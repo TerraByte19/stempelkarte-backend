@@ -1,0 +1,30 @@
+# Build
+target/
+*.class
+*.jar
+
+# IDE
+.idea/
+*.iws
+*.iml
+*.ipr
+.vscode/
+.settings/
+.classpath
+.project
+
+# Sensible Daten - NIEMALS in GitHub!
+certs/
+data/
+uploads/
+*.p12
+*.pem
+*.p8
+google-service-account.json
+application-prod.yml
+
+# Maven wrapper jar
+.mvn/wrapper/maven-wrapper.jar
+
+# Logs
+*.log
