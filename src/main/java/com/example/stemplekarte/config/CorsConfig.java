@@ -14,6 +14,7 @@ public class CorsConfig {
         CorsConfiguration config = new CorsConfiguration();
         config.addAllowedOrigin("http://localhost:5173");
         config.addAllowedOrigin("http://192.168.178.163:5173");
+        config.addAllowedOrigin("https://stempelkarte-frontend.onrender.com");
         config.addAllowedHeader("*");
         config.addAllowedMethod("*");
         config.setAllowCredentials(true);
