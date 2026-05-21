@@ -1,0 +1,17 @@
+spring:
+  datasource:
+    url: ${DATABASE_URL}
+    driver-class-name: org.postgresql.Driver
+    username: ${DATABASE_USER}
+    password: ${DATABASE_PASSWORD}
+  jpa:
+    hibernate:
+      ddl-auto: update
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
+    show-sql: false
+  h2:
+    console:
+      enabled: false
+
+stempelkarte:
+  base-url: ${APP_BASE_URL:https://stempelkarte-backend.onrender.com}

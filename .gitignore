@@ -21,7 +21,6 @@ uploads/
 *.pem
 *.p8
 google-service-account.json
-application-prod.yml
 
 # Maven wrapper jar
 .mvn/wrapper/maven-wrapper.jar
