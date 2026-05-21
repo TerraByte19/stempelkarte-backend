@@ -70,6 +70,11 @@ public class Shop {
         this.updatedAt = Instant.now();
     }
 
+    public void setActive(boolean active) {
+        this.active = active;
+        this.updatedAt = Instant.now();
+    }
+
     public String getId() { return id; }
     public String getEmail() { return email; }
     public String getPasswordHash() { return passwordHash; }

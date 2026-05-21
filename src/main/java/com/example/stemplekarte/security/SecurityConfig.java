@@ -45,6 +45,8 @@ public class SecurityConfig {
                         .requestMatchers("/karte/**", "/karte-neu/**", "/logos/**").permitAll()
                         .requestMatchers("/api/customer", "/api/customer/**").permitAll()
                         .requestMatchers("/wallet/**").permitAll()
+                        .requestMatchers("/api/admin/login").permitAll()
+                        .requestMatchers("/api/admin/**").permitAll()
                         .requestMatchers("/karte/**", "/logos/**").permitAll()
                         .requestMatchers("/h2/**", "/actuator/health").permitAll()
                         .requestMatchers("/api/auth/**").permitAll()

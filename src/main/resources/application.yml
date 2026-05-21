@@ -21,9 +21,10 @@ spring:
       path: /h2
 
 stempelkarte:
-  base-url: http://192.168.178.163:8080
-  upload-path: ./uploads
+  base-url: ${APP_BASE_URL:http://192.168.178.163:8080}
+  upload-path: ${UPLOAD_PATH:./uploads}
   jwt-secret: ${JWT_SECRET:stempelkarte-super-secret-key-mindestens-32-zeichen-lang}
+  admin-secret: ${ADMIN_SECRET:admin-geheim-nur-lokal}
   reward-threshold: 10
 
   apple:
@@ -36,9 +37,9 @@ stempelkarte:
     template-path: ${APPLE_TEMPLATE_PATH:./pass-template/StempelKarte.pass}
     auth-secret: ${APPLE_AUTH_SECRET:bitte-im-prod-aendern-mindestens-32-zeichen}
   google:
-    issuer-id: 3388000000023146979
+    issuer-id: ${GOOGLE_ISSUER_ID:3388000000023146979}
     class-suffix: stempelkarte_class_v1
-    service-account-path: ./certs/google-service-account.json
+    service-account-path: ${GOOGLE_SA_PATH:./certs/google-service-account.json}
   apns:
     enabled: ${APNS_ENABLED:false}
     key-id: ${APNS_KEY_ID:}
