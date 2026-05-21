@@ -10,6 +10,9 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.CorsConfigurationSource;
+import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 @Configuration
 public class SecurityConfig {
@@ -31,10 +34,25 @@ public class SecurityConfig {
     }
 
     @Bean
+    public CorsConfigurationSource corsConfigurationSource() {
+        CorsConfiguration config = new CorsConfiguration();
+        config.addAllowedOrigin("http://localhost:5173");
+        config.addAllowedOrigin("http://192.168.178.163:5173");
+        config.addAllowedOrigin("https://stempelkarte-frontend.onrender.com");
+        config.addAllowedHeader("*");
+        config.addAllowedMethod("*");
+        config.setAllowCredentials(true);
+
+        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+        source.registerCorsConfiguration("/**", config);
+        return source;
+    }
+
+    @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
                 .csrf(csrf -> csrf.disable())
-                .cors(cors -> {})
+                .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(
@@ -42,17 +60,16 @@ public class SecurityConfig {
                                 "/v3/api-docs", "/v3/api-docs/**",
                                 "/swagger-resources/**", "/webjars/**"
                         ).permitAll()
-                        .requestMatchers("/karte/**", "/karte-neu/**", "/logos/**").permitAll()
                         .requestMatchers("/api/customer", "/api/customer/**").permitAll()
                         .requestMatchers("/wallet/**").permitAll()
-                        .requestMatchers("/api/admin/login").permitAll()
-                        .requestMatchers("/api/admin/**").permitAll()
-                        .requestMatchers("/karte/**", "/logos/**").permitAll()
+                        .requestMatchers("/karte/**", "/karte-neu/**", "/logos/**").permitAll()
                         .requestMatchers("/h2/**", "/actuator/health").permitAll()
                         .requestMatchers("/api/auth/**").permitAll()
                         .requestMatchers("/api/scan").permitAll()
                         .requestMatchers("/api/shop/logos/**").permitAll()
                         .requestMatchers("/api/shop/logo").permitAll()
+                        .requestMatchers("/api/admin/login").permitAll()
+                        .requestMatchers("/api/admin/**").permitAll()
                         .requestMatchers("/api/shop/**").hasRole("SHOP")
                         .anyRequest().permitAll()
                 )
