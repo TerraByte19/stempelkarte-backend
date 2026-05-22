@@ -43,4 +43,11 @@ public class CardService {
         }
         return card;
     }
+
+    @Transactional
+    public void deactivate(String cardId, Shop shop) {
+        Card card = getByIdAndShop(cardId, shop);
+        card.setActive(false);
+        cardRepo.save(card);
+    }
 }

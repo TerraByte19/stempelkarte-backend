@@ -10,6 +10,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.constraints.NotBlank;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
@@ -106,7 +107,16 @@ public class ShopController {
         return cardService.getByShop(shop).stream().map(CardResponse::from).toList();
     }
 
-    @Operation(summary = "Staff-Token erstellen (für Mitarbeiter-Scanner)")
+    @Operation(summary = "Karte deaktivieren")
+    @DeleteMapping("/cards/{cardId}")
+    public ResponseEntity<Map<String, String>> deleteCard(@PathVariable String cardId,
+                                                          Authentication auth) {
+        Shop shop = currentShop(auth);
+        cardService.deactivate(cardId, shop);
+        return ResponseEntity.ok(Map.of("message", "Karte deaktiviert"));
+    }
+
+    @Operation(summary = "Staff-Token erstellen")
     @PostMapping("/staff-token")
     public StaffTokenResponse createStaffToken(@RequestBody Map<String, String> body,
                                                Authentication auth) {

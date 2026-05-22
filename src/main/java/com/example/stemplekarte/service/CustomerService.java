@@ -58,6 +58,7 @@ public class CustomerService {
         return customerCardRepo.findByCustomerAndCard(customer, card)
                 .orElseGet(() -> customerCardRepo.save(CustomerCard.create(customer, card)));
     }
+
     public CustomerCard getCustomerCardById(String customerCardId) {
         return customerCardRepo.findById(customerCardId)
                 .orElseThrow(() -> new NoSuchElementException("CustomerCard nicht gefunden: " + customerCardId));
@@ -91,11 +92,15 @@ public class CustomerService {
             throw new IllegalArgumentException("Ungueltiger QR-Code: " + e.getMessage());
         }
 
-        // Sicherstellen dass die Karte zu diesem Shop gehört
         Card card = cardRepo.findById(cardId)
                 .orElseThrow(() -> new NoSuchElementException("Karte nicht gefunden"));
+
         if (!card.getShop().getId().equals(shop.getId())) {
             throw new IllegalArgumentException("Diese Karte gehoert nicht zu deinem Shop");
+        }
+
+        if (!card.isActive()) {
+            throw new IllegalArgumentException("Diese Karte ist nicht mehr aktiv");
         }
 
         CustomerCard cc = getOrCreateCustomerCard(customerId, cardId);

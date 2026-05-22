@@ -50,6 +50,10 @@ public class Card {
         return c;
     }
 
+    public void setActive(boolean active) {
+        this.active = active;
+    }
+
     public String getId() { return id; }
     public Shop getShop() { return shop; }
     public String getName() { return name; }
