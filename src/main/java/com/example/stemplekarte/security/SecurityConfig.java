@@ -64,7 +64,7 @@ public class SecurityConfig {
                         .requestMatchers("/wallet/**").permitAll()
                         .requestMatchers("/karte/**", "/karte-neu/**", "/logos/**").permitAll()
                         .requestMatchers("/h2/**", "/actuator/health").permitAll()
-                        .requestMatchers("/api/auth/**").permitAll()
+                        .requestMatchers("/api/auth/login").permitAll()
                         .requestMatchers("/api/scan").permitAll()
                         .requestMatchers("/api/shop/logos/**").permitAll()
                         .requestMatchers("/api/shop/logo").permitAll()

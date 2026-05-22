@@ -5,13 +5,14 @@ import com.example.stemplekarte.repository.CardRepository;
 import com.example.stemplekarte.repository.CustomerCardRepository;
 import com.example.stemplekarte.repository.ShopRepository;
 import com.example.stemplekarte.security.JwtService;
+import com.example.stemplekarte.service.ShopService;
 import com.example.stemplekarte.wallet.GoogleWalletSetup;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
 
-import java.time.Instant;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -27,25 +28,30 @@ public class AdminController {
     private final CardRepository cardRepo;
     private final CustomerCardRepository customerCardRepo;
     private final JwtService jwtService;
+    private final ShopService shopService;
+    private final PasswordEncoder passwordEncoder;
 
-    @Value("${stempelkarte.admin-secret:${ADMIN_SECRET:admin-secret-bitte-aendern}}")
+    @Value("${stempelkarte.admin-secret:admin-geheim-nur-lokal}")
     private String adminSecret;
 
-    // Rate-Limiting: IP -> [attempts, firstAttemptTime]
     private final ConcurrentHashMap<String, int[]> rateLimitMap = new ConcurrentHashMap<>();
     private static final int MAX_ATTEMPTS = 5;
-    private static final long BLOCK_DURATION_MS = 15 * 60 * 1000L; // 15 Minuten
+    private static final long BLOCK_DURATION_MS = 15 * 60 * 1000L;
 
     public AdminController(GoogleWalletSetup googleWalletSetup,
                            ShopRepository shopRepo,
                            CardRepository cardRepo,
                            CustomerCardRepository customerCardRepo,
-                           JwtService jwtService) {
+                           JwtService jwtService,
+                           ShopService shopService,
+                           PasswordEncoder passwordEncoder) {
         this.googleWalletSetup = googleWalletSetup;
         this.shopRepo = shopRepo;
         this.cardRepo = cardRepo;
         this.customerCardRepo = customerCardRepo;
         this.jwtService = jwtService;
+        this.shopService = shopService;
+        this.passwordEncoder = passwordEncoder;
     }
 
     private void checkAdminToken(String authHeader) {
@@ -67,12 +73,10 @@ public class AdminController {
         String ip = forwardedFor != null ? forwardedFor : (realIp != null ? realIp : "unknown");
         String password = body.get("password");
 
-        // Rate-Limiting prüfen
         int[] rateData = rateLimitMap.getOrDefault(ip, new int[]{0, 0});
         int attempts = rateData[0];
         long firstAttempt = rateData[1];
 
-        // Block zurücksetzen nach 15 Minuten
         if (attempts >= MAX_ATTEMPTS) {
             long elapsed = System.currentTimeMillis() - firstAttempt;
             if (elapsed < BLOCK_DURATION_MS) {
@@ -147,5 +151,42 @@ public class AdminController {
         result.put("name", shop.getName());
         result.put("active", shop.isActive());
         return ResponseEntity.ok(result);
+    }
+
+    public record CreateShopRequest(String email, String password, String name) {}
+
+    @PostMapping("/shops/create")
+    public ResponseEntity<Map<String, Object>> createShop(
+            @RequestHeader("Authorization") String authHeader,
+            @RequestBody CreateShopRequest req) {
+        checkAdminToken(authHeader);
+        try {
+            Shop shop = shopService.register(req.email(), req.password(), req.name());
+            Map<String, Object> result = new HashMap<>();
+            result.put("id", shop.getId());
+            result.put("name", shop.getName());
+            result.put("email", shop.getEmail());
+            return ResponseEntity.ok(result);
+        } catch (Exception e) {
+            return ResponseEntity.status(400).body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    public record ChangePasswordRequest(String shopId, String newPassword) {}
+
+    @PostMapping("/shops/password")
+    public ResponseEntity<Map<String, String>> changePassword(
+            @RequestHeader("Authorization") String authHeader,
+            @RequestBody ChangePasswordRequest req) {
+        checkAdminToken(authHeader);
+        try {
+            Shop shop = shopRepo.findById(req.shopId())
+                    .orElseThrow(() -> new RuntimeException("Shop nicht gefunden"));
+            shop.setPasswordHash(passwordEncoder.encode(req.newPassword()));
+            shopRepo.save(shop);
+            return ResponseEntity.ok(Map.of("message", "Passwort geändert"));
+        } catch (Exception e) {
+            return ResponseEntity.status(400).body(Map.of("error", e.getMessage()));
+        }
     }
 }
