@@ -1,6 +1,5 @@
 package com.example.stemplekarte.security;
 
-
 import com.example.stemplekarte.model.StaffToken;
 import com.example.stemplekarte.repository.StaffTokenRepository;
 import jakarta.servlet.FilterChain;
@@ -29,13 +28,8 @@ public class StaffTokenFilter extends OncePerRequestFilter {
                                     FilterChain chain) throws ServletException, IOException {
         String header = req.getHeader("X-Staff-Token");
 
-        // TEMPORÄR zum Debuggen
-        System.out.println("=== StaffTokenFilter ===");
-        System.out.println("X-Staff-Token Header: " + header);
-
         if (header != null && !header.isBlank()) {
             repo.findById(header.trim()).ifPresent(staff -> {
-                System.out.println("Staff gefunden: " + staff.getLabel());
                 var auth = new UsernamePasswordAuthenticationToken(
                         new StaffPrincipal(staff),
                         null,
@@ -44,6 +38,7 @@ public class StaffTokenFilter extends OncePerRequestFilter {
                 SecurityContextHolder.getContext().setAuthentication(auth);
             });
         }
+
         chain.doFilter(req, resp);
     }
 
