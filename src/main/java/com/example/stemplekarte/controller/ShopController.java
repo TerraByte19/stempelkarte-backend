@@ -1,8 +1,10 @@
 package com.example.stemplekarte.controller;
 
 import com.example.stemplekarte.model.Card;
+import com.example.stemplekarte.model.CustomerCard;
 import com.example.stemplekarte.model.Shop;
 import com.example.stemplekarte.model.StaffToken;
+import com.example.stemplekarte.repository.CustomerCardRepository;
 import com.example.stemplekarte.security.JwtAuthFilter;
 import com.example.stemplekarte.service.CardService;
 import com.example.stemplekarte.service.ShopService;
@@ -14,6 +16,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -25,10 +28,13 @@ public class ShopController {
 
     private final ShopService shopService;
     private final CardService cardService;
+    private final CustomerCardRepository customerCardRepo;
 
-    public ShopController(ShopService shopService, CardService cardService) {
+    public ShopController(ShopService shopService, CardService cardService,
+                          CustomerCardRepository customerCardRepo) {
         this.shopService = shopService;
         this.cardService = cardService;
+        this.customerCardRepo = customerCardRepo;
     }
 
     public record UpdateProfileRequest(String name, String logoUrl,
@@ -75,7 +81,7 @@ public class ShopController {
         );
     }
 
-    @Operation(summary = "Shop-Profil aktualisieren (Name, Farben, Logo)")
+    @Operation(summary = "Shop-Profil aktualisieren")
     @PutMapping("/me")
     public Map<String, Object> updateProfile(@RequestBody UpdateProfileRequest req,
                                              Authentication auth) {
@@ -114,6 +120,24 @@ public class ShopController {
         Shop shop = currentShop(auth);
         cardService.deactivate(cardId, shop);
         return ResponseEntity.ok(Map.of("message", "Karte deaktiviert"));
+    }
+
+    @Operation(summary = "Statistiken pro Karte")
+    @GetMapping("/stats")
+    public List<Map<String, Object>> stats(Authentication auth) {
+        Shop shop = currentShop(auth);
+        return cardService.getByShop(shop).stream().map(card -> {
+            List<CustomerCard> customerCards = customerCardRepo.findByCard(card);
+            int totalStamps = customerCards.stream().mapToInt(CustomerCard::getStamps).sum();
+            int totalRewards = customerCards.stream().mapToInt(CustomerCard::getTotalRewards).sum();
+            Map<String, Object> map = new HashMap<>();
+            map.put("cardId", card.getId());
+            map.put("cardName", card.getName());
+            map.put("customerCount", customerCards.size());
+            map.put("totalStamps", totalStamps);
+            map.put("totalRewards", totalRewards);
+            return map;
+        }).toList();
     }
 
     @Operation(summary = "Staff-Token erstellen")
