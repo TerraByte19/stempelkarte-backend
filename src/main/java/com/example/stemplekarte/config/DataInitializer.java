@@ -27,7 +27,8 @@ public class DataInitializer implements CommandLineRunner {
             Shop demo = shopService.register(
                     "demo@cafeespresso.de",
                     "demo1234",
-                    "Cafe Espresso Demo"
+                    "Cafe Espresso Demo",
+                    5
             );
             String token = shopService.login("demo@cafeespresso.de", "demo1234");
             log.info("==========================================================");

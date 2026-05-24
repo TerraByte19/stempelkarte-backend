@@ -129,6 +129,7 @@ public class AdminController {
             map.put("active", shop.isActive());
             map.put("cardCount", cardCount);
             map.put("customerCount", customerCount);
+            map.put("maxTokens", shop.getMaxTokens());
             return map;
         }).toList();
 
@@ -153,7 +154,7 @@ public class AdminController {
         return ResponseEntity.ok(result);
     }
 
-    public record CreateShopRequest(String email, String password, String name) {}
+    public record CreateShopRequest(String email, String password, String name, int maxTokens) {}
 
     @PostMapping("/shops/create")
     public ResponseEntity<Map<String, Object>> createShop(
@@ -161,11 +162,13 @@ public class AdminController {
             @RequestBody CreateShopRequest req) {
         checkAdminToken(authHeader);
         try {
-            Shop shop = shopService.register(req.email(), req.password(), req.name());
+            int maxTokens = req.maxTokens() > 0 ? req.maxTokens() : 3;
+            Shop shop = shopService.register(req.email(), req.password(), req.name(), maxTokens);
             Map<String, Object> result = new HashMap<>();
             result.put("id", shop.getId());
             result.put("name", shop.getName());
             result.put("email", shop.getEmail());
+            result.put("maxTokens", shop.getMaxTokens());
             return ResponseEntity.ok(result);
         } catch (Exception e) {
             return ResponseEntity.status(400).body(Map.of("error", e.getMessage()));
@@ -184,7 +187,7 @@ public class AdminController {
                     .orElseThrow(() -> new RuntimeException("Shop nicht gefunden"));
             shop.setPasswordHash(passwordEncoder.encode(req.newPassword()));
             shopRepo.save(shop);
-            return ResponseEntity.ok(Map.of("message", "Passwort geändert"));
+            return ResponseEntity.ok(Map.of("message", "Passwort geandert"));
         } catch (Exception e) {
             return ResponseEntity.status(400).body(Map.of("error", e.getMessage()));
         }

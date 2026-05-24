@@ -29,14 +29,15 @@ public class ShopService {
     }
 
     @Transactional
-    public Shop register(String email, String password, String name) {
+    public Shop register(String email, String password, String name, int maxTokens) {
         if (shopRepo.existsByEmail(email.toLowerCase().trim())) {
             throw new IllegalArgumentException("E-Mail wird bereits verwendet");
         }
         Shop shop = Shop.create(
                 email.toLowerCase().trim(),
                 passwordEncoder.encode(password),
-                name
+                name,
+                maxTokens
         );
         Shop saved = shopRepo.save(shop);
         staffTokenRepo.save(StaffToken.create(saved, "Standard-Mitarbeiter"));
@@ -76,6 +77,12 @@ public class ShopService {
     @Transactional
     public StaffToken createStaffToken(String shopId, String label) {
         Shop shop = getById(shopId);
+        List<StaffToken> existing = staffTokenRepo.findByShop(shop);
+        if (existing.size() >= shop.getMaxTokens()) {
+            throw new IllegalArgumentException(
+                    "Maximale Anzahl an Staff-Tokens erreicht (" + shop.getMaxTokens() + ")"
+            );
+        }
         return staffTokenRepo.save(StaffToken.create(shop, label));
     }
 

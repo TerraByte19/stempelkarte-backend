@@ -36,12 +36,12 @@ public class AuthController {
     @Operation(summary = "Shop registrieren")
     @PostMapping("/register")
     public AuthResponse register(@RequestBody RegisterRequest req) {
-        Shop shop = shopService.register(req.email(), req.password(), req.name());
+        Shop shop = shopService.register(req.email(), req.password(), req.name(), 3);
         String token = shopService.login(req.email(), req.password());
         return new AuthResponse(token, shop.getId(), shop.getName());
     }
 
-    @Operation(summary = "Shop einloggen → JWT Token")
+    @Operation(summary = "Shop einloggen")
     @PostMapping("/login")
     public AuthResponse login(@RequestBody LoginRequest req) {
         String token = shopService.login(req.email(), req.password());

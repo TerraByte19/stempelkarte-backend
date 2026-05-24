@@ -36,6 +36,9 @@ public class Shop {
     @Column(nullable = false)
     private boolean active;
 
+    @Column(name = "max_tokens", nullable = false)
+    private int maxTokens;
+
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
@@ -44,7 +47,7 @@ public class Shop {
 
     protected Shop() {}
 
-    public static Shop create(String email, String passwordHash, String name) {
+    public static Shop create(String email, String passwordHash, String name, int maxTokens) {
         Shop s = new Shop();
         s.id = "SHOP-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
         s.email = email;
@@ -55,6 +58,7 @@ public class Shop {
         s.colorForeground = "#FFFFFF";
         s.colorLabel = "#FAC875";
         s.active = true;
+        s.maxTokens = maxTokens;
         s.createdAt = Instant.now();
         s.updatedAt = s.createdAt;
         return s;
@@ -80,6 +84,11 @@ public class Shop {
         this.updatedAt = Instant.now();
     }
 
+    public void setMaxTokens(int maxTokens) {
+        this.maxTokens = maxTokens;
+        this.updatedAt = Instant.now();
+    }
+
     public String getId() { return id; }
     public String getEmail() { return email; }
     public String getPasswordHash() { return passwordHash; }
@@ -89,6 +98,7 @@ public class Shop {
     public String getColorForeground() { return colorForeground; }
     public String getColorLabel() { return colorLabel; }
     public boolean isActive() { return active; }
+    public int getMaxTokens() { return maxTokens; }
     public Instant getCreatedAt() { return createdAt; }
     public Instant getUpdatedAt() { return updatedAt; }
 }
