@@ -36,8 +36,8 @@ public class Shop {
     @Column(nullable = false)
     private boolean active;
 
-    @Column(name = "max_tokens", nullable = false)
-    private int maxTokens;
+    @Column(name = "max_tokens", nullable = false, columnDefinition = "integer default 3")
+    private int maxTokens = 3;
 
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
