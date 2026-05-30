@@ -26,10 +26,12 @@ stempelkarte:
     wwdr-cert-path: ${APPLE_WWDR_PATH:./certs/AppleWWDRCAG4.pem}
     template-path: ${APPLE_TEMPLATE_PATH:./pass-template/StempelKarte.pass}
     auth-secret: ${APPLE_AUTH_SECRET:bitte-im-prod-aendern-mindestens-32-zeichen}
+
   google:
-    issuer-id: ${GOOGLE_ISSUER_ID:3388000000023146979}
+    issuer-id: 3388000000023146979
     class-suffix: stempelkarte_class_v1
-    service-account-path: ${GOOGLE_SA_PATH:./certs/google-service-account.json}
+    service-account-path: C:/Users/adham/Downloads/stempelkarte-496400-8da6689f7402.json
+
   apns:
     enabled: ${APNS_ENABLED:false}
     key-id: ${APNS_KEY_ID:}

@@ -15,3 +15,7 @@ spring:
 
 stempelkarte:
   base-url: ${APP_BASE_URL:https://stempelkarte-backend.onrender.com}
+  google:
+    issuer-id: ${GOOGLE_ISSUER_ID:3388000000023146979}
+    class-suffix: stempelkarte_class_v1
+    service-account-path: ${GOOGLE_SA_PATH:/etc/secrets/google-wallet-key.json}
