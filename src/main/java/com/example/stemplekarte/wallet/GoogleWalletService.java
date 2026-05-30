@@ -95,9 +95,7 @@ public class GoogleWalletService {
                 .issuer(credentials.getClientEmail())
                 .audience().add("google").and()
                 .claim("typ", "savetowallet")
-                .claim("origins", List.of("https://stempelkarte-frontend.onrender.com"))
                 .claim("origins", List.of(
-                        "http://localhost:8080",
                         "https://stempelkarte-backend.onrender.com",
                         "https://stempelkarte-frontend.onrender.com"
                 ))
