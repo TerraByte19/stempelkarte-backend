@@ -72,14 +72,12 @@ public class GoogleWalletService {
         String classId = issuerId + "." + props.google().classSuffix();
         String objectId = issuerId + "." + cc.getId().replace("-", "_");
 
-        // Objekt erstellen oder aktualisieren
         try {
             createOrUpdateObject(cc, classId, objectId);
         } catch (Exception e) {
             log.error("Google Wallet Objekt Fehler: {}", e.getMessage());
         }
 
-        // JWT generieren
         PrivateKey privateKey = credentials.getPrivateKey();
 
         Map<String, Object> loyaltyObject = Map.of(
@@ -107,6 +105,27 @@ public class GoogleWalletService {
         return SAVE_URL_BASE + jwt;
     }
 
+    /**
+     * Aktualisiert das Google Wallet Objekt nach einem Scan.
+     * Wird vom CustomerService aufgerufen.
+     */
+    public void notifyUpdate(CustomerCard cc) {
+        if (credentials == null || walletClient == null) {
+            log.debug("Google Wallet nicht konfiguriert - kein Update");
+            return;
+        }
+
+        String issuerId = props.google().issuerId();
+        String classId = issuerId + "." + props.google().classSuffix();
+        String objectId = issuerId + "." + cc.getId().replace("-", "_");
+
+        try {
+            createOrUpdateObject(cc, classId, objectId);
+        } catch (Exception e) {
+            log.error("Google Wallet Update Fehler: {}", e.getMessage());
+        }
+    }
+
     private void createOrUpdateObject(CustomerCard cc, String classId, String objectId) throws Exception {
         String qrValue = "{\"cid\":\"" + cc.getCustomer().getId() +
                 "\",\"cardId\":\"" + cc.getCard().getId() +
@@ -128,14 +147,11 @@ public class GoogleWalletService {
                         .setAlternateText(cc.getCustomer().getId()));
 
         try {
-            // Prüfen ob Objekt existiert
             walletClient.loyaltyobject().get(objectId).execute();
-            // Existiert → aktualisieren
             walletClient.loyaltyobject().patch(objectId, loyaltyObject).execute();
             log.info("Google Wallet Objekt aktualisiert: {}", objectId);
         } catch (com.google.api.client.googleapis.json.GoogleJsonResponseException e) {
             if (e.getStatusCode() == 404) {
-                // Existiert nicht → erstellen
                 walletClient.loyaltyobject().insert(loyaltyObject).execute();
                 log.info("Google Wallet Objekt erstellt: {}", objectId);
             } else {
