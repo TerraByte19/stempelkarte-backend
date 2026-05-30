@@ -93,7 +93,7 @@ public class GoogleWalletService {
 
         String jwt = Jwts.builder()
                 .issuer(credentials.getClientEmail())
-                .audience().add("google").and()
+                .audience().single("google")
                 .claim("typ", "savetowallet")
                 .claim("origins", List.of(
                         "https://stempelkarte-backend.onrender.com",
