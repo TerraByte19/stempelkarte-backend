@@ -82,7 +82,7 @@ public class CustomerService {
     }
 
     @Transactional
-    public ScanResult processScan(String qrPayload, Shop shop) {
+    public ScanResult processScan(String qrPayload, Shop shop, int count) {
         String customerId;
         String cardId;
         try {
@@ -109,21 +109,23 @@ public class CustomerService {
 
         CustomerCard cc = getOrCreateCustomerCard(customerId, cardId);
         int threshold = card.getRewardThreshold();
+        ScanResult result = null;
 
-        ScanResult result;
-        if (cc.getStamps() >= threshold) {
-            cc.redeemReward();
-            result = new ScanResult.Redeemed(cc, card.getRewardText() + " eingeloest!");
-        } else {
-            cc.addStamp();
-            result = cc.getStamps() == threshold
-                    ? new ScanResult.Full(cc, "Karte voll! " + card.getRewardText())
-                    : new ScanResult.Stamped(cc, "Stempel hinzugefuegt (%d/%d)"
-                    .formatted(cc.getStamps(), threshold));
+        for (int i = 0; i < count; i++) {
+            if (cc.getStamps() >= threshold) {
+                cc.redeemReward();
+                result = new ScanResult.Redeemed(cc, card.getRewardText() + " eingeloest!");
+            } else {
+                cc.addStamp();
+                result = cc.getStamps() == threshold
+                        ? new ScanResult.Full(cc, "Karte voll! " + card.getRewardText())
+                        : new ScanResult.Stamped(cc, "Stempel hinzugefuegt (%d/%d)"
+                        .formatted(cc.getStamps(), threshold));
+            }
         }
 
         customerCardRepo.save(cc);
-        log.info("Scan fuer Kunde {} auf Karte {}: {}", customerId, cardId, result.message());
+        log.info("Scan fuer Kunde {} auf Karte {} ({}x): {}", customerId, cardId, count, result.message());
         apns.notifyUpdate(cc.getId());
         googleWalletService.notifyUpdate(cc);
         return result;

@@ -6,6 +6,8 @@ import com.example.stemplekarte.security.StaffTokenFilter;
 import com.example.stemplekarte.service.CustomerService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
@@ -23,13 +25,19 @@ public class ScanController {
         this.service = service;
     }
 
-    public record ScanRequest(@NotBlank String qrPayload) {}
-    public record ScanResponse(String action, String message, String customerId,
-                               String cardId, int stamps, int totalRewards,
-                               int rewardThreshold) {}
+    public record ScanRequest(
+            @NotBlank String qrPayload,
+            @Min(1) @Max(20) int count
+    ) {}
+
+    public record ScanResponse(
+            String action, String message, String customerId,
+            String cardId, int stamps, int totalRewards,
+            int rewardThreshold, int stampsAdded
+    ) {}
 
     @Operation(summary = "QR-Code scannen und Stempel vergeben",
-            description = "Erfordert X-Staff-Token Header")
+            description = "Erfordert X-Staff-Token Header. count = Anzahl Stempel (1-20)")
     @PostMapping
     public ScanResponse scan(@RequestBody ScanRequest req, Authentication auth) {
         if (auth == null || !(auth.getPrincipal() instanceof StaffTokenFilter.StaffPrincipal)) {
@@ -37,7 +45,9 @@ public class ScanController {
         }
 
         Shop shop = ((StaffTokenFilter.StaffPrincipal) auth.getPrincipal()).staff().getShop();
-        ScanResult result = service.processScan(req.qrPayload(), shop);
+        int count = req.count() <= 0 ? 1 : req.count();
+
+        ScanResult result = service.processScan(req.qrPayload(), shop, count);
 
         String action = switch (result) {
             case ScanResult.Stamped s -> "stamped";
@@ -52,7 +62,8 @@ public class ScanController {
                 cc.getCard().getId(),
                 cc.getStamps(),
                 cc.getTotalRewards(),
-                cc.getCard().getRewardThreshold()
+                cc.getCard().getRewardThreshold(),
+                count
         );
     }
 }
