@@ -70,7 +70,7 @@ public class GoogleWalletService {
 
         String issuerId = props.google().issuerId();
         String classId = issuerId + "." + props.google().classSuffix();
-        String objectId = issuerId + "." + cc.getId();
+        String objectId = issuerId + "." + cc.getId().replace("-", "_");
 
         // Objekt erstellen oder aktualisieren
         try {
