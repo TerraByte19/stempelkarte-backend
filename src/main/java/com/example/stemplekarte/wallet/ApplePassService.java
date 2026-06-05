@@ -2,6 +2,7 @@ package com.example.stemplekarte.wallet;
 
 import com.example.stemplekarte.config.AppProperties;
 import com.example.stemplekarte.model.CustomerCard;
+import com.example.stemplekarte.model.Shop;
 import de.brendamour.jpasskit.PKBarcode;
 import de.brendamour.jpasskit.PKField;
 import de.brendamour.jpasskit.PKPass;
@@ -22,13 +23,13 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Base64;
+import java.util.List;
 
 @Service
 public class ApplePassService {
 
     private static final Logger log = LoggerFactory.getLogger(ApplePassService.class);
 
-    // Render Secret File Pfade
     private static final String B64_PATH = "/etc/secrets/pass-certificate.b64";
     private static final String P12_PATH = "/tmp/pass-certificate.p12";
     private static final String WWDR_PATH = "/etc/secrets/apple-wwdr.pem";
@@ -49,7 +50,6 @@ public class ApplePassService {
             Path p12Path = Paths.get(P12_PATH);
             Path wwdrPath = Paths.get(WWDR_PATH);
 
-            // base64 -> .p12 decodieren falls noch nicht vorhanden
             if (Files.exists(b64Path)) {
                 String b64 = Files.readString(b64Path).trim().replaceAll("\\s", "");
                 byte[] decoded = Base64.getDecoder().decode(b64);
@@ -73,10 +73,7 @@ public class ApplePassService {
 
             PKSigningInformation info = new PKSigningInformationUtil()
                     .loadSigningInformationFromPKCS12AndIntermediateCertificate(
-                            p12Path.toString(),
-                            password,
-                            wwdrPath.toString()
-                    );
+                            p12Path.toString(), password, wwdrPath.toString());
             log.info("Apple Pass Signing Information erfolgreich geladen.");
             return info;
         } catch (Exception e) {
@@ -96,13 +93,48 @@ public class ApplePassService {
         }
 
         int threshold = cc.getCard().getRewardThreshold();
-        var shop = cc.getCard().getShop();
+        Shop shop = cc.getCard().getShop();
+        boolean grid = "grid".equalsIgnoreCase(shop.getWalletStyle());
 
         String qrPayload = "{\"cid\":\"%s\",\"cardId\":\"%s\",\"ts\":%d}"
                 .formatted(cc.getCustomer().getId(), cc.getCard().getId(),
                         System.currentTimeMillis());
 
-        String templatePath = templateGenerator.generateTemplate(shop);
+        String templatePath = templateGenerator.generateTemplate(cc);
+
+        String reward = rewardText(cc.getStamps(), threshold, cc.getCard().getRewardText());
+
+        // FIX: PKPass.builder() erwartet List<PKBarcode>, nicht ein einzelnes Objekt
+        PKBarcode barcode = PKBarcode.builder()
+                .format(PKBarcodeFormat.PKBarcodeFormatQR)
+                .message(qrPayload)
+                .messageEncoding(StandardCharsets.UTF_8)
+                .altText(cc.getCustomer().getId())
+                .build();
+
+        var genericPass = PKGenericPass.builder()
+                .passType(PKPassType.PKStoreCard)
+                .headerFieldBuilder(PKField.builder()
+                        .key("stamps").label("STEMPEL")
+                        .value(cc.getStamps() + "/" + threshold));
+
+        if (grid) {
+            // Kein großes Mittelfeld -> Stempel-Bild wird groß angezeigt
+            genericPass
+                    .secondaryFieldBuilder(PKField.builder()
+                            .key("reward").label("BELOHNUNG").value(reward))
+                    .auxiliaryFieldBuilder(PKField.builder()
+                            .key("name").label("KUNDE").value(cc.getCustomer().getName()));
+        } else {
+            genericPass
+                    .primaryFieldBuilder(PKField.builder()
+                            .key("reward").label("BELOHNUNG").value(reward))
+                    .secondaryFieldBuilder(PKField.builder()
+                            .key("name").label("KUNDE").value(cc.getCustomer().getName()))
+                    .auxiliaryFieldBuilder(PKField.builder()
+                            .key("rewards-total").label("EINGELOEST")
+                            .value(String.valueOf(cc.getTotalRewards())));
+        }
 
         PKPass pass = PKPass.builder()
                 .formatVersion(1)
@@ -117,30 +149,8 @@ public class ApplePassService {
                 .labelColor(hexToRgb(shop.getColorLabel()))
                 .webServiceURL(new URL(props.baseUrl() + "/wallet/"))
                 .authenticationToken(cc.getAuthToken())
-                .pass(PKGenericPass.builder()
-                        .passType(PKPassType.PKStoreCard)
-                        .headerFieldBuilder(PKField.builder()
-                                .key("stamps")
-                                .label("STEMPEL")
-                                .value(cc.getStamps() + "/" + threshold))
-                        .primaryFieldBuilder(PKField.builder()
-                                .key("reward")
-                                .label("BELOHNUNG")
-                                .value(rewardText(cc.getStamps(), threshold,
-                                        cc.getCard().getRewardText())))
-                        .secondaryFieldBuilder(PKField.builder()
-                                .key("name")
-                                .label("KUNDE")
-                                .value(cc.getCustomer().getName()))
-                        .auxiliaryFieldBuilder(PKField.builder()
-                                .key("rewards-total")
-                                .label("EINGELOEST")
-                                .value(String.valueOf(cc.getTotalRewards()))))
-                .barcodeBuilder(PKBarcode.builder()
-                        .format(PKBarcodeFormat.PKBarcodeFormatQR)
-                        .message(qrPayload)
-                        .messageEncoding(StandardCharsets.UTF_8)
-                        .altText(cc.getCustomer().getId()))
+                .barcodes(List.of(barcode))
+                .pass(genericPass.build())
                 .build();
 
         PKPassTemplateFolder template = new PKPassTemplateFolder(templatePath);

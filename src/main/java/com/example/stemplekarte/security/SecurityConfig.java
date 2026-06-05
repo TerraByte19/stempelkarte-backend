@@ -57,30 +57,26 @@ public class SecurityConfig {
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
-                        // Öffentliche Endpoints
                         .requestMatchers("/actuator/health").permitAll()
                         .requestMatchers("/api/auth/login", "/api/auth/register").permitAll()
                         .requestMatchers("/api/customer", "/api/customer/**").permitAll()
                         .requestMatchers("/api/scan").permitAll()
                         .requestMatchers("/api/shop/logos/**").permitAll()
                         .requestMatchers("/api/shop/heroes/**").permitAll()
+                        .requestMatchers("/api/shop/stamp-icons/**").permitAll()
                         .requestMatchers("/wallet/**").permitAll()
                         .requestMatchers("/karte/**", "/karte-neu/**", "/logos/**").permitAll()
 
-                        // Admin: nur mit Admin-Login (wird durch AdminAuthFilter geprüft)
                         .requestMatchers("/api/admin/login").permitAll()
                         .requestMatchers("/api/admin/**").authenticated()
 
-                        // Shop: nur eingeloggte Shops
                         .requestMatchers("/api/shop/**").hasRole("SHOP")
 
-                        // Swagger: nur lokal (dev Profil)
                         .requestMatchers(
                                 "/swagger-ui.html", "/swagger-ui/**",
                                 "/v3/api-docs", "/v3/api-docs/**"
                         ).permitAll()
 
-                        // Alles andere: verboten
                         .anyRequest().denyAll()
                 )
                 .headers(h -> h.frameOptions(f -> f.disable()))
