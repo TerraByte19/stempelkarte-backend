@@ -34,15 +34,26 @@ public class JwtAuthFilter extends OncePerRequestFilter {
             String token = header.substring(7).trim();
 
             if (jwtService.isValid(token)) {
-                String shopId = jwtService.extractShopId(token);
-                shopRepo.findById(shopId).ifPresent(shop -> {
+                // ── Admin-Token ───────────────────────────────────────────
+                if (jwtService.isAdmin(token)) {
                     var auth = new UsernamePasswordAuthenticationToken(
-                            new ShopPrincipal(shop),
+                            "admin",
                             null,
-                            List.of(new SimpleGrantedAuthority("ROLE_SHOP"))
+                            List.of(new SimpleGrantedAuthority("ROLE_ADMIN"))
                     );
                     SecurityContextHolder.getContext().setAuthentication(auth);
-                });
+                } else {
+                    // ── Shop-Token ────────────────────────────────────────
+                    String shopId = jwtService.extractShopId(token);
+                    shopRepo.findById(shopId).ifPresent(shop -> {
+                        var auth = new UsernamePasswordAuthenticationToken(
+                                new ShopPrincipal(shop),
+                                null,
+                                List.of(new SimpleGrantedAuthority("ROLE_SHOP"))
+                        );
+                        SecurityContextHolder.getContext().setAuthentication(auth);
+                    });
+                }
             }
         }
         chain.doFilter(req, resp);
