@@ -27,6 +27,11 @@ public class CardService {
         return cardRepo.save(Card.create(shop, name, description, rewardThreshold, rewardText));
     }
 
+    @Transactional
+    public Card save(Card card) {
+        return cardRepo.save(card);
+    }
+
     public List<Card> getByShop(Shop shop) {
         return cardRepo.findByShopAndActiveTrue(shop);
     }

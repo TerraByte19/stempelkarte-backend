@@ -38,7 +38,6 @@ public class ShopController {
     }
 
     public record UpdateProfileRequest(String name, String logoUrl,
-
                                        String colorBackground, String colorForeground,
                                        String colorLabel) {}
 
@@ -46,14 +45,30 @@ public class ShopController {
             @NotBlank String name,
             @NotBlank String description,
             int rewardThreshold,
-            @NotBlank String rewardText
+            @NotBlank String rewardText,
+            // Design-Felder (optional, haben Defaults)
+            String walletStyle,
+            String stampIconType,
+            String stampPreset,
+            String stampColor,
+            String emptyStampStyle
     ) {}
 
-    public record CardResponse(String id, String name, String description,
-                               int rewardThreshold, String rewardText) {
+    public record CardResponse(
+            String id, String name, String description,
+            int rewardThreshold, String rewardText,
+            // Design
+            String walletStyle, String stampIconType, String stampPreset,
+            String stampColor, String emptyStampStyle, String stampIconUrl
+    ) {
         static CardResponse from(Card c) {
-            return new CardResponse(c.getId(), c.getName(), c.getDescription(),
-                    c.getRewardThreshold(), c.getRewardText());
+            return new CardResponse(
+                    c.getId(), c.getName(), c.getDescription(),
+                    c.getRewardThreshold(), c.getRewardText(),
+                    c.getWalletStyle(), c.getStampIconType(), c.getStampPreset(),
+                    c.getStampColor(), c.getEmptyStampStyle(),
+                    c.getStampIconUrl() != null ? c.getStampIconUrl() : ""
+            );
         }
     }
 
@@ -71,15 +86,16 @@ public class ShopController {
     @GetMapping("/me")
     public Map<String, Object> me(Authentication auth) {
         Shop shop = currentShop(auth);
-        return Map.of(
-                "id", shop.getId(),
-                "name", shop.getName(),
-                "email", shop.getEmail(),
-                "colorBackground", shop.getColorBackground(),
-                "colorForeground", shop.getColorForeground(),
-                "colorLabel", shop.getColorLabel(),
-                "logoUrl", shop.getLogoUrl() != null ? shop.getLogoUrl() : ""
-        );
+        Map<String, Object> map = new HashMap<>();
+        map.put("id", shop.getId());
+        map.put("name", shop.getName());
+        map.put("email", shop.getEmail());
+        map.put("colorBackground", shop.getColorBackground());
+        map.put("colorForeground", shop.getColorForeground());
+        map.put("colorLabel", shop.getColorLabel());
+        map.put("logoUrl", shop.getLogoUrl() != null ? shop.getLogoUrl() : "");
+        map.put("heroImageUrl", shop.getHeroImageUrl() != null ? shop.getHeroImageUrl() : "");
+        return map;
     }
 
     @Operation(summary = "Shop-Profil aktualisieren")
@@ -104,6 +120,10 @@ public class ShopController {
         Shop shop = currentShop(auth);
         Card card = cardService.create(shop, req.name(), req.description(),
                 req.rewardThreshold(), req.rewardText());
+        // Design direkt beim Erstellen setzen
+        card.updateDesign(req.walletStyle(), req.stampIconType(), req.stampPreset(),
+                req.stampColor(), req.emptyStampStyle());
+        cardService.save(card);
         return CardResponse.from(card);
     }
 

@@ -34,6 +34,26 @@ public class Card {
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
+    // ── Design-Felder (pro Karte) ─────────────────────────────────────────
+    @Column(name = "wallet_style", length = 16)
+    private String walletStyle;       // "grid" oder "number"
+
+    @Column(name = "stamp_icon_type", length = 16)
+    private String stampIconType;     // "preset" oder "upload"
+
+    @Column(name = "stamp_preset", length = 32)
+    private String stampPreset;       // "coffee","star","heart","dot","square"
+
+    @Column(name = "stamp_icon_url")
+    private String stampIconUrl;      // bei eigenem Bild
+
+    @Column(name = "stamp_color", length = 32)
+    private String stampColor;
+
+    @Column(name = "empty_stamp_style", length = 16)
+    private String emptyStampStyle;   // "number" oder "faded"
+    // ─────────────────────────────────────────────────────────────────────
+
     protected Card() {}
 
     public static Card create(Shop shop, String name, String description,
@@ -47,11 +67,31 @@ public class Card {
         c.rewardText = rewardText;
         c.active = true;
         c.createdAt = Instant.now();
+        // Design-Defaults
+        c.walletStyle = "number";
+        c.stampIconType = "preset";
+        c.stampPreset = "coffee";
+        c.stampColor = "#6F4E37";
+        c.emptyStampStyle = "number";
+        c.stampIconUrl = null;
         return c;
     }
 
     public void setActive(boolean active) {
         this.active = active;
+    }
+
+    public void updateDesign(String walletStyle, String stampIconType, String stampPreset,
+                             String stampColor, String emptyStampStyle) {
+        if (walletStyle != null) this.walletStyle = walletStyle;
+        if (stampIconType != null) this.stampIconType = stampIconType;
+        if (stampPreset != null) this.stampPreset = stampPreset;
+        if (stampColor != null) this.stampColor = stampColor;
+        if (emptyStampStyle != null) this.emptyStampStyle = emptyStampStyle;
+    }
+
+    public void setStampIconUrl(String stampIconUrl) {
+        this.stampIconUrl = stampIconUrl;
     }
 
     public String getId() { return id; }
@@ -62,4 +102,10 @@ public class Card {
     public String getRewardText() { return rewardText; }
     public boolean isActive() { return active; }
     public Instant getCreatedAt() { return createdAt; }
+    public String getWalletStyle() { return walletStyle != null ? walletStyle : "number"; }
+    public String getStampIconType() { return stampIconType != null ? stampIconType : "preset"; }
+    public String getStampPreset() { return stampPreset != null ? stampPreset : "coffee"; }
+    public String getStampIconUrl() { return stampIconUrl; }
+    public String getStampColor() { return stampColor != null ? stampColor : "#6F4E37"; }
+    public String getEmptyStampStyle() { return emptyStampStyle != null ? emptyStampStyle : "number"; }
 }
