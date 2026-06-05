@@ -2,6 +2,7 @@ package com.example.stemplekarte.wallet;
 
 import com.example.stemplekarte.config.AppProperties;
 import com.example.stemplekarte.model.CustomerCard;
+import com.example.stemplekarte.model.Shop;
 import com.google.api.client.googleapis.javanet.GoogleNetHttpTransport;
 import com.google.api.client.json.gson.GsonFactory;
 import com.google.api.services.walletobjects.Walletobjects;
@@ -63,19 +64,29 @@ public class GoogleWalletService {
         }
     }
 
+    // Jeder Shop bekommt seine eigene Class: issuerId.shop_<SHOPID>
+    private String classIdFor(Shop shop) {
+        return props.google().issuerId() + ".shop_" + shop.getId().replace("-", "_");
+    }
+
+    private String objectIdFor(CustomerCard cc) {
+        return props.google().issuerId() + "." + cc.getId().replace("-", "_");
+    }
+
     public String generateSaveUrl(CustomerCard cc) {
         if (credentials == null || walletClient == null) {
             throw new IllegalStateException("Google Service Account nicht konfiguriert.");
         }
 
-        String issuerId = props.google().issuerId();
-        String classId = issuerId + "." + props.google().classSuffix();
-        String objectId = issuerId + "." + cc.getId().replace("-", "_");
+        Shop shop = cc.getCard().getShop();
+        String classId = classIdFor(shop);
+        String objectId = objectIdFor(cc);
 
         try {
+            createOrUpdateClass(shop, classId);
             createOrUpdateObject(cc, classId, objectId);
         } catch (Exception e) {
-            log.error("Google Wallet Objekt Fehler: {}", e.getMessage());
+            log.error("Google Wallet Fehler: {}", e.getMessage());
         }
 
         PrivateKey privateKey = credentials.getPrivateKey();
@@ -84,12 +95,11 @@ public class GoogleWalletService {
                 "id", objectId,
                 "classId", classId
         );
-
         Map<String, Object> payload = Map.of(
                 "loyaltyObjects", List.of(loyaltyObject)
         );
 
-        String jwt = Jwts.builder()
+        return SAVE_URL_BASE + Jwts.builder()
                 .issuer(credentials.getClientEmail())
                 .audience().single("google")
                 .claim("typ", "savetowallet")
@@ -101,28 +111,48 @@ public class GoogleWalletService {
                 .issuedAt(new Date())
                 .signWith(privateKey, Jwts.SIG.RS256)
                 .compact();
-
-        return SAVE_URL_BASE + jwt;
     }
 
-    /**
-     * Aktualisiert das Google Wallet Objekt nach einem Scan.
-     * Wird vom CustomerService aufgerufen.
-     */
     public void notifyUpdate(CustomerCard cc) {
-        if (credentials == null || walletClient == null) {
-            log.debug("Google Wallet nicht konfiguriert - kein Update");
-            return;
-        }
-
-        String issuerId = props.google().issuerId();
-        String classId = issuerId + "." + props.google().classSuffix();
-        String objectId = issuerId + "." + cc.getId().replace("-", "_");
-
+        if (credentials == null || walletClient == null) return;
+        Shop shop = cc.getCard().getShop();
         try {
-            createOrUpdateObject(cc, classId, objectId);
+            createOrUpdateClass(shop, classIdFor(shop));
+            createOrUpdateObject(cc, classIdFor(shop), objectIdFor(cc));
         } catch (Exception e) {
             log.error("Google Wallet Update Fehler: {}", e.getMessage());
+        }
+    }
+
+    private void createOrUpdateClass(Shop shop, String classId) throws Exception {
+        LoyaltyClass lc = new LoyaltyClass()
+                .setId(classId)
+                .setIssuerName(shop.getName())
+                .setProgramName(shop.getName())
+                .setHexBackgroundColor(safeColor(shop.getColorBackground()))
+                .setReviewStatus("underReview")
+                .setCountryCode("DE");
+
+        if (isHttps(shop.getLogoUrl())) {
+            lc.setProgramLogo(new Image().setSourceUri(
+                    new ImageUri().setUri(shop.getLogoUrl())));
+        }
+        if (isHttps(shop.getHeroImageUrl())) {
+            lc.setHeroImage(new Image().setSourceUri(
+                    new ImageUri().setUri(shop.getHeroImageUrl())));
+        }
+
+        try {
+            walletClient.loyaltyclass().get(classId).execute();
+            walletClient.loyaltyclass().patch(classId, lc).execute();
+            log.info("Google Wallet Class aktualisiert: {}", classId);
+        } catch (com.google.api.client.googleapis.json.GoogleJsonResponseException e) {
+            if (e.getStatusCode() == 404) {
+                walletClient.loyaltyclass().insert(lc).execute();
+                log.info("Google Wallet Class erstellt: {}", classId);
+            } else {
+                throw e;
+            }
         }
     }
 
@@ -137,10 +167,16 @@ public class GoogleWalletService {
                 .setState("ACTIVE")
                 .setAccountName(cc.getCustomer().getName())
                 .setAccountId(cc.getId())
+                // Datenfeld 1: Stempel
                 .setLoyaltyPoints(new LoyaltyPoints()
                         .setLabel("Stempel")
                         .setBalance(new LoyaltyPointsBalance()
                                 .setString(cc.getStamps() + "/" + cc.getCard().getRewardThreshold())))
+                // Datenfeld 2: Belohnung
+                .setSecondaryLoyaltyPoints(new LoyaltyPoints()
+                        .setLabel("Belohnung")
+                        .setBalance(new LoyaltyPointsBalance()
+                                .setString(cc.getCard().getRewardText())))
                 .setBarcode(new Barcode()
                         .setType("QR_CODE")
                         .setValue(qrValue)
@@ -158,5 +194,13 @@ public class GoogleWalletService {
                 throw e;
             }
         }
+    }
+
+    private boolean isHttps(String url) {
+        return url != null && url.startsWith("https://");
+    }
+
+    private String safeColor(String c) {
+        return (c != null && c.startsWith("#")) ? c : "#3C3489";
     }
 }

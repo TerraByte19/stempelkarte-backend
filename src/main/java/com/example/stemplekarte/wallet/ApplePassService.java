@@ -18,11 +18,20 @@ import org.springframework.stereotype.Service;
 
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.Base64;
 
 @Service
 public class ApplePassService {
 
     private static final Logger log = LoggerFactory.getLogger(ApplePassService.class);
+
+    // Render Secret File Pfade
+    private static final String B64_PATH = "/etc/secrets/pass-certificate.b64";
+    private static final String P12_PATH = "/tmp/pass-certificate.p12";
+    private static final String WWDR_PATH = "/etc/secrets/apple-wwdr.pem";
 
     private final AppProperties props;
     private final PassTemplateGenerator templateGenerator;
@@ -36,17 +45,49 @@ public class ApplePassService {
 
     private PKSigningInformation loadSigningInfo() {
         try {
-            return new PKSigningInformationUtil()
+            Path b64Path = Paths.get(B64_PATH);
+            Path p12Path = Paths.get(P12_PATH);
+            Path wwdrPath = Paths.get(WWDR_PATH);
+
+            // base64 -> .p12 decodieren falls noch nicht vorhanden
+            if (Files.exists(b64Path)) {
+                String b64 = Files.readString(b64Path).trim().replaceAll("\\s", "");
+                byte[] decoded = Base64.getDecoder().decode(b64);
+                Files.write(p12Path, decoded);
+                log.info("Apple Pass Zertifikat decodiert ({} bytes) -> {}", decoded.length, p12Path);
+            } else {
+                log.warn("Apple Pass base64 Datei nicht gefunden: {}", b64Path);
+                return null;
+            }
+
+            if (!Files.exists(wwdrPath)) {
+                log.warn("Apple WWDR Zertifikat nicht gefunden: {}", wwdrPath);
+                return null;
+            }
+
+            String password = props.apple().certPassword();
+            if (password == null || password.isBlank()) {
+                log.warn("Apple Cert Passwort fehlt (APPLE_CERT_PASSWORD).");
+                return null;
+            }
+
+            PKSigningInformation info = new PKSigningInformationUtil()
                     .loadSigningInformationFromPKCS12AndIntermediateCertificate(
-                            props.apple().certPath(),
-                            props.apple().certPassword(),
-                            props.apple().wwdrCertPath()
+                            p12Path.toString(),
+                            password,
+                            wwdrPath.toString()
                     );
+            log.info("Apple Pass Signing Information erfolgreich geladen.");
+            return info;
         } catch (Exception e) {
-            log.warn("Apple Pass Zertifikate nicht geladen ({}). Pass-Generierung wird fehlschlagen bis Zertifikate vorhanden sind.",
+            log.warn("Apple Pass Zertifikate nicht geladen ({}). Pass-Generierung wird fehlschlagen.",
                     e.getMessage());
             return null;
         }
+    }
+
+    public boolean isReady() {
+        return signingInfo != null;
     }
 
     public byte[] generatePass(CustomerCard cc) throws Exception {
@@ -61,7 +102,6 @@ public class ApplePassService {
                 .formatted(cc.getCustomer().getId(), cc.getCard().getId(),
                         System.currentTimeMillis());
 
-        // Dynamisches Template pro Laden generieren
         String templatePath = templateGenerator.generateTemplate(shop);
 
         PKPass pass = PKPass.builder()

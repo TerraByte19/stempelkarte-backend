@@ -24,6 +24,9 @@ public class Shop {
     @Column(name = "logo_url")
     private String logoUrl;
 
+    @Column(name = "hero_image_url")
+    private String heroImageUrl;
+
     @Column(name = "color_background", length = 32)
     private String colorBackground;
 
@@ -54,6 +57,7 @@ public class Shop {
         s.passwordHash = passwordHash;
         s.name = name;
         s.logoUrl = null;
+        s.heroImageUrl = null;
         s.colorBackground = "#3C3489";
         s.colorForeground = "#FFFFFF";
         s.colorLabel = "#FAC875";
@@ -89,11 +93,17 @@ public class Shop {
         this.updatedAt = Instant.now();
     }
 
+    public void setHeroImageUrl(String heroImageUrl) {
+        this.heroImageUrl = heroImageUrl;
+        this.updatedAt = Instant.now();
+    }
+
     public String getId() { return id; }
     public String getEmail() { return email; }
     public String getPasswordHash() { return passwordHash; }
     public String getName() { return name; }
     public String getLogoUrl() { return logoUrl; }
+    public String getHeroImageUrl() { return heroImageUrl; }
     public String getColorBackground() { return colorBackground; }
     public String getColorForeground() { return colorForeground; }
     public String getColorLabel() { return colorLabel; }

@@ -38,6 +38,7 @@ public class ShopController {
     }
 
     public record UpdateProfileRequest(String name, String logoUrl,
+
                                        String colorBackground, String colorForeground,
                                        String colorLabel) {}
 
