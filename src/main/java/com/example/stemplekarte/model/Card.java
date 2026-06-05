@@ -34,25 +34,40 @@ public class Card {
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
-    // ── Design-Felder (pro Karte) ─────────────────────────────────────────
+    // ── Farben & Bilder (pro Karte) ───────────────────────────────────────
+    @Column(name = "color_background", length = 32)
+    private String colorBackground;
+
+    @Column(name = "color_foreground", length = 32)
+    private String colorForeground;
+
+    @Column(name = "color_label", length = 32)
+    private String colorLabel;
+
+    @Column(name = "logo_url")
+    private String logoUrl;
+
+    @Column(name = "hero_image_url")
+    private String heroImageUrl;
+
+    // ── Stempel-Design (pro Karte) ────────────────────────────────────────
     @Column(name = "wallet_style", length = 16)
-    private String walletStyle;       // "grid" oder "number"
+    private String walletStyle;
 
     @Column(name = "stamp_icon_type", length = 16)
-    private String stampIconType;     // "preset" oder "upload"
+    private String stampIconType;
 
     @Column(name = "stamp_preset", length = 32)
-    private String stampPreset;       // "coffee","star","heart","dot","square"
+    private String stampPreset;
 
     @Column(name = "stamp_icon_url")
-    private String stampIconUrl;      // bei eigenem Bild
+    private String stampIconUrl;
 
     @Column(name = "stamp_color", length = 32)
     private String stampColor;
 
     @Column(name = "empty_stamp_style", length = 16)
-    private String emptyStampStyle;   // "number" oder "faded"
-    // ─────────────────────────────────────────────────────────────────────
+    private String emptyStampStyle;
 
     protected Card() {}
 
@@ -67,7 +82,13 @@ public class Card {
         c.rewardText = rewardText;
         c.active = true;
         c.createdAt = Instant.now();
-        // Design-Defaults
+        // Farb-Defaults vom Shop übernehmen
+        c.colorBackground = shop.getColorBackground() != null ? shop.getColorBackground() : "#3C3489";
+        c.colorForeground = shop.getColorForeground() != null ? shop.getColorForeground() : "#FFFFFF";
+        c.colorLabel = shop.getColorLabel() != null ? shop.getColorLabel() : "#FAC875";
+        c.logoUrl = shop.getLogoUrl();
+        c.heroImageUrl = shop.getHeroImageUrl();
+        // Stempel-Defaults
         c.walletStyle = "number";
         c.stampIconType = "preset";
         c.stampPreset = "coffee";
@@ -77,9 +98,7 @@ public class Card {
         return c;
     }
 
-    public void setActive(boolean active) {
-        this.active = active;
-    }
+    public void setActive(boolean active) { this.active = active; }
 
     public void updateDesign(String walletStyle, String stampIconType, String stampPreset,
                              String stampColor, String emptyStampStyle) {
@@ -90,9 +109,15 @@ public class Card {
         if (emptyStampStyle != null) this.emptyStampStyle = emptyStampStyle;
     }
 
-    public void setStampIconUrl(String stampIconUrl) {
-        this.stampIconUrl = stampIconUrl;
+    public void updateColors(String colorBackground, String colorForeground, String colorLabel) {
+        if (colorBackground != null) this.colorBackground = colorBackground;
+        if (colorForeground != null) this.colorForeground = colorForeground;
+        if (colorLabel != null) this.colorLabel = colorLabel;
     }
+
+    public void setLogoUrl(String logoUrl) { this.logoUrl = logoUrl; }
+    public void setHeroImageUrl(String heroImageUrl) { this.heroImageUrl = heroImageUrl; }
+    public void setStampIconUrl(String stampIconUrl) { this.stampIconUrl = stampIconUrl; }
 
     public String getId() { return id; }
     public Shop getShop() { return shop; }
@@ -102,6 +127,11 @@ public class Card {
     public String getRewardText() { return rewardText; }
     public boolean isActive() { return active; }
     public Instant getCreatedAt() { return createdAt; }
+    public String getColorBackground() { return colorBackground != null ? colorBackground : "#3C3489"; }
+    public String getColorForeground() { return colorForeground != null ? colorForeground : "#FFFFFF"; }
+    public String getColorLabel() { return colorLabel != null ? colorLabel : "#FAC875"; }
+    public String getLogoUrl() { return logoUrl; }
+    public String getHeroImageUrl() { return heroImageUrl; }
     public String getWalletStyle() { return walletStyle != null ? walletStyle : "number"; }
     public String getStampIconType() { return stampIconType != null ? stampIconType : "preset"; }
     public String getStampPreset() { return stampPreset != null ? stampPreset : "coffee"; }

@@ -46,20 +46,23 @@ public class ShopController {
             @NotBlank String description,
             int rewardThreshold,
             @NotBlank String rewardText,
-            // Design-Felder (optional, haben Defaults)
             String walletStyle,
             String stampIconType,
             String stampPreset,
             String stampColor,
-            String emptyStampStyle
+            String emptyStampStyle,
+            String colorBackground,
+            String colorForeground,
+            String colorLabel
     ) {}
 
     public record CardResponse(
             String id, String name, String description,
             int rewardThreshold, String rewardText,
-            // Design
             String walletStyle, String stampIconType, String stampPreset,
-            String stampColor, String emptyStampStyle, String stampIconUrl
+            String stampColor, String emptyStampStyle, String stampIconUrl,
+            String colorBackground, String colorForeground, String colorLabel,
+            String logoUrl, String heroImageUrl
     ) {
         static CardResponse from(Card c) {
             return new CardResponse(
@@ -67,7 +70,10 @@ public class ShopController {
                     c.getRewardThreshold(), c.getRewardText(),
                     c.getWalletStyle(), c.getStampIconType(), c.getStampPreset(),
                     c.getStampColor(), c.getEmptyStampStyle(),
-                    c.getStampIconUrl() != null ? c.getStampIconUrl() : ""
+                    c.getStampIconUrl() != null ? c.getStampIconUrl() : "",
+                    c.getColorBackground(), c.getColorForeground(), c.getColorLabel(),
+                    c.getLogoUrl() != null ? c.getLogoUrl() : "",
+                    c.getHeroImageUrl() != null ? c.getHeroImageUrl() : ""
             );
         }
     }
@@ -120,9 +126,9 @@ public class ShopController {
         Shop shop = currentShop(auth);
         Card card = cardService.create(shop, req.name(), req.description(),
                 req.rewardThreshold(), req.rewardText());
-        // Design direkt beim Erstellen setzen
         card.updateDesign(req.walletStyle(), req.stampIconType(), req.stampPreset(),
                 req.stampColor(), req.emptyStampStyle());
+        card.updateColors(req.colorBackground(), req.colorForeground(), req.colorLabel());
         cardService.save(card);
         return CardResponse.from(card);
     }

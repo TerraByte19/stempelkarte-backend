@@ -20,7 +20,7 @@ import java.util.Base64;
 import java.util.HashMap;
 import java.util.Map;
 
-@Tag(name = "Design", description = "Karten-Design (Stempel) pro Karte")
+@Tag(name = "Design", description = "Karten-Design pro Karte")
 @RestController
 @RequestMapping("/api/shop")
 public class StampDesignController {
@@ -43,20 +43,23 @@ public class StampDesignController {
         return ((JwtAuthFilter.ShopPrincipal) auth.getPrincipal()).shop();
     }
 
-    public record DesignRequest(String walletStyle, String stampIconType, String stampPreset,
-                                String stampColor, String emptyStampStyle) {}
+    public record DesignRequest(
+            String walletStyle, String stampIconType, String stampPreset,
+            String stampColor, String emptyStampStyle,
+            String colorBackground, String colorForeground, String colorLabel
+    ) {}
 
-    public record StampIconUploadRequest(String base64, String extension) {}
+    public record ImageUploadRequest(String base64, String extension) {}
 
     // ── Design einer Karte abrufen ────────────────────────────────────────
     @GetMapping("/cards/{cardId}/design")
     public Map<String, Object> getCardDesign(@PathVariable String cardId, Authentication auth) {
         Shop shop = currentShop(auth);
         Card card = cardService.getByIdAndShop(cardId, shop);
-        return cardToDesignMap(card);
+        return toMap(card);
     }
 
-    // ── Design einer Karte speichern ──────────────────────────────────────
+    // ── Komplettes Design einer Karte speichern ───────────────────────────
     @PutMapping("/cards/{cardId}/design")
     public Map<String, Object> updateCardDesign(@PathVariable String cardId,
                                                 @RequestBody DesignRequest req,
@@ -65,44 +68,64 @@ public class StampDesignController {
         Card card = cardService.getByIdAndShop(cardId, shop);
         card.updateDesign(req.walletStyle(), req.stampIconType(), req.stampPreset(),
                 req.stampColor(), req.emptyStampStyle());
+        card.updateColors(req.colorBackground(), req.colorForeground(), req.colorLabel());
         cardService.save(card);
-        return cardToDesignMap(card);
+        return toMap(card);
+    }
+
+    // ── Logo für eine Karte hochladen ─────────────────────────────────────
+    @PostMapping("/cards/{cardId}/logo")
+    public Map<String, String> uploadCardLogo(@PathVariable String cardId,
+                                              @RequestBody ImageUploadRequest req,
+                                              Authentication auth) throws IOException {
+        Shop shop = currentShop(auth);
+        Card card = cardService.getByIdAndShop(cardId, shop);
+        String url = saveImage(req, "card-logos", "logo-" + card.getId());
+        card.setLogoUrl(url);
+        cardService.save(card);
+        return Map.of("logoUrl", url);
+    }
+
+    // ── Hero/Banner für eine Karte hochladen ──────────────────────────────
+    @PostMapping("/cards/{cardId}/hero")
+    public Map<String, String> uploadCardHero(@PathVariable String cardId,
+                                              @RequestBody ImageUploadRequest req,
+                                              Authentication auth) throws IOException {
+        Shop shop = currentShop(auth);
+        Card card = cardService.getByIdAndShop(cardId, shop);
+        String url = saveImage(req, "card-heroes", "hero-" + card.getId());
+        card.setHeroImageUrl(url);
+        cardService.save(card);
+        return Map.of("heroImageUrl", url);
     }
 
     // ── Stempel-Icon für eine Karte hochladen ─────────────────────────────
     @PostMapping("/cards/{cardId}/stamp-icon")
     public Map<String, String> uploadCardStampIcon(@PathVariable String cardId,
-                                                   @RequestBody StampIconUploadRequest req,
+                                                   @RequestBody ImageUploadRequest req,
                                                    Authentication auth) throws IOException {
         Shop shop = currentShop(auth);
         Card card = cardService.getByIdAndShop(cardId, shop);
-
-        byte[] imageBytes = Base64.getDecoder().decode(req.base64());
-        Path uploadDir = Paths.get(uploadPath, "stamp-icons");
-        Files.createDirectories(uploadDir);
-
-        String ext = req.extension() != null ? req.extension() : "png";
-        String filename = card.getId() + "." + ext;
-        Files.write(uploadDir.resolve(filename), imageBytes);
-
-        String url = baseUrl + "/api/shop/stamp-icons/" + filename;
+        String url = saveImage(req, "stamp-icons", card.getId());
         card.setStampIconUrl(url);
         cardService.save(card);
         return Map.of("stampIconUrl", url);
     }
 
-    // ── Stempel-Icon ausliefern (public) ──────────────────────────────────
+    // ── Bilder ausliefern (public) ────────────────────────────────────────
     @GetMapping("/stamp-icons/{filename}")
     public ResponseEntity<byte[]> getStampIcon(@PathVariable String filename) throws IOException {
-        Path filePath = Paths.get(uploadPath, "stamp-icons", filename);
-        if (!Files.exists(filePath)) {
-            return ResponseEntity.notFound().build();
-        }
-        byte[] bytes = Files.readAllBytes(filePath);
-        String contentType = filename.endsWith(".png") ? "image/png" : "image/jpeg";
-        return ResponseEntity.ok()
-                .contentType(MediaType.parseMediaType(contentType))
-                .body(bytes);
+        return serveFile(Paths.get(uploadPath, "stamp-icons", filename));
+    }
+
+    @GetMapping("/card-logos/{filename}")
+    public ResponseEntity<byte[]> getCardLogo(@PathVariable String filename) throws IOException {
+        return serveFile(Paths.get(uploadPath, "card-logos", filename));
+    }
+
+    @GetMapping("/card-heroes/{filename}")
+    public ResponseEntity<byte[]> getCardHero(@PathVariable String filename) throws IOException {
+        return serveFile(Paths.get(uploadPath, "card-heroes", filename));
     }
 
     // ── Alte Shop-weite Design-Endpoints (Rückwärtskompatibilität) ─────────
@@ -129,23 +152,35 @@ public class StampDesignController {
     }
 
     @PostMapping("/stamp-icon")
-    public Map<String, String> uploadShopStampIcon(@RequestBody StampIconUploadRequest req,
+    public Map<String, String> uploadShopStampIcon(@RequestBody ImageUploadRequest req,
                                                    Authentication auth) throws IOException {
         Shop shop = currentShop(auth);
-        byte[] imageBytes = Base64.getDecoder().decode(req.base64());
-        Path uploadDir = Paths.get(uploadPath, "stamp-icons");
-        Files.createDirectories(uploadDir);
-        String ext = req.extension() != null ? req.extension() : "png";
-        String filename = shop.getId() + "." + ext;
-        Files.write(uploadDir.resolve(filename), imageBytes);
-        String url = baseUrl + "/api/shop/stamp-icons/" + filename;
+        String url = saveImage(req, "stamp-icons", shop.getId());
         shop.setStampIconUrl(url);
         shopRepo.save(shop);
         return Map.of("stampIconUrl", url);
     }
 
-    // ── Hilfsmethode ──────────────────────────────────────────────────────
-    private Map<String, Object> cardToDesignMap(Card card) {
+    // ── Hilfsmethoden ─────────────────────────────────────────────────────
+
+    private String saveImage(ImageUploadRequest req, String folder, String baseName) throws IOException {
+        byte[] bytes = Base64.getDecoder().decode(req.base64());
+        Path dir = Paths.get(uploadPath, folder);
+        Files.createDirectories(dir);
+        String ext = req.extension() != null ? req.extension() : "png";
+        String filename = baseName + "." + ext;
+        Files.write(dir.resolve(filename), bytes);
+        return baseUrl + "/api/shop/" + folder + "/" + filename;
+    }
+
+    private ResponseEntity<byte[]> serveFile(Path path) throws IOException {
+        if (!Files.exists(path)) return ResponseEntity.notFound().build();
+        byte[] bytes = Files.readAllBytes(path);
+        String ct = path.toString().endsWith(".png") ? "image/png" : "image/jpeg";
+        return ResponseEntity.ok().contentType(MediaType.parseMediaType(ct)).body(bytes);
+    }
+
+    private Map<String, Object> toMap(Card card) {
         Map<String, Object> map = new HashMap<>();
         map.put("walletStyle", card.getWalletStyle());
         map.put("stampIconType", card.getStampIconType());
@@ -153,6 +188,11 @@ public class StampDesignController {
         map.put("stampColor", card.getStampColor());
         map.put("emptyStampStyle", card.getEmptyStampStyle());
         map.put("stampIconUrl", card.getStampIconUrl() != null ? card.getStampIconUrl() : "");
+        map.put("colorBackground", card.getColorBackground());
+        map.put("colorForeground", card.getColorForeground());
+        map.put("colorLabel", card.getColorLabel());
+        map.put("logoUrl", card.getLogoUrl() != null ? card.getLogoUrl() : "");
+        map.put("heroImageUrl", card.getHeroImageUrl() != null ? card.getHeroImageUrl() : "");
         return map;
     }
 }
