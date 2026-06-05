@@ -4,6 +4,7 @@ import com.example.stemplekarte.model.Customer;
 import com.example.stemplekarte.model.CustomerCard;
 import com.example.stemplekarte.service.CardService;
 import com.example.stemplekarte.service.CustomerService;
+import com.example.stemplekarte.wallet.ApplePassService;
 import com.example.stemplekarte.wallet.GoogleWalletService;
 import com.google.zxing.BarcodeFormat;
 import com.google.zxing.client.j2se.MatrixToImageWriter;
@@ -13,7 +14,9 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.io.ByteArrayOutputStream;
@@ -31,12 +34,16 @@ public class CustomerController {
     private final CustomerService customerService;
     private final CardService cardService;
     private final GoogleWalletService googleWalletService;
+    private final ApplePassService applePassService;
 
-    public CustomerController(CustomerService customerService, CardService cardService,
-                              GoogleWalletService googleWalletService) {
+    public CustomerController(CustomerService customerService,
+                              CardService cardService,
+                              GoogleWalletService googleWalletService,
+                              ApplePassService applePassService) {
         this.customerService = customerService;
         this.cardService = cardService;
         this.googleWalletService = googleWalletService;
+        this.applePassService = applePassService;
     }
 
     public record CreateCustomerRequest(@NotBlank String name, @Email @NotBlank String email) {}
@@ -110,5 +117,23 @@ public class CustomerController {
         CustomerCard cc = customerService.getOrCreateCustomerCard(customerId, cardId);
         String url = googleWalletService.generateSaveUrl(cc);
         return Map.of("saveUrl", url);
+    }
+
+    @Operation(summary = "Apple Wallet Pass herunterladen (.pkpass)")
+    @GetMapping(value = "/{customerId}/card/{cardId}/apple-pass",
+            produces = "application/vnd.apple.pkpass")
+    public ResponseEntity<byte[]> applePass(@PathVariable String customerId,
+                                            @PathVariable String cardId) throws Exception {
+        CustomerCard cc = customerService.getOrCreateCustomerCard(customerId, cardId);
+        byte[] passBytes = applePassService.generatePass(cc);
+
+        String filename = "stampit-" + cc.getCard().getShop().getName()
+                .replaceAll("[^a-zA-Z0-9]", "_") + ".pkpass";
+
+        return ResponseEntity.ok()
+                .contentType(MediaType.parseMediaType("application/vnd.apple.pkpass"))
+                .header(HttpHeaders.CONTENT_DISPOSITION,
+                        "attachment; filename=\"" + filename + "\"")
+                .body(passBytes);
     }
 }
