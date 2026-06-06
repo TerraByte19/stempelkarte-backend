@@ -16,6 +16,8 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import java.io.FileInputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
 import java.security.PrivateKey;
 import java.util.Date;
 import java.util.List;
@@ -64,7 +66,6 @@ public class GoogleWalletService {
         }
     }
 
-    // Jeder Shop bekommt seine eigene Class: issuerId.shop_<SHOPID>
     private String classIdFor(Shop shop) {
         return props.google().issuerId() + ".shop_" + shop.getId().replace("-", "_");
     }
@@ -133,13 +134,20 @@ public class GoogleWalletService {
                 .setReviewStatus("underReview")
                 .setCountryCode("DE");
 
-        if (isHttps(shop.getLogoUrl())) {
+        // Logo nur setzen wenn die URL wirklich erreichbar ist
+        if (isImageReachable(shop.getLogoUrl())) {
             lc.setProgramLogo(new Image().setSourceUri(
                     new ImageUri().setUri(shop.getLogoUrl())));
+        } else if (isHttps(shop.getLogoUrl())) {
+            log.warn("Logo-URL nicht erreichbar, wird übersprungen: {}", shop.getLogoUrl());
         }
-        if (isHttps(shop.getHeroImageUrl())) {
+
+        // Hero nur setzen wenn die URL wirklich erreichbar ist
+        if (isImageReachable(shop.getHeroImageUrl())) {
             lc.setHeroImage(new Image().setSourceUri(
                     new ImageUri().setUri(shop.getHeroImageUrl())));
+        } else if (isHttps(shop.getHeroImageUrl())) {
+            log.warn("Hero-URL nicht erreichbar, wird übersprungen: {}", shop.getHeroImageUrl());
         }
 
         try {
@@ -167,12 +175,10 @@ public class GoogleWalletService {
                 .setState("ACTIVE")
                 .setAccountName(cc.getCustomer().getName())
                 .setAccountId(cc.getId())
-                // Datenfeld 1: Stempel
                 .setLoyaltyPoints(new LoyaltyPoints()
                         .setLabel("Stempel")
                         .setBalance(new LoyaltyPointsBalance()
                                 .setString(cc.getStamps() + "/" + cc.getCard().getRewardThreshold())))
-                // Datenfeld 2: Belohnung
                 .setSecondaryLoyaltyPoints(new LoyaltyPoints()
                         .setLabel("Belohnung")
                         .setBalance(new LoyaltyPointsBalance()
@@ -198,6 +204,23 @@ public class GoogleWalletService {
 
     private boolean isHttps(String url) {
         return url != null && url.startsWith("https://");
+    }
+
+    // Prüft ob ein Bild wirklich abrufbar ist (HTTP 200), damit Google die Class
+    // nicht wegen einer toten Bild-URL komplett ablehnt.
+    private boolean isImageReachable(String url) {
+        if (!isHttps(url)) return false;
+        try {
+            HttpURLConnection conn = (HttpURLConnection) new URL(url).openConnection();
+            conn.setRequestMethod("HEAD");
+            conn.setConnectTimeout(4000);
+            conn.setReadTimeout(4000);
+            int code = conn.getResponseCode();
+            conn.disconnect();
+            return code == 200;
+        } catch (Exception e) {
+            return false;
+        }
     }
 
     private String safeColor(String c) {
