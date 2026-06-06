@@ -1,5 +1,6 @@
 package com.example.stemplekarte.wallet;
 
+import com.example.stemplekarte.model.Card;
 import com.example.stemplekarte.model.CustomerCard;
 import com.example.stemplekarte.model.Shop;
 import org.springframework.beans.factory.annotation.Value;
@@ -24,67 +25,102 @@ public class PassTemplateGenerator {
     @Value("${stempelkarte.upload-path:./uploads}")
     private String uploadPath;
 
-    public String generateTemplate(CustomerCard cc) throws IOException {
-        Shop shop = cc.getCard().getShop();
-        int stamps = cc.getStamps();
-        int threshold = cc.getCard().getRewardThreshold();
+    @Value("${stempelkarte.apple.pass-type-identifier:pass.com.example.stempelkarte}")
+    private String passTypeIdentifier;
 
-        // Ordner pro Kundenkarte (damit jede Karte ihr eigenes Stempelbild hat)
-        String shopDir = uploadPath + "/pass-templates/" + cc.getId() + ".pass";
-        Path templatePath = Paths.get(shopDir);
+    @Value("${stempelkarte.apple.team-identifier:ABCDE12345}")
+    private String teamIdentifier;
+
+    public String generateTemplate(CustomerCard cc) throws IOException {
+        Card card = cc.getCard();
+        Shop shop = card.getShop();
+        int stamps = cc.getStamps();
+        int threshold = card.getRewardThreshold();
+
+        // Karten-Design hat Vorrang, Fallback auf Shop
+        String bgColor = notBlank(card.getColorBackground()) ? card.getColorBackground() : shop.getColorBackground();
+        String fgColor = notBlank(card.getColorForeground()) ? card.getColorForeground() : shop.getColorForeground();
+        String labelColor = notBlank(card.getColorLabel()) ? card.getColorLabel() : shop.getColorLabel();
+        String logoUrl = notBlank(card.getLogoUrl()) ? card.getLogoUrl() : shop.getLogoUrl();
+        String walletStyle = card.getWalletStyle();
+        String stampColor = card.getStampColor();
+        String stampIconType = card.getStampIconType();
+        String stampPreset = card.getStampPreset();
+        String stampIconUrl = card.getStampIconUrl();
+        String emptyStampStyle = card.getEmptyStampStyle();
+
+        String passDir = uploadPath + "/pass-templates/" + cc.getId() + ".pass";
+        Path templatePath = Paths.get(passDir);
         Files.createDirectories(templatePath);
 
-        Files.writeString(templatePath.resolve("pass.json"), generatePassJson(shop));
-        generateLogoImages(shop, templatePath);
-        generateIconImages(shop, templatePath);
+        Files.writeString(templatePath.resolve("pass.json"),
+                generatePassJson(shop.getName(), card.getName(), bgColor, fgColor, labelColor));
 
-        // Altes Stempelbild entfernen, dann nur bei Raster-Stil neu erzeugen
+        generateLogoImages(logoUrl, shop.getName(), bgColor, templatePath);
+        generateIconImages(bgColor, templatePath);
+
         deleteStripImages(templatePath);
-        if ("grid".equalsIgnoreCase(shop.getWalletStyle())) {
-            generateStripImages(shop, stamps, threshold, templatePath);
+        if ("grid".equalsIgnoreCase(walletStyle)) {
+            generateStripImages(stamps, threshold, walletStyle, stampColor,
+                    stampIconType, stampPreset, stampIconUrl, emptyStampStyle, templatePath);
         }
 
-        return shopDir;
+        return passDir;
     }
 
-    private String generatePassJson(Shop shop) {
+    // ── pass.json ─────────────────────────────────────────────────────────────
+
+    private String generatePassJson(String orgName, String cardName,
+                                    String bgColor, String fgColor, String labelColor) {
         return """
                 {
                   "formatVersion": 1,
-                  "passTypeIdentifier": "pass.com.example.stempelkarte",
-                  "teamIdentifier": "ABCDE12345",
+                  "passTypeIdentifier": "%s",
+                  "teamIdentifier": "%s",
                   "organizationName": "%s",
-                  "description": "Treuekarte",
+                  "description": "%s",
                   "logoText": "%s",
-                  "foregroundColor": "rgb(255,255,255)",
+                  "foregroundColor": "%s",
                   "backgroundColor": "%s",
-                  "labelColor": "rgb(255,200,100)",
+                  "labelColor": "%s",
                   "storeCard": {}
                 }
                 """.formatted(
-                shop.getName(),
-                shop.getName(),
-                hexToRgb(shop.getColorBackground())
+                passTypeIdentifier,
+                teamIdentifier,
+                orgName,
+                cardName,
+                orgName,
+                hexToRgb(fgColor != null ? fgColor : "#FFFFFF"),
+                hexToRgb(bgColor != null ? bgColor : "#3C3489"),
+                hexToRgb(labelColor != null ? labelColor : "#FAC875")
         );
     }
 
-    // ===================== STEMPEL-RASTER (STRIP) =====================
+    // ── Stempel-Raster (Strip) ────────────────────────────────────────────────
 
-    private void generateStripImages(Shop shop, int stamps, int threshold, Path templatePath) throws IOException {
-        BufferedImage customIcon = loadCustomIcon(shop);
-        ImageIO.write(renderStrip(shop, stamps, threshold, 320, 110, customIcon), "PNG",
-                templatePath.resolve("strip.png").toFile());
-        ImageIO.write(renderStrip(shop, stamps, threshold, 640, 220, customIcon), "PNG",
-                templatePath.resolve("strip@2x.png").toFile());
-        ImageIO.write(renderStrip(shop, stamps, threshold, 960, 330, customIcon), "PNG",
-                templatePath.resolve("strip@3x.png").toFile());
+    private void generateStripImages(int stamps, int threshold,
+                                     String walletStyle, String stampColor,
+                                     String stampIconType, String stampPreset,
+                                     String stampIconUrl, String emptyStampStyle,
+                                     Path templatePath) throws IOException {
+        BufferedImage customIcon = loadCustomIcon(stampIconType, stampIconUrl);
+        ImageIO.write(renderStrip(stamps, threshold, stampColor, stampIconType,
+                        stampPreset, stampIconUrl, emptyStampStyle, 320, 110, customIcon),
+                "PNG", templatePath.resolve("strip.png").toFile());
+        ImageIO.write(renderStrip(stamps, threshold, stampColor, stampIconType,
+                        stampPreset, stampIconUrl, emptyStampStyle, 640, 220, customIcon),
+                "PNG", templatePath.resolve("strip@2x.png").toFile());
+        ImageIO.write(renderStrip(stamps, threshold, stampColor, stampIconType,
+                        stampPreset, stampIconUrl, emptyStampStyle, 960, 330, customIcon),
+                "PNG", templatePath.resolve("strip@3x.png").toFile());
     }
 
-    private BufferedImage loadCustomIcon(Shop shop) {
-        if ("upload".equalsIgnoreCase(shop.getStampIconType())
-                && shop.getStampIconUrl() != null && !shop.getStampIconUrl().isBlank()) {
+    private BufferedImage loadCustomIcon(String stampIconType, String stampIconUrl) {
+        if ("upload".equalsIgnoreCase(stampIconType)
+                && notBlank(stampIconUrl)) {
             try {
-                return ImageIO.read(new URL(shop.getStampIconUrl()));
+                return ImageIO.read(new URL(stampIconUrl));
             } catch (Exception e) {
                 return null;
             }
@@ -92,7 +128,10 @@ public class PassTemplateGenerator {
         return null;
     }
 
-    private BufferedImage renderStrip(Shop shop, int stamps, int threshold,
+    private BufferedImage renderStrip(int stamps, int threshold,
+                                      String stampColorHex, String stampIconType,
+                                      String stampPreset, String stampIconUrl,
+                                      String emptyStampStyle,
                                       int w, int h, BufferedImage customIcon) {
         BufferedImage img = new BufferedImage(w, h, BufferedImage.TYPE_INT_ARGB);
         Graphics2D g = img.createGraphics();
@@ -108,11 +147,10 @@ public class PassTemplateGenerator {
         double cellW = contentW / cols, cellH = contentH / rows;
         double diameter = Math.min(cellW, cellH) * 0.80;
 
-        Color stampColor = hexToColor(shop.getStampColor() != null
-                ? shop.getStampColor() : shop.getColorLabel());
-        String emptyStyle = shop.getEmptyStampStyle() == null ? "number" : shop.getEmptyStampStyle();
-        boolean useCustom = "upload".equalsIgnoreCase(shop.getStampIconType()) && customIcon != null;
-        String preset = shop.getStampPreset() == null ? "coffee" : shop.getStampPreset();
+        Color stampColor = hexToColor(stampColorHex != null ? stampColorHex : "#6F4E37");
+        String emptyStyle = emptyStampStyle == null ? "number" : emptyStampStyle;
+        boolean useCustom = "upload".equalsIgnoreCase(stampIconType) && customIcon != null;
+        String preset = stampPreset == null ? "coffee" : stampPreset;
 
         for (int i = 0; i < threshold; i++) {
             int r = i / cols, c = i % cols;
@@ -121,16 +159,17 @@ public class PassTemplateGenerator {
             double cx = padX + rowOffset + c * cellW + cellW / 2;
             double cy = padY + r * cellH + cellH / 2;
             boolean filled = i < stamps;
-            drawStamp(g, filled, i + 1, cx, cy, diameter, useCustom, customIcon,
-                    preset, stampColor, emptyStyle);
+            drawStamp(g, filled, i + 1, cx, cy, diameter,
+                    useCustom, customIcon, preset, stampColor, emptyStyle);
         }
 
         g.dispose();
         return img;
     }
 
-    private void drawStamp(Graphics2D g, boolean filled, int number, double cx, double cy,
-                           double d, boolean useCustom, BufferedImage customIcon,
+    private void drawStamp(Graphics2D g, boolean filled, int number,
+                           double cx, double cy, double d,
+                           boolean useCustom, BufferedImage customIcon,
                            String preset, Color stampColor, String emptyStyle) {
         double r = d / 2;
         if (filled) {
@@ -152,7 +191,7 @@ public class PassTemplateGenerator {
                 String s = String.valueOf(number);
                 g.drawString(s, (float) (cx - fm.stringWidth(s) / 2.0),
                         (float) (cy + fm.getAscent() / 2.0 - fm.getDescent() / 2.0));
-            } else { // faded
+            } else {
                 g.setColor(new Color(255, 255, 255, 60));
                 g.fill(new Ellipse2D.Double(cx - r, cy - r, d, d));
                 if (useCustom) {
@@ -164,8 +203,8 @@ public class PassTemplateGenerator {
         }
     }
 
-    private void drawImageInCircle(Graphics2D g, BufferedImage img, double cx, double cy,
-                                   double d, float alpha) {
+    private void drawImageInCircle(Graphics2D g, BufferedImage img,
+                                   double cx, double cy, double d, float alpha) {
         Shape oldClip = g.getClip();
         Composite oldComp = g.getComposite();
         g.setClip(new Ellipse2D.Double(cx - d / 2, cy - d / 2, d, d));
@@ -181,14 +220,14 @@ public class PassTemplateGenerator {
         g.setColor(col);
         String p = preset == null ? "coffee" : preset.toLowerCase();
         switch (p) {
-            case "star" -> g.fill(starShape(cx, cy, size / 2));
-            case "heart" -> g.fill(heartShape(cx, cy, size / 2));
+            case "star"   -> g.fill(starShape(cx, cy, size / 2));
+            case "heart"  -> g.fill(heartShape(cx, cy, size / 2));
             case "square" -> {
                 double s = size * 0.86;
                 g.fill(new RoundRectangle2D.Double(cx - s / 2, cy - s / 2, s, s, s * 0.22, s * 0.22));
             }
-            case "dot" -> g.fill(new Ellipse2D.Double(cx - size / 2, cy - size / 2, size, size));
-            default -> drawCoffee(g, cx, cy, size, col);
+            case "dot"    -> g.fill(new Ellipse2D.Double(cx - size / 2, cy - size / 2, size, size));
+            default       -> drawCoffee(g, cx, cy, size, col);
         }
     }
 
@@ -226,35 +265,36 @@ public class PassTemplateGenerator {
 
     private void deleteStripImages(Path templatePath) {
         for (String n : new String[]{"strip.png", "strip@2x.png", "strip@3x.png"}) {
-            try {
-                Files.deleteIfExists(templatePath.resolve(n));
-            } catch (IOException ignored) {
-            }
+            try { Files.deleteIfExists(templatePath.resolve(n)); }
+            catch (IOException ignored) {}
         }
     }
 
-    // ===================== LOGO / ICON (unverändert) =====================
+    // ── Logo / Icon ───────────────────────────────────────────────────────────
 
-    private void generateLogoImages(Shop shop, Path templatePath) throws IOException {
-        if (shop.getLogoUrl() != null && !shop.getLogoUrl().isBlank()) {
+    private void generateLogoImages(String logoUrl, String shopName,
+                                    String bgColor, Path templatePath) throws IOException {
+        if (notBlank(logoUrl)) {
             try {
-                BufferedImage logo = ImageIO.read(new URL(shop.getLogoUrl()));
-                ImageIO.write(resizeImage(logo, 160, 50), "PNG", templatePath.resolve("logo.png").toFile());
-                ImageIO.write(resizeImage(logo, 320, 100), "PNG", templatePath.resolve("logo@2x.png").toFile());
+                BufferedImage logo = ImageIO.read(new URL(logoUrl));
+                ImageIO.write(resizeImage(logo, 160, 50), "PNG",
+                        templatePath.resolve("logo.png").toFile());
+                ImageIO.write(resizeImage(logo, 320, 100), "PNG",
+                        templatePath.resolve("logo@2x.png").toFile());
                 return;
             } catch (Exception e) {
-                // Fallback
+                // Fallback auf Text-Logo
             }
         }
-        createTextLogo(shop.getName(), shop.getColorBackground(), 160, 50,
+        createTextLogo(shopName, bgColor, 160, 50,
                 templatePath.resolve("logo.png").toString());
-        createTextLogo(shop.getName(), shop.getColorBackground(), 320, 100,
+        createTextLogo(shopName, bgColor, 320, 100,
                 templatePath.resolve("logo@2x.png").toString());
     }
 
-    private void generateIconImages(Shop shop, Path templatePath) throws IOException {
-        createColorIcon(shop.getColorBackground(), 29, templatePath.resolve("icon.png").toString());
-        createColorIcon(shop.getColorBackground(), 58, templatePath.resolve("icon@2x.png").toString());
+    private void generateIconImages(String bgColor, Path templatePath) throws IOException {
+        createColorIcon(bgColor, 29, templatePath.resolve("icon.png").toString());
+        createColorIcon(bgColor, 58, templatePath.resolve("icon@2x.png").toString());
     }
 
     private void createTextLogo(String text, String bgColor, int width, int height,
@@ -267,9 +307,9 @@ public class PassTemplateGenerator {
         g.setColor(Color.WHITE);
         g.setFont(new Font("Arial", Font.BOLD, height / 2));
         FontMetrics fm = g.getFontMetrics();
-        int x = (width - fm.stringWidth(text)) / 2;
-        int y = (height + fm.getAscent() - fm.getDescent()) / 2;
         String displayText = text.length() > 15 ? text.substring(0, 13) + ".." : text;
+        int x = (width - fm.stringWidth(displayText)) / 2;
+        int y = (height + fm.getAscent() - fm.getDescent()) / 2;
         g.drawString(displayText, Math.max(0, x), y);
         g.dispose();
         ImageIO.write(img, "PNG", Paths.get(outputPath).toFile());
@@ -288,10 +328,17 @@ public class PassTemplateGenerator {
     private BufferedImage resizeImage(BufferedImage original, int width, int height) {
         BufferedImage resized = new BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB);
         Graphics2D g = resized.createGraphics();
-        g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+        g.setRenderingHint(RenderingHints.KEY_INTERPOLATION,
+                RenderingHints.VALUE_INTERPOLATION_BILINEAR);
         g.drawImage(original, 0, 0, width, height, null);
         g.dispose();
         return resized;
+    }
+
+    // ── Hilfsmethoden ─────────────────────────────────────────────────────────
+
+    private boolean notBlank(String s) {
+        return s != null && !s.isBlank();
     }
 
     private Color hexToColor(String hex) {
