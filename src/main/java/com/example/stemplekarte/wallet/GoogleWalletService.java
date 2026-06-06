@@ -84,7 +84,7 @@ public class GoogleWalletService {
         String objectId = objectIdFor(cc);
 
         try {
-            createOrUpdateClass(shop, classId);
+            createOrUpdateClass(cc, classId);
             createOrUpdateObject(cc, classId, objectId);
         } catch (Exception e) {
             log.error("Google Wallet Fehler: {}", e.getMessage());
@@ -116,38 +116,45 @@ public class GoogleWalletService {
 
     public void notifyUpdate(CustomerCard cc) {
         if (credentials == null || walletClient == null) return;
-        Shop shop = cc.getCard().getShop();
         try {
-            createOrUpdateClass(shop, classIdFor(shop));
-            createOrUpdateObject(cc, classIdFor(shop), objectIdFor(cc));
+            createOrUpdateClass(cc, classIdFor(cc.getCard().getShop()));
+            createOrUpdateObject(cc, classIdFor(cc.getCard().getShop()), objectIdFor(cc));
         } catch (Exception e) {
             log.error("Google Wallet Update Fehler: {}", e.getMessage());
         }
     }
 
-    private void createOrUpdateClass(Shop shop, String classId) throws Exception {
+    private void createOrUpdateClass(CustomerCard cc, String classId) throws Exception {
+        Shop shop = cc.getCard().getShop();
+        com.example.stemplekarte.model.Card card = cc.getCard();
+
+        // Karten-Design hat Vorrang, Fallback auf Shop
+        String bgColor = card.getColorBackground() != null ? card.getColorBackground() : shop.getColorBackground();
+        String logoUrl = (card.getLogoUrl() != null && !card.getLogoUrl().isBlank()) ? card.getLogoUrl() : shop.getLogoUrl();
+        String heroUrl = (card.getHeroImageUrl() != null && !card.getHeroImageUrl().isBlank()) ? card.getHeroImageUrl() : shop.getHeroImageUrl();
+
         LoyaltyClass lc = new LoyaltyClass()
                 .setId(classId)
                 .setIssuerName(shop.getName())
-                .setProgramName(shop.getName())
-                .setHexBackgroundColor(safeColor(shop.getColorBackground()))
+                .setProgramName(card.getName())
+                .setHexBackgroundColor(safeColor(bgColor))
                 .setReviewStatus("underReview")
                 .setCountryCode("DE");
 
         // Logo nur setzen wenn die URL wirklich erreichbar ist
-        if (isImageReachable(shop.getLogoUrl())) {
+        if (isImageReachable(logoUrl)) {
             lc.setProgramLogo(new Image().setSourceUri(
-                    new ImageUri().setUri(shop.getLogoUrl())));
-        } else if (isHttps(shop.getLogoUrl())) {
-            log.warn("Logo-URL nicht erreichbar, wird übersprungen: {}", shop.getLogoUrl());
+                    new ImageUri().setUri(logoUrl)));
+        } else if (isHttps(logoUrl)) {
+            log.warn("Logo-URL nicht erreichbar, wird übersprungen: {}", logoUrl);
         }
 
         // Hero nur setzen wenn die URL wirklich erreichbar ist
-        if (isImageReachable(shop.getHeroImageUrl())) {
+        if (isImageReachable(heroUrl)) {
             lc.setHeroImage(new Image().setSourceUri(
-                    new ImageUri().setUri(shop.getHeroImageUrl())));
-        } else if (isHttps(shop.getHeroImageUrl())) {
-            log.warn("Hero-URL nicht erreichbar, wird übersprungen: {}", shop.getHeroImageUrl());
+                    new ImageUri().setUri(heroUrl)));
+        } else if (isHttps(heroUrl)) {
+            log.warn("Hero-URL nicht erreichbar, wird übersprungen: {}", heroUrl);
         }
 
         try {

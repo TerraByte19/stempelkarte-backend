@@ -5,18 +5,11 @@ import com.example.stemplekarte.model.Shop;
 import com.example.stemplekarte.repository.ShopRepository;
 import com.example.stemplekarte.security.JwtAuthFilter;
 import com.example.stemplekarte.service.CardService;
+import com.example.stemplekarte.wallet.CloudinaryService;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.MediaType;
-import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.util.Base64;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -27,16 +20,13 @@ public class StampDesignController {
 
     private final ShopRepository shopRepo;
     private final CardService cardService;
+    private final CloudinaryService cloudinary;
 
-    @Value("${stempelkarte.upload-path:./uploads}")
-    private String uploadPath;
-
-    @Value("${stempelkarte.base-url:http://localhost:8080}")
-    private String baseUrl;
-
-    public StampDesignController(ShopRepository shopRepo, CardService cardService) {
+    public StampDesignController(ShopRepository shopRepo, CardService cardService,
+                                 CloudinaryService cloudinary) {
         this.shopRepo = shopRepo;
         this.cardService = cardService;
+        this.cloudinary = cloudinary;
     }
 
     private Shop currentShop(Authentication auth) {
@@ -77,10 +67,11 @@ public class StampDesignController {
     @PostMapping("/cards/{cardId}/logo")
     public Map<String, String> uploadCardLogo(@PathVariable String cardId,
                                               @RequestBody ImageUploadRequest req,
-                                              Authentication auth) throws IOException {
+                                              Authentication auth) {
         Shop shop = currentShop(auth);
         Card card = cardService.getByIdAndShop(cardId, shop);
-        String url = saveImage(req, "card-logos", "logo-" + card.getId());
+        String url = cloudinary.upload(req.base64(), "logo-" + card.getId(),
+                CloudinaryService.ImageType.LOGO);
         card.setLogoUrl(url);
         cardService.save(card);
         return Map.of("logoUrl", url);
@@ -90,10 +81,11 @@ public class StampDesignController {
     @PostMapping("/cards/{cardId}/hero")
     public Map<String, String> uploadCardHero(@PathVariable String cardId,
                                               @RequestBody ImageUploadRequest req,
-                                              Authentication auth) throws IOException {
+                                              Authentication auth) {
         Shop shop = currentShop(auth);
         Card card = cardService.getByIdAndShop(cardId, shop);
-        String url = saveImage(req, "card-heroes", "hero-" + card.getId());
+        String url = cloudinary.upload(req.base64(), "hero-" + card.getId(),
+                CloudinaryService.ImageType.HERO);
         card.setHeroImageUrl(url);
         cardService.save(card);
         return Map.of("heroImageUrl", url);
@@ -103,32 +95,17 @@ public class StampDesignController {
     @PostMapping("/cards/{cardId}/stamp-icon")
     public Map<String, String> uploadCardStampIcon(@PathVariable String cardId,
                                                    @RequestBody ImageUploadRequest req,
-                                                   Authentication auth) throws IOException {
+                                                   Authentication auth) {
         Shop shop = currentShop(auth);
         Card card = cardService.getByIdAndShop(cardId, shop);
-        String url = saveImage(req, "stamp-icons", card.getId());
+        String url = cloudinary.upload(req.base64(), "stamp-" + card.getId(),
+                CloudinaryService.ImageType.STAMP);
         card.setStampIconUrl(url);
         cardService.save(card);
         return Map.of("stampIconUrl", url);
     }
 
-    // ── Bilder ausliefern (public) ────────────────────────────────────────
-    @GetMapping("/stamp-icons/{filename}")
-    public ResponseEntity<byte[]> getStampIcon(@PathVariable String filename) throws IOException {
-        return serveFile(Paths.get(uploadPath, "stamp-icons", filename));
-    }
-
-    @GetMapping("/card-logos/{filename}")
-    public ResponseEntity<byte[]> getCardLogo(@PathVariable String filename) throws IOException {
-        return serveFile(Paths.get(uploadPath, "card-logos", filename));
-    }
-
-    @GetMapping("/card-heroes/{filename}")
-    public ResponseEntity<byte[]> getCardHero(@PathVariable String filename) throws IOException {
-        return serveFile(Paths.get(uploadPath, "card-heroes", filename));
-    }
-
-    // ── Alte Shop-weite Design-Endpoints (Rückwärtskompatibilität) ─────────
+    // ── Alte Shop-weite Endpoints (Rückwärtskompatibilität) ────────────────
     @GetMapping("/design")
     public Map<String, Object> getShopDesign(Authentication auth) {
         Shop shop = currentShop(auth);
@@ -153,31 +130,13 @@ public class StampDesignController {
 
     @PostMapping("/stamp-icon")
     public Map<String, String> uploadShopStampIcon(@RequestBody ImageUploadRequest req,
-                                                   Authentication auth) throws IOException {
+                                                   Authentication auth) {
         Shop shop = currentShop(auth);
-        String url = saveImage(req, "stamp-icons", shop.getId());
+        String url = cloudinary.upload(req.base64(), "stamp-" + shop.getId(),
+                CloudinaryService.ImageType.STAMP);
         shop.setStampIconUrl(url);
         shopRepo.save(shop);
         return Map.of("stampIconUrl", url);
-    }
-
-    // ── Hilfsmethoden ─────────────────────────────────────────────────────
-
-    private String saveImage(ImageUploadRequest req, String folder, String baseName) throws IOException {
-        byte[] bytes = Base64.getDecoder().decode(req.base64());
-        Path dir = Paths.get(uploadPath, folder);
-        Files.createDirectories(dir);
-        String ext = req.extension() != null ? req.extension() : "png";
-        String filename = baseName + "." + ext;
-        Files.write(dir.resolve(filename), bytes);
-        return baseUrl + "/api/shop/" + folder + "/" + filename;
-    }
-
-    private ResponseEntity<byte[]> serveFile(Path path) throws IOException {
-        if (!Files.exists(path)) return ResponseEntity.notFound().build();
-        byte[] bytes = Files.readAllBytes(path);
-        String ct = path.toString().endsWith(".png") ? "image/png" : "image/jpeg";
-        return ResponseEntity.ok().contentType(MediaType.parseMediaType(ct)).body(bytes);
     }
 
     private Map<String, Object> toMap(Card card) {

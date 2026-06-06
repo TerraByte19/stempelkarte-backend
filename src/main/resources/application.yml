@@ -38,3 +38,8 @@ stempelkarte:
     team-id: ${APPLE_TEAM_ID:ABCDE12345}
     auth-key-path: ${APNS_KEY_PATH:./certs/AuthKey.p8}
     use-sandbox: ${APNS_SANDBOX:true}
+
+cloudinary:
+  cloud-name: ${CLOUDINARY_CLOUD_NAME:dzu73ui9i}
+  api-key: ${CLOUDINARY_API_KEY:587366334988363}
+  api-secret: ${CLOUDINARY_API_SECRET:}
