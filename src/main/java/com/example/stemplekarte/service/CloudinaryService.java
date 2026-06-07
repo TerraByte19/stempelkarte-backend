@@ -48,11 +48,11 @@ public class CloudinaryService {
                 // NEU: Schneidet das Logo als perfekten Kreis aus und macht die Ecken transparent
                 case LOGO -> new Transformation<>()
                         .width(660).height(660)
-                        .crop("fill").gravity("center")
-                        .radius("max")
-                        .background("transparent")
+                        .crop("pad")                    // Passt das ganze Logo an, ohne es abzuschneiden
+                        .background("transparent")      // Innenraum ist durchsichtig (nimmt die schwarze Kartenfarbe an)
+                        .border("12px_solid_white")     // HIER ENTSTEHT DER WEIßE RING (12 Pixel dick)
+                        .radius("max")                  // Macht das Ganze zu einem perfekten Kreis
                         .quality("auto").fetchFormat("png");
-
                 case HERO -> new Transformation<>()
                         .width(1125).height(369).crop("fill").gravity("center")
                         .quality("auto").fetchFormat("png");

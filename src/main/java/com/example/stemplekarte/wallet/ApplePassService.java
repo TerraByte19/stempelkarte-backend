@@ -144,9 +144,10 @@ public class ApplePassService {
                 .serialNumber(cc.getId())
                 .description(cc.getCard().getName())
                 .logoText(shop.getName())
-                .foregroundColor(hexToRgb(shop.getColorForeground()))
-                .backgroundColor(hexToRgb(shop.getColorBackground()))
-                .labelColor(hexToRgb(shop.getColorLabel()))
+                // NACHHER (Die korrekte Version):
+                .foregroundColor(hexToRgb(cc.getCard().getColorForeground()))
+                .backgroundColor(hexToRgb(cc.getCard().getColorBackground()))
+                .labelColor(hexToRgb(cc.getCard().getColorLabel()))
                 .webServiceURL(new URL(props.baseUrl() + "/wallet/"))
                 .authenticationToken(cc.getAuthToken())
                 .barcodes(List.of(barcode))
