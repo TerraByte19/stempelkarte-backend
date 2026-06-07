@@ -98,8 +98,8 @@ public class ApplePassService {
         boolean ready = remaining <= 0;
         String rewardText = cc.getCard().getRewardText();
 
-        log.info("Pass-Generierung fuer {} - Farben: fg={}, bg={}, label={}",
-                cc.getId(), shop.getColorForeground(), shop.getColorBackground(), shop.getColorLabel());
+        log.info("Pass-Generierung {} | walletStyle='{}' grid={} stamps={} threshold={} remaining={} reward='{}'",
+                cc.getId(), shop.getWalletStyle(), grid, cc.getStamps(), threshold, remaining, rewardText);
 
         String qrPayload = "{\"cid\":\"%s\",\"cardId\":\"%s\",\"ts\":%d}"
                 .formatted(cc.getCustomer().getId(), cc.getCard().getId(),
