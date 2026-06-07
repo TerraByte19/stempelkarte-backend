@@ -15,9 +15,9 @@ import java.util.Map;
  * für Apple/Google Wallet. Bilder überleben so jeden Render-Deploy.
  *
  * Offizielle Wallet-Größen (recherchiert):
- *  - Logo:   quadratisch, 660x660px (für beide Wallets optimal)
- *  - Hero:   3:1 Banner, 1125x369px (kein Text)
- *  - Stempel-Icon: quadratisch, 400x400px (transparent)
+ * - Logo:   quadratisch, 660x660px (für beide Wallets optimal)
+ * - Hero:   3:1 Banner, 1125x369px (kein Text)
+ * - Stempel-Icon: quadratisch, 400x400px (transparent)
  */
 @Service
 public class CloudinaryService {
@@ -45,12 +45,18 @@ public class CloudinaryService {
             byte[] bytes = Base64.getDecoder().decode(base64);
 
             Transformation<?> transformation = switch (type) {
+                // NEU: Schneidet das Logo als perfekten Kreis aus und macht die Ecken transparent
                 case LOGO -> new Transformation<>()
-                        .width(660).height(660).crop("fit")
+                        .width(660).height(660)
+                        .crop("fill").gravity("center")
+                        .radius("max")
+                        .background("transparent")
                         .quality("auto").fetchFormat("png");
+
                 case HERO -> new Transformation<>()
                         .width(1125).height(369).crop("fill").gravity("center")
                         .quality("auto").fetchFormat("png");
+
                 case STAMP -> new Transformation<>()
                         .width(400).height(400).crop("fit")
                         .quality("auto").fetchFormat("png");
