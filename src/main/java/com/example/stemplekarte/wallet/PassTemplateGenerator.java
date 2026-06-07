@@ -325,33 +325,31 @@ public class PassTemplateGenerator {
         ImageIO.write(img, "PNG", Paths.get(outputPath).toFile());
     }
 
-    private BufferedImage resizeImage(BufferedImage original, int width, int height) {
-        BufferedImage resized = new BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB);
+    // --- HIER IST DIE NEUE, OPTIMIERTE METHODE ---
+    private BufferedImage resizeImage(BufferedImage original, int maxWidth, int maxHeight) {
+        // Seitenverhältnis berechnen
+        double aspectOriginal = (double) original.getWidth() / original.getHeight();
+        double aspectTarget = (double) maxWidth / maxHeight;
+
+        int targetWidth = maxWidth;
+        int targetHeight = maxHeight;
+
+        // Bildmaße berechnen, OHNE unsichtbaren Platz (Padding) hinzuzufügen
+        if (aspectOriginal > aspectTarget) {
+            targetHeight = (int) (maxWidth / aspectOriginal);
+        } else {
+            targetWidth = (int) (maxHeight * aspectOriginal);
+        }
+
+        // Erzeugt ein Bild, das exakt die Größe des Logos hat (keine leeren Ränder mehr!)
+        BufferedImage resized = new BufferedImage(targetWidth, targetHeight, BufferedImage.TYPE_INT_ARGB);
         Graphics2D g = resized.createGraphics();
         g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
 
-        // -- NEU: Berechnet das Seitenverhältnis, um Verzerrungen (Ovale) zu verhindern --
-        double aspectOriginal = (double) original.getWidth() / original.getHeight();
-        double aspectTarget = (double) width / height;
-
-        int drawWidth = width;
-        int drawHeight = height;
-        int x = 0;
-        int y = 0;
-
-        if (aspectOriginal > aspectTarget) {
-            // Bild ist breiter als das Ziel
-            drawHeight = (int) (width / aspectOriginal);
-            y = (height - drawHeight) / 2;
-        } else {
-            // Bild ist höher als das Ziel
-            drawWidth = (int) (height * aspectOriginal);
-            x = (width - drawWidth) / 2;
-        }
-
-        // Zeichnet das Bild zentriert und ungetreckt
-        g.drawImage(original, x, y, drawWidth, drawHeight, null);
+        // Zeichnet das Bild direkt an den Koordinaten 0,0 (ganz oben links)
+        g.drawImage(original, 0, 0, targetWidth, targetHeight, null);
         g.dispose();
+
         return resized;
     }
 
