@@ -96,6 +96,7 @@ public class ApplePassService {
         boolean grid = "grid".equalsIgnoreCase(shop.getWalletStyle());
         int remaining = Math.max(0, threshold - cc.getStamps());
         boolean ready = remaining <= 0;
+        String rewardText = cc.getCard().getRewardText();
 
         String qrPayload = "{\"cid\":\"%s\",\"cardId\":\"%s\",\"ts\":%d}"
                 .formatted(cc.getCustomer().getId(), cc.getCard().getId(),
@@ -107,30 +108,25 @@ public class ApplePassService {
                 .passType(PKPassType.PKStoreCard)
                 .headerFieldBuilder(PKField.builder()
                         .key("stamps").label("STEMPEL")
-                        .value(cc.getStamps() + "/" + threshold));
+                        .value(String.valueOf(cc.getStamps())));
 
         if (grid) {
-            // Raster-Stil: Stempel-Bild oben, kein großes Mittelfeld
-            String reward = ready
-                    ? cc.getCard().getRewardText() + " verfuegbar!"
-                    : "Noch " + remaining + " bis: " + cc.getCard().getRewardText();
             genericPass
                     .secondaryFieldBuilder(PKField.builder()
-                            .key("reward").label("BELOHNUNG").value(reward))
+                            .key("reward").label("BELOHNUNG").value(rewardText))
                     .auxiliaryFieldBuilder(PKField.builder()
                             .key("name").label("KUNDE").value(cc.getCustomer().getName()));
         } else {
-            // Zähler-Stil wie die lila Karte: große Zahl in der Mitte
             genericPass
                     .primaryFieldBuilder(PKField.builder()
                             .key("remaining")
-                            .label(ready ? "Belohnung bereit" : "Stempel bis " + cc.getCard().getRewardText())
+                            .label(ready ? "Belohnung bereit" : "Stempel bis " + rewardText)
                             .value(ready ? "Bereit!" : String.valueOf(remaining)))
                     .secondaryFieldBuilder(PKField.builder()
                             .key("card").label("KARTE").value(cc.getCard().getName()))
                     .auxiliaryFieldBuilder(PKField.builder()
-                            .key("onCard").label("STEMPEL AUF KARTE")
-                            .value(cc.getStamps() + "/" + threshold));
+                            .key("threshold").label("STEMPEL GESAMT")
+                            .value(String.valueOf(threshold)));
         }
 
         PKPass pass = PKPass.builder()
