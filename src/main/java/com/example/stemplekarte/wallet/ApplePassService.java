@@ -23,7 +23,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Base64;
-import java.util.List;
 
 @Service
 public class ApplePassService {
@@ -95,22 +94,14 @@ public class ApplePassService {
         int threshold = cc.getCard().getRewardThreshold();
         Shop shop = cc.getCard().getShop();
         boolean grid = "grid".equalsIgnoreCase(shop.getWalletStyle());
+        int remaining = Math.max(0, threshold - cc.getStamps());
+        boolean ready = remaining <= 0;
 
         String qrPayload = "{\"cid\":\"%s\",\"cardId\":\"%s\",\"ts\":%d}"
                 .formatted(cc.getCustomer().getId(), cc.getCard().getId(),
                         System.currentTimeMillis());
 
         String templatePath = templateGenerator.generateTemplate(cc);
-
-        String reward = rewardText(cc.getStamps(), threshold, cc.getCard().getRewardText());
-
-        // FIX: PKPass.builder() erwartet List<PKBarcode>, nicht ein einzelnes Objekt
-        PKBarcode barcode = PKBarcode.builder()
-                .format(PKBarcodeFormat.PKBarcodeFormatQR)
-                .message(qrPayload)
-                .messageEncoding(StandardCharsets.UTF_8)
-                .altText(cc.getCustomer().getId())
-                .build();
 
         var genericPass = PKGenericPass.builder()
                 .passType(PKPassType.PKStoreCard)
@@ -119,21 +110,27 @@ public class ApplePassService {
                         .value(cc.getStamps() + "/" + threshold));
 
         if (grid) {
-            // Kein großes Mittelfeld -> Stempel-Bild wird groß angezeigt
+            // Raster-Stil: Stempel-Bild oben, kein großes Mittelfeld
+            String reward = ready
+                    ? cc.getCard().getRewardText() + " verfuegbar!"
+                    : "Noch " + remaining + " bis: " + cc.getCard().getRewardText();
             genericPass
                     .secondaryFieldBuilder(PKField.builder()
                             .key("reward").label("BELOHNUNG").value(reward))
                     .auxiliaryFieldBuilder(PKField.builder()
                             .key("name").label("KUNDE").value(cc.getCustomer().getName()));
         } else {
+            // Zähler-Stil wie die lila Karte: große Zahl in der Mitte
             genericPass
                     .primaryFieldBuilder(PKField.builder()
-                            .key("reward").label("BELOHNUNG").value(reward))
+                            .key("remaining")
+                            .label(ready ? "Belohnung bereit" : "Stempel bis " + cc.getCard().getRewardText())
+                            .value(ready ? "Bereit!" : String.valueOf(remaining)))
                     .secondaryFieldBuilder(PKField.builder()
-                            .key("name").label("KUNDE").value(cc.getCustomer().getName()))
+                            .key("card").label("KARTE").value(cc.getCard().getName()))
                     .auxiliaryFieldBuilder(PKField.builder()
-                            .key("rewards-total").label("EINGELOEST")
-                            .value(String.valueOf(cc.getTotalRewards())));
+                            .key("onCard").label("STEMPEL AUF KARTE")
+                            .value(cc.getStamps() + "/" + threshold));
         }
 
         PKPass pass = PKPass.builder()
@@ -144,25 +141,22 @@ public class ApplePassService {
                 .serialNumber(cc.getId())
                 .description(cc.getCard().getName())
                 .logoText(shop.getName())
-                // NACHHER (Die korrekte Version):
-                .foregroundColor(hexToRgb(cc.getCard().getColorForeground()))
-                .backgroundColor(hexToRgb(cc.getCard().getColorBackground()))
-                .labelColor(hexToRgb(cc.getCard().getColorLabel()))
+                .foregroundColor(hexToRgb(shop.getColorForeground()))
+                .backgroundColor(hexToRgb(shop.getColorBackground()))
+                .labelColor(hexToRgb(shop.getColorLabel()))
                 .webServiceURL(new URL(props.baseUrl() + "/wallet/"))
                 .authenticationToken(cc.getAuthToken())
-                .barcodes(List.of(barcode))
                 .pass(genericPass.build())
+                .barcodeBuilder(PKBarcode.builder()
+                        .format(PKBarcodeFormat.PKBarcodeFormatQR)
+                        .message(qrPayload)
+                        .messageEncoding(StandardCharsets.UTF_8)
+                        .altText(cc.getCustomer().getId()))
                 .build();
 
         PKPassTemplateFolder template = new PKPassTemplateFolder(templatePath);
         return new PKFileBasedSigningUtil()
                 .createSignedAndZippedPkPassArchive(pass, template, signingInfo);
-    }
-
-    private String rewardText(int stamps, int threshold, String rewardText) {
-        return stamps >= threshold
-                ? rewardText + " verfuegbar!"
-                : "Noch " + (threshold - stamps) + " bis: " + rewardText;
     }
 
     private String hexToRgb(String hex) {
