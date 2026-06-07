@@ -328,9 +328,29 @@ public class PassTemplateGenerator {
     private BufferedImage resizeImage(BufferedImage original, int width, int height) {
         BufferedImage resized = new BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB);
         Graphics2D g = resized.createGraphics();
-        g.setRenderingHint(RenderingHints.KEY_INTERPOLATION,
-                RenderingHints.VALUE_INTERPOLATION_BILINEAR);
-        g.drawImage(original, 0, 0, width, height, null);
+        g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+
+        // -- NEU: Berechnet das Seitenverhältnis, um Verzerrungen (Ovale) zu verhindern --
+        double aspectOriginal = (double) original.getWidth() / original.getHeight();
+        double aspectTarget = (double) width / height;
+
+        int drawWidth = width;
+        int drawHeight = height;
+        int x = 0;
+        int y = 0;
+
+        if (aspectOriginal > aspectTarget) {
+            // Bild ist breiter als das Ziel
+            drawHeight = (int) (width / aspectOriginal);
+            y = (height - drawHeight) / 2;
+        } else {
+            // Bild ist höher als das Ziel
+            drawWidth = (int) (height * aspectOriginal);
+            x = (width - drawWidth) / 2;
+        }
+
+        // Zeichnet das Bild zentriert und ungetreckt
+        g.drawImage(original, x, y, drawWidth, drawHeight, null);
         g.dispose();
         return resized;
     }
