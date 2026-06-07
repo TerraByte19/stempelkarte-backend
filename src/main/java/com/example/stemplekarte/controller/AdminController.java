@@ -54,16 +54,6 @@ public class AdminController {
         this.passwordEncoder = passwordEncoder;
     }
 
-    private void checkAdminToken(String authHeader) {
-        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
-            throw new SecurityException("Nicht autorisiert");
-        }
-        String token = authHeader.substring(7);
-        if (!jwtService.isAdmin(token)) {
-            throw new SecurityException("Nicht autorisiert");
-        }
-    }
-
     @PostMapping("/login")
     public ResponseEntity<Map<String, String>> login(
             @RequestBody Map<String, String> body,
@@ -115,10 +105,7 @@ public class AdminController {
     }
 
     @GetMapping("/shops")
-    public ResponseEntity<List<Map<String, Object>>> getAllShops(
-            @RequestHeader("Authorization") String authHeader) {
-        checkAdminToken(authHeader);
-
+    public ResponseEntity<List<Map<String, Object>>> getAllShops() {
         List<Map<String, Object>> result = shopRepo.findAll().stream().map(shop -> {
             int cardCount = cardRepo.findByShopAndActiveTrue(shop).size();
             int customerCount = customerCardRepo.countByCard_Shop(shop);
@@ -137,11 +124,7 @@ public class AdminController {
     }
 
     @PostMapping("/shops/{shopId}/toggle")
-    public ResponseEntity<Map<String, Object>> toggleShop(
-            @PathVariable String shopId,
-            @RequestHeader("Authorization") String authHeader) {
-        checkAdminToken(authHeader);
-
+    public ResponseEntity<Map<String, Object>> toggleShop(@PathVariable String shopId) {
         Shop shop = shopRepo.findById(shopId)
                 .orElseThrow(() -> new RuntimeException("Shop nicht gefunden"));
         shop.setActive(!shop.isActive());
@@ -157,10 +140,7 @@ public class AdminController {
     public record CreateShopRequest(String email, String password, String name, int maxTokens) {}
 
     @PostMapping("/shops/create")
-    public ResponseEntity<Map<String, Object>> createShop(
-            @RequestHeader("Authorization") String authHeader,
-            @RequestBody CreateShopRequest req) {
-        checkAdminToken(authHeader);
+    public ResponseEntity<Map<String, Object>> createShop(@RequestBody CreateShopRequest req) {
         try {
             int maxTokens = req.maxTokens() > 0 ? req.maxTokens() : 3;
             Shop shop = shopService.register(req.email(), req.password(), req.name(), maxTokens);
@@ -178,10 +158,7 @@ public class AdminController {
     public record ChangePasswordRequest(String shopId, String newPassword) {}
 
     @PostMapping("/shops/password")
-    public ResponseEntity<Map<String, String>> changePassword(
-            @RequestHeader("Authorization") String authHeader,
-            @RequestBody ChangePasswordRequest req) {
-        checkAdminToken(authHeader);
+    public ResponseEntity<Map<String, String>> changePassword(@RequestBody ChangePasswordRequest req) {
         try {
             Shop shop = shopRepo.findById(req.shopId())
                     .orElseThrow(() -> new RuntimeException("Shop nicht gefunden"));

@@ -70,7 +70,7 @@ public class SecurityConfig {
                         .requestMatchers("/karte/**", "/karte-neu/**", "/logos/**").permitAll()
 
                         .requestMatchers("/api/admin/login").permitAll()
-                        .requestMatchers("/api/admin/**").authenticated()
+                        .requestMatchers("/api/admin/**").hasRole("ADMIN") // Von .authenticated() zu .hasRole("ADMIN") geandert
 
                         .requestMatchers("/api/shop/**").hasRole("SHOP")
 
