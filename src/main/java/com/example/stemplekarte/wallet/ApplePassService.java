@@ -134,8 +134,9 @@ public class ApplePassService {
                             .key("name").label("KUNDE").value(cc.getCustomer().getName()));
         } else {
             genericPass
+                    // HIER GEÄNDERT: "STEMPEL BIS" als Titel und nur die reine Anzahl als Wert
                     .primaryFieldBuilder(PKField.builder()
-                            .key("stamps-big").label("GESAMMELTE STEMPEL").value(cc.getStamps() + " / " + threshold))
+                            .key("stamps-big").label("STEMPEL BIS").value(String.valueOf(cc.getStamps())))
                     .secondaryFieldBuilder(PKField.builder()
                             .key("reward").label("BELOHNUNG").value(reward))
                     .auxiliaryFieldBuilder(PKField.builder()
@@ -164,10 +165,11 @@ public class ApplePassService {
                 .createSignedAndZippedPkPassArchive(pass, template, signingInfo);
     }
 
+    // HIER GEÄNDERT: Entfernt das "Noch X bis:" und gibt nur noch den Namen der Belohnung aus
     private String rewardText(int stamps, int threshold, String rewardText) {
         return stamps >= threshold
                 ? rewardText + " verfuegbar!"
-                : "Noch " + (threshold - stamps) + " bis: " + rewardText;
+                : rewardText;
     }
 
     private String hexToRgb(String hex) {
