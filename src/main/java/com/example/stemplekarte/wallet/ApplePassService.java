@@ -129,18 +129,18 @@ public class ApplePassService {
             genericPass
                     .headerFieldBuilder(PKField.builder()
                             .key("stamps").label("STEMPEL")
-                            .value(cc.getStamps() + "/" + threshold))
+                            .value(cc.getStamps() + "/" + threshold)
+                            .changeMessage("Neuer Stempel! Stand: %@")) // HIER GEÄNDERT: Push Benachrichtigung
                     .secondaryFieldBuilder(PKField.builder()
                             .key("reward").label("BELOHNUNG").value(reward))
                     .auxiliaryFieldBuilder(PKField.builder()
                             .key("name").label("KUNDE").value(cc.getCustomer().getName()));
         } else {
             genericPass
-                    // HIER GEÄNDERT: Oben rechts steht jetzt der Fortschritt (z.B. "0/10")
                     .headerFieldBuilder(PKField.builder()
                             .key("stamps-header").label("STEMPEL")
-                            .value(cc.getStamps() + "/" + threshold))
-                    // HIER GEÄNDERT: In der Mitte steht jetzt die dicke Zahl der FEHLENDEN Stempel
+                            .value(cc.getStamps() + "/" + threshold)
+                            .changeMessage("Neuer Stempel! Stand: %@")) // HIER GEÄNDERT: Push Benachrichtigung
                     .primaryFieldBuilder(PKField.builder()
                             .key("stamps-big").label("Stemple Bis↓").value(String.valueOf(missingStamps)))
                     .secondaryFieldBuilder(PKField.builder()
@@ -157,6 +157,7 @@ public class ApplePassService {
                 .serialNumber(cc.getId())
                 .description(card.getName())
                 .logoText(shop.getName())
+                .groupingIdentifier(card.getId()) // HIER GEÄNDERT: Trennt die Karten voneinander
                 .foregroundColor(hexToRgb(fgColor))
                 .backgroundColor(hexToRgb(bgColor))
                 .labelColor(hexToRgb(labelColor))
