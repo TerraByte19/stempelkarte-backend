@@ -292,7 +292,24 @@ public class PassTemplateGenerator {
                 templatePath.resolve("logo@2x.png").toString());
     }
 
+    // --- HIER IST DIE NEUE LOGIK FÜR DEIN STAMPIT LOGO ---
     private void generateIconImages(String bgColor, Path templatePath) throws IOException {
+        Path platformIconPath = Paths.get(uploadPath, "platform-icon.png");
+
+        if (Files.exists(platformIconPath)) {
+            try {
+                BufferedImage baseIcon = ImageIO.read(platformIconPath.toFile());
+                // Apple braucht das Icon in exakt diesen 3 Größen für verschiedene iPhones
+                ImageIO.write(resizeImage(baseIcon, 29, 29), "PNG", templatePath.resolve("icon.png").toFile());
+                ImageIO.write(resizeImage(baseIcon, 58, 58), "PNG", templatePath.resolve("icon@2x.png").toFile());
+                ImageIO.write(resizeImage(baseIcon, 87, 87), "PNG", templatePath.resolve("icon@3x.png").toFile());
+                return;
+            } catch (Exception e) {
+                // Falls beim Lesen deines Bildes was schiefgeht, geht es unten beim Fallback weiter
+            }
+        }
+
+        // Fallback: Zeichnet das farbige Viereck, falls "platform-icon.png" nicht gefunden wird
         createColorIcon(bgColor, 29, templatePath.resolve("icon.png").toString());
         createColorIcon(bgColor, 58, templatePath.resolve("icon@2x.png").toString());
     }
@@ -325,28 +342,23 @@ public class PassTemplateGenerator {
         ImageIO.write(img, "PNG", Paths.get(outputPath).toFile());
     }
 
-    // --- HIER IST DIE NEUE, OPTIMIERTE METHODE ---
     private BufferedImage resizeImage(BufferedImage original, int maxWidth, int maxHeight) {
-        // Seitenverhältnis berechnen
         double aspectOriginal = (double) original.getWidth() / original.getHeight();
         double aspectTarget = (double) maxWidth / maxHeight;
 
         int targetWidth = maxWidth;
         int targetHeight = maxHeight;
 
-        // Bildmaße berechnen, OHNE unsichtbaren Platz (Padding) hinzuzufügen
         if (aspectOriginal > aspectTarget) {
             targetHeight = (int) (maxWidth / aspectOriginal);
         } else {
             targetWidth = (int) (maxHeight * aspectOriginal);
         }
 
-        // Erzeugt ein Bild, das exakt die Größe des Logos hat (keine leeren Ränder mehr!)
         BufferedImage resized = new BufferedImage(targetWidth, targetHeight, BufferedImage.TYPE_INT_ARGB);
         Graphics2D g = resized.createGraphics();
         g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
 
-        // Zeichnet das Bild direkt an den Koordinaten 0,0 (ganz oben links)
         g.drawImage(original, 0, 0, targetWidth, targetHeight, null);
         g.dispose();
 

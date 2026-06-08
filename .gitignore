@@ -16,7 +16,10 @@ target/
 # Sensible Daten - NIEMALS in GitHub!
 certs/
 data/
-uploads/
+uploads/*
+!uploads/platform-icon.png
+!uploads/platform-icon@2x.png
+!uploads/platform-icon@3x.png
 *.p12
 *.pem
 *.p8
