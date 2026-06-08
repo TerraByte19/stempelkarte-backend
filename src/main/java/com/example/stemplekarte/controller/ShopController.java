@@ -8,6 +8,7 @@ import com.example.stemplekarte.repository.CustomerCardRepository;
 import com.example.stemplekarte.security.JwtAuthFilter;
 import com.example.stemplekarte.service.CardService;
 import com.example.stemplekarte.service.ShopService;
+import com.example.stemplekarte.wallet.CloudinaryService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -19,6 +20,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 @Tag(name = "Shop", description = "Shop-Profil und Karten-Verwaltung")
 @SecurityRequirement(name = "bearerAuth")
@@ -29,12 +31,14 @@ public class ShopController {
     private final ShopService shopService;
     private final CardService cardService;
     private final CustomerCardRepository customerCardRepo;
+    private final CloudinaryService cloudinaryService;
 
     public ShopController(ShopService shopService, CardService cardService,
-                          CustomerCardRepository customerCardRepo) {
+                          CustomerCardRepository customerCardRepo, CloudinaryService cloudinaryService) {
         this.shopService = shopService;
         this.cardService = cardService;
         this.customerCardRepo = customerCardRepo;
+        this.cloudinaryService = cloudinaryService;
     }
 
     public record UpdateProfileRequest(String name, String logoUrl,
@@ -53,7 +57,10 @@ public class ShopController {
             String emptyStampStyle,
             String colorBackground,
             String colorForeground,
-            String colorLabel
+            String colorLabel,
+            String logoUrl,
+            String heroImageUrl,
+            String stampIconUrl
     ) {}
 
     public record CardResponse(
@@ -84,9 +91,21 @@ public class ShopController {
         }
     }
 
+    // Request-Objekt für die Base64 Bild-Uploads vom Frontend
+    public record ImageUploadRequest(String base64, String extension) {}
+
     private Shop currentShop(Authentication auth) {
         return ((JwtAuthFilter.ShopPrincipal) auth.getPrincipal()).shop();
     }
+
+    // --- BILD UPLOAD ENDPOINTS ---
+
+
+
+
+
+
+    // --- STANDARD SHOP ENDPOINTS ---
 
     @Operation(summary = "Eigenes Shop-Profil abrufen")
     @GetMapping("/me")
@@ -129,6 +148,12 @@ public class ShopController {
         card.updateDesign(req.walletStyle(), req.stampIconType(), req.stampPreset(),
                 req.stampColor(), req.emptyStampStyle());
         card.updateColors(req.colorBackground(), req.colorForeground(), req.colorLabel());
+
+        // URLs setzen, falls sie beim Erstellen mitgeschickt wurden
+        if (req.logoUrl() != null) card.setLogoUrl(req.logoUrl());
+        if (req.heroImageUrl() != null) card.setHeroImageUrl(req.heroImageUrl());
+        if (req.stampIconUrl() != null) card.setStampIconUrl(req.stampIconUrl());
+
         cardService.save(card);
         return CardResponse.from(card);
     }

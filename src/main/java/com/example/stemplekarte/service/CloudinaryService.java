@@ -13,11 +13,6 @@ import java.util.Map;
 /**
  * Lädt Bilder zu Cloudinary hoch und formatiert sie automatisch passend
  * für Apple/Google Wallet. Bilder überleben so jeden Render-Deploy.
- *
- * Offizielle Wallet-Größen (recherchiert):
- * - Logo:   quadratisch, 660x660px (für beide Wallets optimal)
- * - Hero:   3:1 Banner, 1125x369px (kein Text)
- * - Stempel-Icon: quadratisch, 400x400px (transparent)
  */
 @Service
 public class CloudinaryService {
@@ -45,20 +40,20 @@ public class CloudinaryService {
             byte[] bytes = Base64.getDecoder().decode(base64);
 
             Transformation<?> transformation = switch (type) {
-                // NEU: Schneidet das Logo als perfekten Kreis aus und macht die Ecken transparent
                 case LOGO -> new Transformation<>()
                         .width(660).height(660)
-                        .crop("pad")                    // Passt das ganze Logo an, ohne es abzuschneiden
-                        .background("transparent")      // Innenraum ist durchsichtig (nimmt die schwarze Kartenfarbe an)
-                        .border("12px_solid_white")     // HIER ENTSTEHT DER WEIßE RING (12 Pixel dick)
-                        .radius("max")                  // Macht das Ganze zu einem perfekten Kreis
+                        .crop("pad")
+                        .background("transparent")
+                        .border("12px_solid_white")
+                        .radius("max")
                         .quality("auto").fetchFormat("png");
                 case HERO -> new Transformation<>()
                         .width(1125).height(369).crop("fill").gravity("center")
                         .quality("auto").fetchFormat("png");
-
                 case STAMP -> new Transformation<>()
-                        .width(400).height(400).crop("fit")
+                        .width(400).height(400)
+                        .crop("fill")
+                        .gravity("center")     // zentriert den Ausschnitt
                         .quality("auto").fetchFormat("png");
             };
 
@@ -68,13 +63,15 @@ public class CloudinaryService {
                 case STAMP -> "stampit/stamps";
             };
 
+            // WICHTIG: transformation.generate() wandelt das Objekt in einen String um,
+            // wodurch die API-Signatur korrekt berechnet wird.
             Map<?, ?> result = cloudinary.uploader().upload(bytes, ObjectUtils.asMap(
                     "public_id", publicId,
                     "folder", folder,
                     "overwrite", true,
                     "invalidate", true,
-                    "transformation", transformation,
-                    "resource_type", "image"
+                    "resource_type", "image",
+                    "transformation", transformation.generate()
             ));
 
             String url = (String) result.get("secure_url");
