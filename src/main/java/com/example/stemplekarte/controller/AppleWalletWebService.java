@@ -93,9 +93,13 @@ public class AppleWalletWebService {
         CustomerCard cc = customerService.getCustomerCardById(serial);
         byte[] pass = applePass.generatePass(cc);
 
+        // Wir bauen den HTTP-Header exakt nach Apples RFC-1123 Standard per Hand
+        java.time.ZonedDateTime zonedDateTime = cc.getUpdatedAt().atZone(java.time.ZoneId.of("GMT"));
+        String appleDateHeader = java.time.format.DateTimeFormatter.RFC_1123_DATE_TIME.format(zonedDateTime);
+
         return ResponseEntity.ok()
                 .contentType(MediaType.parseMediaType("application/vnd.apple.pkpass"))
-                .header(HttpHeaders.LAST_MODIFIED, cc.getUpdatedAt().toString())
+                .header("Last-Modified", appleDateHeader)
                 .body(pass);
     }
 
