@@ -112,8 +112,13 @@ public class ApplePassService {
         String templatePath = templateGenerator.generateTemplate(cc);
         String reward = rewardText(cc.getStamps(), threshold, card.getRewardText());
 
-        int missingStamps = threshold - cc.getStamps();
-        if (missingStamps < 0) missingStamps = 0;
+        // Fortschritts-Verhältnis als String bauen (z.B. "3/10")
+        String stampRatio = cc.getStamps() + "/" + threshold;
+
+        // Dynamische Push-Nachricht auf Basis der gesammelten Stempel
+        String changeMsg = (cc.getStamps() >= threshold)
+                ? "Glückwunsch! Deine Karte ist voll (%@). 🎉"
+                : "Update! Du hast jetzt %@ Stempel.";
 
         PKBarcode barcode = PKBarcode.builder()
                 .format(PKBarcodeFormat.PKBarcodeFormatQR)
@@ -129,8 +134,8 @@ public class ApplePassService {
             genericPass
                     .headerFieldBuilder(PKField.builder()
                             .key("stamps").label("STEMPEL")
-                            .value(cc.getStamps() + "/" + threshold)
-                            .changeMessage("Neuer Stempel! Stand: %@")) // HIER GEÄNDERT: Push Benachrichtigung
+                            .value(stampRatio)
+                            .changeMessage(changeMsg))
                     .secondaryFieldBuilder(PKField.builder()
                             .key("reward").label("BELOHNUNG").value(reward))
                     .auxiliaryFieldBuilder(PKField.builder()
@@ -139,10 +144,10 @@ public class ApplePassService {
             genericPass
                     .headerFieldBuilder(PKField.builder()
                             .key("stamps-header").label("STEMPEL")
-                            .value(cc.getStamps() + "/" + threshold)
-                            .changeMessage("Neuer Stempel! Stand: %@")) // HIER GEÄNDERT: Push Benachrichtigung
+                            .value(stampRatio)
+                            .changeMessage(changeMsg))
                     .primaryFieldBuilder(PKField.builder()
-                            .key("stamps-big").label("Stemple Bis↓").value(String.valueOf(missingStamps)))
+                            .key("stamps-big").label("FORTSCHRITT").value(stampRatio))
                     .secondaryFieldBuilder(PKField.builder()
                             .key("reward").label("BELOHNUNG").value(reward))
                     .auxiliaryFieldBuilder(PKField.builder()
@@ -157,7 +162,7 @@ public class ApplePassService {
                 .serialNumber(cc.getId())
                 .description(card.getName())
                 .logoText(shop.getName())
-                .groupingIdentifier(card.getId()) // HIER GEÄNDERT: Trennt die Karten voneinander
+                .groupingIdentifier(card.getId())
                 .foregroundColor(hexToRgb(fgColor))
                 .backgroundColor(hexToRgb(bgColor))
                 .labelColor(hexToRgb(labelColor))
