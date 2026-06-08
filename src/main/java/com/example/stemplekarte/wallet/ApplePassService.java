@@ -97,12 +97,10 @@ public class ApplePassService {
         Shop shop = card.getShop();
         int threshold = card.getRewardThreshold();
 
-        // HIER BEHOBEN: Wir prüfen, ob DIE KARTE auf "grid" oder "Zahl" steht, nicht nur der Shop!
         String walletStyle = (card.getWalletStyle() != null && !card.getWalletStyle().isBlank())
                 ? card.getWalletStyle() : shop.getWalletStyle();
         boolean grid = "grid".equalsIgnoreCase(walletStyle);
 
-        // HIER BEHOBEN: Wir nutzen wieder die richtigen Farben der Karte!
         String bgColor = (card.getColorBackground() != null && !card.getColorBackground().isBlank()) ? card.getColorBackground() : shop.getColorBackground();
         String fgColor = (card.getColorForeground() != null && !card.getColorForeground().isBlank()) ? card.getColorForeground() : shop.getColorForeground();
         String labelColor = (card.getColorLabel() != null && !card.getColorLabel().isBlank()) ? card.getColorLabel() : shop.getColorLabel();
@@ -129,14 +127,12 @@ public class ApplePassService {
                         .value(cc.getStamps() + "/" + threshold));
 
         if (grid) {
-            // Ansicht "Stempel" -> Das dicke Mittelfeld bleibt frei für die Stempel-Bilder
             genericPass
                     .secondaryFieldBuilder(PKField.builder()
                             .key("reward").label("BELOHNUNG").value(reward))
                     .auxiliaryFieldBuilder(PKField.builder()
                             .key("name").label("KUNDE").value(cc.getCustomer().getName()));
         } else {
-            // HIER BEHOBEN: Ansicht "Zahl" -> Wir platzieren den Stempel-Fortschritt als RIESIGE ZAHL in der Mitte!
             genericPass
                     .primaryFieldBuilder(PKField.builder()
                             .key("stamps-big").label("GESAMMELTE STEMPEL").value(cc.getStamps() + " / " + threshold))
@@ -180,4 +176,9 @@ public class ApplePassService {
             int r = Integer.parseInt(hex.substring(1, 3), 16);
             int g = Integer.parseInt(hex.substring(3, 5), 16);
             int b = Integer.parseInt(hex.substring(5, 7), 16);
-            return
+            return "rgb(%d,%d,%d)".formatted(r, g, b);
+        } catch (Exception e) {
+            return hex;
+        }
+    }
+}
