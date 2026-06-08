@@ -42,4 +42,4 @@ stempelkarte:
 cloudinary:
   cloud-name: ${CLOUDINARY_CLOUD_NAME:dzu73ui9i}
   api-key: ${CLOUDINARY_API_KEY:587366334988363}
-  api-secret: ${CLOUDINARY_API_SECRET:P7T5lhIm3G6bVYxjEjTNrbs_sw0}
+  api-secret: ${CLOUDINARY_API_SECRET:}
