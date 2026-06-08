@@ -190,6 +190,23 @@ public class LandingController {
                             </div>
                         </div>
                         <script>
+                            // HIER GEÄNDERT: Automatischer Live-Reload, wenn gestempelt wurde
+                            const currentStamps = %d;
+                            const custId = '%s';
+                            const cId = '%s';
+                            
+                            setInterval(async () => {
+                                try {
+                                    const res = await fetch(`/api/customer/${custId}/card/${cId}`);
+                                    if (res.ok) {
+                                        const data = await res.json();
+                                        if (data.stamps !== currentStamps) {
+                                            window.location.reload();
+                                        }
+                                    }
+                                } catch (e) {}
+                            }, 2500);
+
                             const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
                             const isAndroid = /Android/.test(navigator.userAgent);
                             const appleBtn = document.getElementById('apple-btn');
@@ -211,7 +228,8 @@ public class LandingController {
                     applePassUrl,
                     googleSaveUrl.isBlank() ? "" :
                             "<a href='" + googleSaveUrl + "' class='btn-google' id='google-btn'>" +
-                                    "🤖 Zu Google Wallet hinzufügen</a>"
+                                    "🤖 Zu Google Wallet hinzufügen</a>",
+                    stamps, customerId, cardId // Parameter für das JS-Polling
             );
 
             return ResponseEntity.ok(html);
