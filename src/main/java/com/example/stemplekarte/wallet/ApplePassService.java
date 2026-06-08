@@ -110,8 +110,11 @@ public class ApplePassService {
                         System.currentTimeMillis());
 
         String templatePath = templateGenerator.generateTemplate(cc);
-
         String reward = rewardText(cc.getStamps(), threshold, card.getRewardText());
+
+        // HIER GEÄNDERT: Berechne, wie viele Stempel noch fehlen
+        int missingStamps = threshold - cc.getStamps();
+        if (missingStamps < 0) missingStamps = 0;
 
         PKBarcode barcode = PKBarcode.builder()
                 .format(PKBarcodeFormat.PKBarcodeFormatQR)
@@ -121,20 +124,24 @@ public class ApplePassService {
                 .build();
 
         var genericPass = PKGenericPass.builder()
-                .passType(PKPassType.PKStoreCard)
-                .headerFieldBuilder(PKField.builder()
-                        .key("stamps").label("STEMPEL")
-                        .value(cc.getStamps() + "/" + threshold));
+                .passType(PKPassType.PKStoreCard);
 
         if (grid) {
             genericPass
+                    .headerFieldBuilder(PKField.builder()
+                            .key("stamps").label("STEMPEL")
+                            .value(cc.getStamps() + "/" + threshold))
                     .secondaryFieldBuilder(PKField.builder()
                             .key("reward").label("BELOHNUNG").value(reward))
                     .auxiliaryFieldBuilder(PKField.builder()
                             .key("name").label("KUNDE").value(cc.getCustomer().getName()));
         } else {
             genericPass
-                    // HIER GEÄNDERT: "STEMPEL BIS" als Titel und nur die reine Anzahl als Wert
+                    // HIER GEÄNDERT: Das Kopf-Feld (oben rechts, direkt über dem Hauptfeld) zeigt die fehlenden Stempel
+                    .headerFieldBuilder(PKField.builder()
+                            .key("missing").label("FEHLEN NOCH")
+                            .value(String.valueOf(missingStamps)))
+                    // Das Hauptfeld bleibt unverändert (Label: STEMPEL BIS, Value: aktuelle Zahl)
                     .primaryFieldBuilder(PKField.builder()
                             .key("stamps-big").label("STEMPEL BIS").value(String.valueOf(cc.getStamps())))
                     .secondaryFieldBuilder(PKField.builder()
@@ -165,7 +172,6 @@ public class ApplePassService {
                 .createSignedAndZippedPkPassArchive(pass, template, signingInfo);
     }
 
-    // HIER GEÄNDERT: Entfernt das "Noch X bis:" und gibt nur noch den Namen der Belohnung aus
     private String rewardText(int stamps, int threshold, String rewardText) {
         return stamps >= threshold
                 ? rewardText + " verfuegbar!"
