@@ -112,7 +112,6 @@ public class ApplePassService {
         String templatePath = templateGenerator.generateTemplate(cc);
         String reward = rewardText(cc.getStamps(), threshold, card.getRewardText());
 
-        // HIER GEÄNDERT: Berechne, wie viele Stempel noch fehlen
         int missingStamps = threshold - cc.getStamps();
         if (missingStamps < 0) missingStamps = 0;
 
@@ -137,13 +136,13 @@ public class ApplePassService {
                             .key("name").label("KUNDE").value(cc.getCustomer().getName()));
         } else {
             genericPass
-                    // HIER GEÄNDERT: Das Kopf-Feld (oben rechts, direkt über dem Hauptfeld) zeigt die fehlenden Stempel
+                    // HIER GEÄNDERT: Oben rechts steht jetzt der Fortschritt (z.B. "0/10")
                     .headerFieldBuilder(PKField.builder()
-                            .key("missing").label("FEHLEN NOCH")
-                            .value(String.valueOf(missingStamps)))
-                    // Das Hauptfeld bleibt unverändert (Label: STEMPEL BIS, Value: aktuelle Zahl)
+                            .key("stamps-header").label("STEMPEL")
+                            .value(cc.getStamps() + "/" + threshold))
+                    // HIER GEÄNDERT: In der Mitte steht jetzt die dicke Zahl der FEHLENDEN Stempel
                     .primaryFieldBuilder(PKField.builder()
-                            .key("stamps-big").label("STEMPEL BIS").value(String.valueOf(cc.getStamps())))
+                            .key("stamps-big").label("Stemple Bis↓").value(String.valueOf(missingStamps)))
                     .secondaryFieldBuilder(PKField.builder()
                             .key("reward").label("BELOHNUNG").value(reward))
                     .auxiliaryFieldBuilder(PKField.builder()
