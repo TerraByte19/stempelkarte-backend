@@ -10,6 +10,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -46,6 +47,7 @@ public class ApnsPushService {
     }
 
     @Async
+    @Transactional
     public void notifyUpdate(String serialNumber) {
         if (!props.apns().enabled()) {
             log.debug("APNs deaktiviert. Kein Push fuer {}.", serialNumber);
@@ -88,6 +90,13 @@ public class ApnsPushService {
                             device.getDeviceLibraryIdentifier().substring(0, 8), serialNumber);
                 } else {
                     log.warn("APNs Push fehlgeschlagen ({}): {}", resp.statusCode(), resp.body());
+                    if (resp.statusCode() == 410
+                            || resp.body().contains("BadDeviceToken")
+                            || resp.body().contains("Unregistered")) {
+                        deviceRepo.deleteByPushToken(device.getPushToken());
+                        log.info("Toter APNs Token entfernt fuer Geraet {}",
+                                device.getDeviceLibraryIdentifier().substring(0, 8));
+                    }
                 }
             } catch (Exception e) {
                 log.error("APNs Push Exception", e);

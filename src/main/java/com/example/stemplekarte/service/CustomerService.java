@@ -4,8 +4,6 @@ import com.example.stemplekarte.model.*;
 import com.example.stemplekarte.repository.CardRepository;
 import com.example.stemplekarte.repository.CustomerCardRepository;
 import com.example.stemplekarte.repository.CustomerRepository;
-import com.example.stemplekarte.wallet.ApnsPushService;
-import com.example.stemplekarte.wallet.GoogleWalletService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
@@ -25,18 +23,13 @@ public class CustomerService {
     private final CustomerRepository customerRepo;
     private final CardRepository cardRepo;
     private final CustomerCardRepository customerCardRepo;
-    private final ApnsPushService apns;
-    private final GoogleWalletService googleWalletService;
     private final ObjectMapper mapper = new ObjectMapper();
 
     public CustomerService(CustomerRepository customerRepo, CardRepository cardRepo,
-                           CustomerCardRepository customerCardRepo, ApnsPushService apns,
-                           GoogleWalletService googleWalletService) {
+                           CustomerCardRepository customerCardRepo) {
         this.customerRepo = customerRepo;
         this.cardRepo = cardRepo;
         this.customerCardRepo = customerCardRepo;
-        this.apns = apns;
-        this.googleWalletService = googleWalletService;
     }
 
     @Transactional
@@ -126,8 +119,6 @@ public class CustomerService {
 
         customerCardRepo.save(cc);
         log.info("Scan fuer Kunde {} auf Karte {} ({}x): {}", customerId, cardId, count, result.message());
-        apns.notifyUpdate(cc.getId());
-        googleWalletService.notifyUpdate(cc);
         return result;
     }
 }

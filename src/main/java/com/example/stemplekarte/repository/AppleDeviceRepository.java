@@ -8,4 +8,5 @@ public interface AppleDeviceRepository extends JpaRepository<AppleDeviceRegistra
     List<AppleDeviceRegistration> findBySerialNumber(String serialNumber);
     List<AppleDeviceRegistration> findByDeviceLibraryIdentifier(String deviceId);
     void deleteByDeviceLibraryIdentifierAndSerialNumber(String deviceId, String serialNumber);
+    void deleteByPushToken(String pushToken);
 }
