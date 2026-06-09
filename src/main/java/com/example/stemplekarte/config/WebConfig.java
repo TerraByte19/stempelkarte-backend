@@ -14,7 +14,7 @@ public class WebConfig implements WebMvcConfigurer {
     @Override
     public void addCorsMappings(CorsRegistry registry) {
         registry.addMapping("/**")
-                // Hier erlauben wir die geladene Live-URL UND immer auch Localhost fürs Testen
+                // Erlaubt deiner Haupt-Domain von Vercel UND deinem lokalen PC den Zugriff
                 .allowedOrigins(frontendUrl, "http://localhost:5173")
                 .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
                 .allowedHeaders("*")

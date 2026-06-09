@@ -40,7 +40,7 @@ public class SecurityConfig {
         config.addAllowedOrigin("http://localhost:5174");
         config.addAllowedOrigin("http://192.168.178.163:5173");
         config.addAllowedOrigin("http://192.168.178.163:5174");
-        config.addAllowedOrigin("https://stempelkarte-frontend.onrender.com");
+        config.addAllowedOrigin("https://stempelkarte-frontend.vercel.app");
         config.addAllowedHeader("*");
         config.addAllowedMethod("*");
         config.setAllowCredentials(true);
