@@ -33,6 +33,9 @@ public class ApnsPushService {
     private static final Logger log = LoggerFactory.getLogger(ApnsPushService.class);
 
     private final AppProperties props;
+    private volatile String cachedJwt;
+    private volatile long cachedJwtTime = 0;
+    private static final long JWT_TTL_MS = 50 * 60 * 1000L; // 50 Min
     private final AppleDeviceRepository deviceRepo;
     private final ObjectMapper mapper = new ObjectMapper();
     private final HttpClient httpClient;
@@ -62,7 +65,7 @@ public class ApnsPushService {
 
         String jwt;
         try {
-            jwt = buildProviderToken();
+            jwt = getProviderToken();
         } catch (Exception e) {
             log.error("APNs JWT konnte nicht erstellt werden", e);
             return;
@@ -121,4 +124,15 @@ public class ApnsPushService {
                 .signWith(privateKey, Jwts.SIG.ES256)
                 .compact();
     }
+
+    private synchronized String getProviderToken() throws Exception {
+        long now = System.currentTimeMillis();
+        if (cachedJwt == null || (now - cachedJwtTime) > JWT_TTL_MS) {
+            cachedJwt = buildProviderToken();
+            cachedJwtTime = now;
+            log.info("Neuer APNs Provider-Token generiert");
+        }
+        return cachedJwt;
+    }
+
 }
