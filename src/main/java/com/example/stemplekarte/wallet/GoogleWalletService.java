@@ -132,7 +132,6 @@ public class GoogleWalletService {
      * Transaktion — so gibt es im Async-Thread keine Lazy-Loading-Probleme.
      */
     @Async
-    @Transactional
     public void notifyUpdate(String customerCardId) {
         if (credentials == null || walletClient == null) return;
         try {
