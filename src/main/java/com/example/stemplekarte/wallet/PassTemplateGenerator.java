@@ -14,6 +14,7 @@ import java.awt.geom.Path2D;
 import java.awt.geom.RoundRectangle2D;
 import java.awt.image.BufferedImage;
 import java.io.IOException;
+import java.io.InputStream;
 import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -292,26 +293,31 @@ public class PassTemplateGenerator {
                 templatePath.resolve("logo@2x.png").toString());
     }
 
-    // --- HIER IST DIE NEUE LOGIK FÜR DEIN STAMPIT LOGO ---
+    // --- ICON FÜR DIE PUSH-BENACHRICHTIGUNG (StampIT-Logo) ---
+    // Liest platform-icon.png aus dem Classpath (src/main/resources/static/),
+    // damit es jeden Render-Deploy überlebt. Erzeugt alle drei Apple-Größen.
     private void generateIconImages(String bgColor, Path templatePath) throws IOException {
-        Path platformIconPath = Paths.get(uploadPath, "platform-icon.png");
-
-        if (Files.exists(platformIconPath)) {
-            try {
-                BufferedImage baseIcon = ImageIO.read(platformIconPath.toFile());
-                // Apple braucht das Icon in exakt diesen 3 Größen für verschiedene iPhones
-                ImageIO.write(resizeImage(baseIcon, 29, 29), "PNG", templatePath.resolve("icon.png").toFile());
-                ImageIO.write(resizeImage(baseIcon, 58, 58), "PNG", templatePath.resolve("icon@2x.png").toFile());
-                ImageIO.write(resizeImage(baseIcon, 87, 87), "PNG", templatePath.resolve("icon@3x.png").toFile());
-                return;
-            } catch (Exception e) {
-                // Falls beim Lesen deines Bildes was schiefgeht, geht es unten beim Fallback weiter
+        try (InputStream in = getClass().getResourceAsStream("/static/platform-icon.png")) {
+            if (in != null) {
+                BufferedImage baseIcon = ImageIO.read(in);
+                if (baseIcon != null) {
+                    ImageIO.write(resizeImage(baseIcon, 29, 29), "PNG",
+                            templatePath.resolve("icon.png").toFile());
+                    ImageIO.write(resizeImage(baseIcon, 58, 58), "PNG",
+                            templatePath.resolve("icon@2x.png").toFile());
+                    ImageIO.write(resizeImage(baseIcon, 87, 87), "PNG",
+                            templatePath.resolve("icon@3x.png").toFile());
+                    return;
+                }
             }
+        } catch (Exception e) {
+            // Falls Lesen/Skalieren fehlschlägt, geht es unten beim Fallback weiter
         }
 
-        // Fallback: Zeichnet das farbige Viereck, falls "platform-icon.png" nicht gefunden wird
+        // Fallback: einfarbiges Viereck, falls platform-icon.png nicht im Classpath liegt
         createColorIcon(bgColor, 29, templatePath.resolve("icon.png").toString());
         createColorIcon(bgColor, 58, templatePath.resolve("icon@2x.png").toString());
+        createColorIcon(bgColor, 87, templatePath.resolve("icon@3x.png").toString());
     }
 
     private void createTextLogo(String text, String bgColor, int width, int height,
