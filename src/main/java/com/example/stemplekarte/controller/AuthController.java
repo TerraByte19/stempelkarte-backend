@@ -10,10 +10,10 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import org.springframework.web.bind.annotation.*;
 
+// KEIN @CrossOrigin hier — CORS läuft global über SecurityConfig
 @Tag(name = "Auth", description = "Shop-Registrierung und Login")
 @RestController
 @RequestMapping("/api/auth")
-@CrossOrigin(origins = "https://stempelkarte-frontend.vercel.app", allowedHeaders = "*")
 public class AuthController {
 
     private final ShopService shopService;

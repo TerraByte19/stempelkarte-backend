@@ -18,10 +18,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
+// KEIN @CrossOrigin hier — CORS läuft global über SecurityConfig
 @Tag(name = "Admin", description = "Admin-Endpoints")
 @RestController
 @RequestMapping("/api/admin")
-@CrossOrigin(origins = "https://stempelkarte-frontend.vercel.app", allowedHeaders = "*")
 public class AdminController {
 
     private final GoogleWalletSetup googleWalletSetup;
@@ -35,9 +35,6 @@ public class AdminController {
     @Value("${stempelkarte.admin-secret:admin-geheim-nur-lokal}")
     private String adminSecret;
 
-    // Pro IP: [0] = Anzahl Fehlversuche, [1] = Start des Zeitfensters in ms.
-    // WICHTIG: long[] statt int[] — der Timestamp passt nicht in einen int
-    // (Ueberlauf), genau das hat den alten Limiter wirkungslos gemacht.
     private final ConcurrentHashMap<String, long[]> rateLimitMap = new ConcurrentHashMap<>();
     private static final int MAX_ATTEMPTS = 5;
     private static final long BLOCK_DURATION_MS = 15 * 60 * 1000L;
@@ -70,13 +67,11 @@ public class AdminController {
 
         long[] data = rateLimitMap.get(ip);
 
-        // Abgelaufenes Zeitfenster: Zaehler zuruecksetzen
         if (data != null && (now - data[1]) >= BLOCK_DURATION_MS) {
             rateLimitMap.remove(ip);
             data = null;
         }
 
-        // Innerhalb des Fensters und Limit erreicht -> blocken
         if (data != null && data[0] >= MAX_ATTEMPTS) {
             long remainingMin = (BLOCK_DURATION_MS - (now - data[1])) / 60000 + 1;
             return ResponseEntity.status(429).body(
@@ -88,7 +83,7 @@ public class AdminController {
             if (data == null) {
                 rateLimitMap.put(ip, new long[]{1L, now});
             } else {
-                data[0]++; // Fensterstart bleibt erhalten
+                data[0]++;
             }
             long attempts = (data == null) ? 1 : data[0];
             long remaining = Math.max(0, MAX_ATTEMPTS - attempts);
@@ -97,19 +92,13 @@ public class AdminController {
             );
         }
 
-        // Erfolg: Zaehler fuer diese IP loeschen
         rateLimitMap.remove(ip);
         String token = jwtService.generateAdminToken();
         return ResponseEntity.ok(Map.of("token", token));
     }
 
-    // Hinweis: X-Forwarded-For ist vom Client manipulierbar. Auf Render setzt
-    // der Proxy den echten Client-IP. Fuer einen wirklich robusten Schutz waere
-    // eine echte Rate-Limit-Schicht (z.B. bucket4j oder Cloudflare) der naechste
-    // Schritt — dieser Limiter ist die einfache In-Memory-Variante.
     private String resolveIp(String forwardedFor, String realIp) {
         if (forwardedFor != null && !forwardedFor.isBlank()) {
-            // Erstes Element ist der urspruengliche Client
             return forwardedFor.split(",")[0].trim();
         }
         if (realIp != null && !realIp.isBlank()) {
@@ -188,7 +177,7 @@ public class AdminController {
                     .orElseThrow(() -> new RuntimeException("Shop nicht gefunden"));
             shop.setPasswordHash(passwordEncoder.encode(req.newPassword()));
             shopRepo.save(shop);
-            return ResponseEntity.ok(Map.of("message", "Passwort geandert"));
+            return ResponseEntity.ok(Map.of("message", "Passwort geaendert"));
         } catch (Exception e) {
             return ResponseEntity.status(400).body(Map.of("error", e.getMessage()));
         }
