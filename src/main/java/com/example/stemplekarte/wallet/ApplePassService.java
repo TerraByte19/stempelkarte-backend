@@ -118,7 +118,7 @@ public class ApplePassService {
         // Countdown fuer das grosse Mittelfeld: wie viele Stempel noch bis zur Belohnung.
         // Zaehlt 10 -> 9 -> ... -> 1 runter, danach "Bereit!".
         int remaining = Math.max(0, threshold - cc.getStamps());
-        String countdownLabel = remaining > 0 ? "NOCH SAMMELN" : "BELOHNUNG";
+        String countdownLabel = remaining > 0 ? "Stempel bis ↓" : "BELOHNUNG";
         String countdownValue = remaining > 0 ? String.valueOf(remaining) : "Bereit! 🎉";
 
         // Dynamische Push-Nachricht auf Basis der gesammelten Stempel
