@@ -115,6 +115,12 @@ public class ApplePassService {
         // Fortschritts-Verhältnis als String bauen (z.B. "3/10")
         String stampRatio = cc.getStamps() + "/" + threshold;
 
+        // Countdown fuer das grosse Mittelfeld: wie viele Stempel noch bis zur Belohnung.
+        // Zaehlt 10 -> 9 -> ... -> 1 runter, danach "Bereit!".
+        int remaining = Math.max(0, threshold - cc.getStamps());
+        String countdownLabel = remaining > 0 ? "NOCH SAMMELN" : "BELOHNUNG";
+        String countdownValue = remaining > 0 ? String.valueOf(remaining) : "Bereit! 🎉";
+
         // Dynamische Push-Nachricht auf Basis der gesammelten Stempel
         String changeMsg = (cc.getStamps() >= threshold)
                 ? "Glückwunsch! Deine Karte ist voll (%@). 🎉"
@@ -147,7 +153,7 @@ public class ApplePassService {
                             .value(stampRatio)
                             .changeMessage(changeMsg))
                     .primaryFieldBuilder(PKField.builder()
-                            .key("stamps-big").label("FORTSCHRITT").value(stampRatio))
+                            .key("stamps-big").label(countdownLabel).value(countdownValue))
                     .secondaryFieldBuilder(PKField.builder()
                             .key("reward").label("BELOHNUNG").value(reward))
                     .auxiliaryFieldBuilder(PKField.builder()
