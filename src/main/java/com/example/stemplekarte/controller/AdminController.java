@@ -21,6 +21,7 @@ import java.util.concurrent.ConcurrentHashMap;
 @Tag(name = "Admin", description = "Admin-Endpoints")
 @RestController
 @RequestMapping("/api/admin")
+@CrossOrigin(origins = "https://stempelkarte-frontend.vercel.app", allowedHeaders = "*")
 public class AdminController {
 
     private final GoogleWalletSetup googleWalletSetup;
