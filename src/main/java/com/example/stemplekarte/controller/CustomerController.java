@@ -11,6 +11,7 @@ import com.google.zxing.client.j2se.MatrixToImageWriter;
 import com.google.zxing.qrcode.QRCodeWriter;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import org.springframework.beans.factory.annotation.Value;
@@ -67,7 +68,7 @@ public class CustomerController {
 
     @Operation(summary = "Kunde anlegen oder bestehenden per E-Mail finden")
     @PostMapping
-    public Map<String, String> getOrCreate(@RequestBody CreateCustomerRequest req) {
+    public Map<String, String> getOrCreate(@Valid @RequestBody CreateCustomerRequest req) {
         Customer c = customerService.getOrCreate(req.name(), req.email());
         return Map.of("id", c.getId(), "name", c.getName(), "email", c.getEmail());
     }

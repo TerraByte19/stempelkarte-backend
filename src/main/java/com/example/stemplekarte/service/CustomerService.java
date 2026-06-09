@@ -20,6 +20,10 @@ public class CustomerService {
 
     private static final Logger log = LoggerFactory.getLogger(CustomerService.class);
 
+    // Harte Obergrenze als Defense-in-Depth, falls processScan jemals ohne
+    // Controller-Validierung aufgerufen wird (schuetzt die Schleife vor DoS).
+    private static final int MAX_STAMPS_PER_SCAN = 20;
+
     private final CustomerRepository customerRepo;
     private final CardRepository cardRepo;
     private final CustomerCardRepository customerCardRepo;
@@ -76,6 +80,10 @@ public class CustomerService {
 
     @Transactional
     public ScanResult processScan(String qrPayload, Shop shop, int count) {
+        // Defense-in-Depth: Eingabe hart begrenzen, unabhaengig vom Controller.
+        if (count < 1) count = 1;
+        if (count > MAX_STAMPS_PER_SCAN) count = MAX_STAMPS_PER_SCAN;
+
         String customerId;
         String cardId;
         try {

@@ -25,7 +25,10 @@ public class Customer {
 
     public static Customer create(String name, String email) {
         Customer c = new Customer();
-        c.id = "CUST-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
+        // Volle UUID statt nur 8 Hex-Zeichen: macht die Kunden-ID praktisch
+        // unratbar (Enumeration-Schutz). Die ID wirkt damit als Capability-Token
+        // in der Karten-URL. Bestehende Kunden behalten ihre alte kurze ID.
+        c.id = "CUST-" + UUID.randomUUID().toString().toUpperCase();
         c.name = name;
         c.email = email.toLowerCase().trim();
         c.createdAt = Instant.now();

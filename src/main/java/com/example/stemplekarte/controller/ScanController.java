@@ -8,6 +8,7 @@ import com.example.stemplekarte.wallet.ApnsPushService;
 import com.example.stemplekarte.wallet.GoogleWalletService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
@@ -51,7 +52,7 @@ public class ScanController {
     @Operation(summary = "QR-Code scannen und Stempel vergeben",
             description = "Erfordert X-Staff-Token Header. count = Anzahl Stempel (1-20)")
     @PostMapping
-    public ScanResponse scan(@RequestBody ScanRequest req, Authentication auth) {
+    public ScanResponse scan(@Valid @RequestBody ScanRequest req, Authentication auth) {
         if (auth == null || !(auth.getPrincipal() instanceof StaffTokenFilter.StaffPrincipal)) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Kein gueltiger Staff-Token");
         }
