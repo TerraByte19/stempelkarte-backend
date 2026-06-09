@@ -90,7 +90,6 @@ public class GoogleWalletService {
         String objectId = objectIdFor(cc);
 
         try {
-            // Beim Hinzufuegen zur Wallet: Class + Object einmalig anlegen/aktualisieren.
             createOrUpdateClass(cc, classId);
             createOrUpdateObject(cc, classId, objectId);
         } catch (Exception e) {
