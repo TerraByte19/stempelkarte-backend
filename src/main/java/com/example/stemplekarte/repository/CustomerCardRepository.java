@@ -12,11 +12,12 @@ import java.util.Optional;
 
 public interface CustomerCardRepository extends JpaRepository<CustomerCard, String> {
 
-    // 1. DAS HIER IST DER FIX: Zwingt Hibernate, Card und Shop sofort mitzuladen!
-    @EntityGraph(attributePaths = {"card", "card.shop"})
+    // NUR DAS HIER IST NEU: Zwingt Hibernate, Karte, Shop und Kunde sofort zu laden.
+    // Das repariert den Google- und Apple-Fehler im Hintergrund, ohne andere Dateien zu berühren!
+    @EntityGraph(attributePaths = {"card", "card.shop", "customer"})
     Optional<CustomerCard> findById(String id);
 
-    // 2. Deine bestehenden Methoden, die deine Services brauchen:
+    // Deine bestehenden Methoden bleiben absolut unverändert:
     Optional<CustomerCard> findByCustomerAndCard(Customer customer, Card card);
     List<CustomerCard> findByCustomer(Customer customer);
     List<CustomerCard> findByCard(Card card);

@@ -37,7 +37,6 @@ public class AppleWalletWebService {
         this.applePass = applePass;
     }
 
-    // serial = customerCardId (Format: CC-XXXXXXXX)
     @PostMapping("/devices/{deviceId}/registrations/{passType}/{serial}")
     @Transactional
     public ResponseEntity<Void> register(@PathVariable String deviceId,
@@ -80,6 +79,7 @@ public class AppleWalletWebService {
     }
 
     @GetMapping("/passes/{passType}/{serial}")
+    @Transactional(readOnly = true) // Hält die Hibernate-Session offen, bis die Datei generiert wurde!
     public ResponseEntity<byte[]> latestPass(@PathVariable String passType,
                                              @PathVariable String serial,
                                              HttpServletRequest request) throws Exception {
@@ -87,13 +87,9 @@ public class AppleWalletWebService {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
 
-        // serial = customerCardId → CustomerCard laden
-        // CustomerCard ID hat Format CC-XXXXXXXX
-        // Wir suchen direkt im CustomerCard Repository
         CustomerCard cc = customerService.getCustomerCardById(serial);
         byte[] pass = applePass.generatePass(cc);
 
-        // Wir bauen den HTTP-Header exakt nach Apples RFC-1123 Standard per Hand
         java.time.ZonedDateTime zonedDateTime = cc.getUpdatedAt().atZone(java.time.ZoneId.of("GMT"));
         String appleDateHeader = java.time.format.DateTimeFormatter.RFC_1123_DATE_TIME.format(zonedDateTime);
 
