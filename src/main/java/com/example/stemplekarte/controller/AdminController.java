@@ -1,16 +1,24 @@
 package com.example.stemplekarte.controller;
 
+import com.example.stemplekarte.model.Card;
+import com.example.stemplekarte.model.CustomerCard;
 import com.example.stemplekarte.model.Shop;
+import com.example.stemplekarte.model.StaffToken;
+import com.example.stemplekarte.repository.AppleDeviceRepository;
 import com.example.stemplekarte.repository.CardRepository;
 import com.example.stemplekarte.repository.CustomerCardRepository;
 import com.example.stemplekarte.repository.ShopRepository;
+import com.example.stemplekarte.repository.StaffTokenRepository;
 import com.example.stemplekarte.security.JwtService;
 import com.example.stemplekarte.service.ShopService;
 import com.example.stemplekarte.wallet.GoogleWalletSetup;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.HashMap;
@@ -24,10 +32,14 @@ import java.util.concurrent.ConcurrentHashMap;
 @RequestMapping("/api/admin")
 public class AdminController {
 
+    private static final Logger log = LoggerFactory.getLogger(AdminController.class);
+
     private final GoogleWalletSetup googleWalletSetup;
     private final ShopRepository shopRepo;
     private final CardRepository cardRepo;
     private final CustomerCardRepository customerCardRepo;
+    private final StaffTokenRepository staffTokenRepo;
+    private final AppleDeviceRepository appleDeviceRepo;
     private final JwtService jwtService;
     private final ShopService shopService;
     private final PasswordEncoder passwordEncoder;
@@ -43,6 +55,8 @@ public class AdminController {
                            ShopRepository shopRepo,
                            CardRepository cardRepo,
                            CustomerCardRepository customerCardRepo,
+                           StaffTokenRepository staffTokenRepo,
+                           AppleDeviceRepository appleDeviceRepo,
                            JwtService jwtService,
                            ShopService shopService,
                            PasswordEncoder passwordEncoder) {
@@ -50,6 +64,8 @@ public class AdminController {
         this.shopRepo = shopRepo;
         this.cardRepo = cardRepo;
         this.customerCardRepo = customerCardRepo;
+        this.staffTokenRepo = staffTokenRepo;
+        this.appleDeviceRepo = appleDeviceRepo;
         this.jwtService = jwtService;
         this.shopService = shopService;
         this.passwordEncoder = passwordEncoder;
@@ -148,6 +164,42 @@ public class AdminController {
         result.put("name", shop.getName());
         result.put("active", shop.isActive());
         return ResponseEntity.ok(result);
+    }
+
+    /**
+     * Löscht einen Shop komplett:
+     * Apple-Registrierungen → CustomerCards → StaffTokens → Cards → Shop
+     */
+    @DeleteMapping("/shops/{shopId}")
+    @Transactional
+    public ResponseEntity<Map<String, String>> deleteShop(@PathVariable String shopId) {
+        Shop shop = shopRepo.findById(shopId)
+                .orElseThrow(() -> new RuntimeException("Shop nicht gefunden"));
+
+        // 1. Alle Karten des Shops holen (aktive + inaktive)
+        List<Card> allCards = cardRepo.findByShop(shop);
+
+        // 2. CustomerCards + Apple-Registrierungen löschen
+        for (Card card : allCards) {
+            List<CustomerCard> customerCards = customerCardRepo.findByCard(card);
+            for (CustomerCard cc : customerCards) {
+                appleDeviceRepo.deleteBySerialNumber(cc.getId());
+            }
+            customerCardRepo.deleteAll(customerCards);
+        }
+
+        // 3. Karten löschen
+        cardRepo.deleteAll(allCards);
+
+        // 4. Staff-Tokens löschen
+        List<StaffToken> tokens = staffTokenRepo.findByShop(shop);
+        staffTokenRepo.deleteAll(tokens);
+
+        // 5. Shop löschen
+        shopRepo.delete(shop);
+
+        log.info("Admin: Shop {} ({}) vollstaendig geloescht", shop.getName(), shopId);
+        return ResponseEntity.ok(Map.of("message", "Shop " + shop.getName() + " geloescht"));
     }
 
     public record CreateShopRequest(String email, String password, String name, int maxTokens) {}

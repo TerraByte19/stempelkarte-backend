@@ -13,4 +13,7 @@ public interface CardRepository extends JpaRepository<Card, String> {
     Optional<Card> findById(String id);
 
     List<Card> findByShopAndActiveTrue(Shop shop);
+
+    // Für vollständige Shop-Löschung (auch inaktive Karten)
+    List<Card> findByShop(Shop shop);
 }
