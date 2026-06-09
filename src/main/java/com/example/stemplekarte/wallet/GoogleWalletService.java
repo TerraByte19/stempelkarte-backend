@@ -94,7 +94,7 @@ public class GoogleWalletService {
             createOrUpdateClass(cc, classId);
             createOrUpdateObject(cc, classId, objectId);
         } catch (Exception e) {
-            log.error("Google Wallet Fehler: {}", e.getMessage());
+            log.error("Google Wallet Fehler im Lifecycle: {}", e.getMessage());
         }
 
         PrivateKey privateKey = credentials.getPrivateKey();
@@ -121,17 +121,8 @@ public class GoogleWalletService {
                 .compact();
     }
 
-    /**
-     * Wird bei jedem Scan aufgerufen. Laeuft jetzt ASYNCHRON (eigener Thread),
-     * damit der Scan am Tresen nicht auf die Google-API wartet. Aktualisiert
-     * NUR das Loyalty-Object (Stempelstand) — die Class (Design/Logo/Hero,
-     * inkl. langsamem Bild-HEAD-Check) wird hier bewusst NICHT mehr angefasst,
-     * die wird beim Hinzufuegen zur Wallet bzw. bei Design-Aenderungen gesetzt.
-     *
-     * Nimmt die ID statt der Entity entgegen und laedt frisch in eigener
-     * Transaktion — so gibt es im Async-Thread keine Lazy-Loading-Probleme.
-     */
     @Async
+    @Transactional
     public void notifyUpdate(String customerCardId) {
         if (credentials == null || walletClient == null) return;
         try {
@@ -148,7 +139,6 @@ public class GoogleWalletService {
         Shop shop = cc.getCard().getShop();
         com.example.stemplekarte.model.Card card = cc.getCard();
 
-        // Karten-Design hat Vorrang, Fallback auf Shop
         String bgColor = card.getColorBackground() != null ? card.getColorBackground() : shop.getColorBackground();
         String logoUrl = (card.getLogoUrl() != null && !card.getLogoUrl().isBlank()) ? card.getLogoUrl() : shop.getLogoUrl();
         String heroUrl = (card.getHeroImageUrl() != null && !card.getHeroImageUrl().isBlank()) ? card.getHeroImageUrl() : shop.getHeroImageUrl();
@@ -161,20 +151,11 @@ public class GoogleWalletService {
                 .setReviewStatus("underReview")
                 .setCountryCode("DE");
 
-        // Logo nur setzen wenn die URL wirklich erreichbar ist
         if (isImageReachable(logoUrl)) {
-            lc.setProgramLogo(new Image().setSourceUri(
-                    new ImageUri().setUri(logoUrl)));
-        } else if (isHttps(logoUrl)) {
-            log.warn("Logo-URL nicht erreichbar, wird übersprungen: {}", logoUrl);
+            lc.setProgramLogo(new Image().setSourceUri(new ImageUri().setUri(logoUrl)));
         }
-
-        // Hero nur setzen wenn die URL wirklich erreichbar ist
         if (isImageReachable(heroUrl)) {
-            lc.setHeroImage(new Image().setSourceUri(
-                    new ImageUri().setUri(heroUrl)));
-        } else if (isHttps(heroUrl)) {
-            log.warn("Hero-URL nicht erreichbar, wird übersprungen: {}", heroUrl);
+            lc.setHeroImage(new Image().setSourceUri(new ImageUri().setUri(heroUrl)));
         }
 
         try {
@@ -183,8 +164,20 @@ public class GoogleWalletService {
             log.info("Google Wallet Class aktualisiert: {}", classId);
         } catch (com.google.api.client.googleapis.json.GoogleJsonResponseException e) {
             if (e.getStatusCode() == 404) {
-                walletClient.loyaltyclass().insert(lc).execute();
-                log.info("Google Wallet Class erstellt: {}", classId);
+                try {
+                    walletClient.loyaltyclass().insert(lc).execute();
+                    log.info("Google Wallet Class erstellt: {}", classId);
+                } catch (com.google.api.client.googleapis.json.GoogleJsonResponseException ex) {
+                    if (ex.getStatusCode() == 409) {
+                        log.warn("Google Wallet Class parallel erstellt (409), wechsle zu Patch: {}", classId);
+                        walletClient.loyaltyclass().patch(classId, lc).execute();
+                    } else {
+                        throw ex;
+                    }
+                }
+            } else if (e.getStatusCode() == 409) {
+                log.warn("Google Wallet Class Concurrency Conflict (409) bei Patch: {}", classId);
+                walletClient.loyaltyclass().patch(classId, lc).execute();
             } else {
                 throw e;
             }
@@ -221,8 +214,20 @@ public class GoogleWalletService {
             log.info("Google Wallet Objekt aktualisiert: {}", objectId);
         } catch (com.google.api.client.googleapis.json.GoogleJsonResponseException e) {
             if (e.getStatusCode() == 404) {
-                walletClient.loyaltyobject().insert(loyaltyObject).execute();
-                log.info("Google Wallet Objekt erstellt: {}", objectId);
+                try {
+                    walletClient.loyaltyobject().insert(loyaltyObject).execute();
+                    log.info("Google Wallet Objekt erstellt: {}", objectId);
+                } catch (com.google.api.client.googleapis.json.GoogleJsonResponseException ex) {
+                    if (ex.getStatusCode() == 409) {
+                        log.warn("Google Wallet Objekt parallel erstellt (409), wechsle zu Patch: {}", objectId);
+                        walletClient.loyaltyobject().patch(objectId, loyaltyObject).execute();
+                    } else {
+                        throw ex;
+                    }
+                }
+            } else if (e.getStatusCode() == 409) {
+                log.warn("Google Wallet Objekt Concurrency Conflict (409) bei Patch: {}", objectId);
+                walletClient.loyaltyobject().patch(objectId, loyaltyObject).execute();
             } else {
                 throw e;
             }
@@ -233,8 +238,6 @@ public class GoogleWalletService {
         return url != null && url.startsWith("https://");
     }
 
-    // Prüft ob ein Bild wirklich abrufbar ist (HTTP 200), damit Google die Class
-    // nicht wegen einer toten Bild-URL komplett ablehnt.
     private boolean isImageReachable(String url) {
         if (!isHttps(url)) return false;
         try {
