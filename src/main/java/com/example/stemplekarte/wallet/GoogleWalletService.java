@@ -3,6 +3,7 @@ package com.example.stemplekarte.wallet;
 import com.example.stemplekarte.config.AppProperties;
 import com.example.stemplekarte.model.CustomerCard;
 import com.example.stemplekarte.model.Shop;
+import com.example.stemplekarte.repository.CustomerCardRepository;
 import com.google.api.client.googleapis.javanet.GoogleNetHttpTransport;
 import com.google.api.client.json.gson.GsonFactory;
 import com.google.api.services.walletobjects.Walletobjects;
@@ -13,7 +14,9 @@ import com.google.auth.oauth2.ServiceAccountCredentials;
 import io.jsonwebtoken.Jwts;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.io.FileInputStream;
 import java.net.HttpURLConnection;
@@ -22,6 +25,7 @@ import java.security.PrivateKey;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
+import java.util.NoSuchElementException;
 
 @Service
 public class GoogleWalletService {
@@ -31,11 +35,13 @@ public class GoogleWalletService {
     private static final String SCOPE = "https://www.googleapis.com/auth/wallet_object.issuer";
 
     private final AppProperties props;
+    private final CustomerCardRepository customerCardRepo;
     private final ServiceAccountCredentials credentials;
     private final Walletobjects walletClient;
 
-    public GoogleWalletService(AppProperties props) {
+    public GoogleWalletService(AppProperties props, CustomerCardRepository customerCardRepo) {
         this.props = props;
+        this.customerCardRepo = customerCardRepo;
         this.credentials = loadCredentials();
         this.walletClient = buildWalletClient();
     }
@@ -84,6 +90,7 @@ public class GoogleWalletService {
         String objectId = objectIdFor(cc);
 
         try {
+            // Beim Hinzufuegen zur Wallet: Class + Object einmalig anlegen/aktualisieren.
             createOrUpdateClass(cc, classId);
             createOrUpdateObject(cc, classId, objectId);
         } catch (Exception e) {
@@ -114,11 +121,25 @@ public class GoogleWalletService {
                 .compact();
     }
 
-    public void notifyUpdate(CustomerCard cc) {
+    /**
+     * Wird bei jedem Scan aufgerufen. Laeuft jetzt ASYNCHRON (eigener Thread),
+     * damit der Scan am Tresen nicht auf die Google-API wartet. Aktualisiert
+     * NUR das Loyalty-Object (Stempelstand) — die Class (Design/Logo/Hero,
+     * inkl. langsamem Bild-HEAD-Check) wird hier bewusst NICHT mehr angefasst,
+     * die wird beim Hinzufuegen zur Wallet bzw. bei Design-Aenderungen gesetzt.
+     *
+     * Nimmt die ID statt der Entity entgegen und laedt frisch in eigener
+     * Transaktion — so gibt es im Async-Thread keine Lazy-Loading-Probleme.
+     */
+    @Async
+    @Transactional
+    public void notifyUpdate(String customerCardId) {
         if (credentials == null || walletClient == null) return;
         try {
-            createOrUpdateClass(cc, classIdFor(cc.getCard().getShop()));
-            createOrUpdateObject(cc, classIdFor(cc.getCard().getShop()), objectIdFor(cc));
+            CustomerCard cc = customerCardRepo.findById(customerCardId)
+                    .orElseThrow(() -> new NoSuchElementException("CustomerCard nicht gefunden: " + customerCardId));
+            String classId = classIdFor(cc.getCard().getShop());
+            createOrUpdateObject(cc, classId, objectIdFor(cc));
         } catch (Exception e) {
             log.error("Google Wallet Update Fehler: {}", e.getMessage());
         }

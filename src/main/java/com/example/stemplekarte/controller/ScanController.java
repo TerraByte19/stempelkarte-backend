@@ -72,7 +72,7 @@ public class ScanController {
 
         // ── Google Wallet: Loyalty Object direkt per API updaten ──────────
         try {
-            googleWalletService.notifyUpdate(cc);
+            googleWalletService.notifyUpdate(cc.getId());
         } catch (Exception e) {
             log.warn("Google Wallet Update fehlgeschlagen (nicht kritisch): {}", e.getMessage());
         }

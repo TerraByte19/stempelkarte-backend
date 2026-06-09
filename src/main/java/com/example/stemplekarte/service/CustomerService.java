@@ -1,6 +1,7 @@
 package com.example.stemplekarte.service;
 
 import com.example.stemplekarte.model.*;
+import com.example.stemplekarte.repository.AppleDeviceRepository;
 import com.example.stemplekarte.repository.CardRepository;
 import com.example.stemplekarte.repository.CustomerCardRepository;
 import com.example.stemplekarte.repository.CustomerRepository;
@@ -20,20 +21,19 @@ public class CustomerService {
 
     private static final Logger log = LoggerFactory.getLogger(CustomerService.class);
 
-    // Harte Obergrenze als Defense-in-Depth, falls processScan jemals ohne
-    // Controller-Validierung aufgerufen wird (schuetzt die Schleife vor DoS).
-    private static final int MAX_STAMPS_PER_SCAN = 20;
-
     private final CustomerRepository customerRepo;
     private final CardRepository cardRepo;
     private final CustomerCardRepository customerCardRepo;
+    private final AppleDeviceRepository appleDeviceRepo;
     private final ObjectMapper mapper = new ObjectMapper();
 
     public CustomerService(CustomerRepository customerRepo, CardRepository cardRepo,
-                           CustomerCardRepository customerCardRepo) {
+                           CustomerCardRepository customerCardRepo,
+                           AppleDeviceRepository appleDeviceRepo) {
         this.customerRepo = customerRepo;
         this.cardRepo = cardRepo;
         this.customerCardRepo = customerCardRepo;
+        this.appleDeviceRepo = appleDeviceRepo;
     }
 
     @Transactional
@@ -78,12 +78,31 @@ public class CustomerService {
         return customerCardRepo.findByCustomer(customer);
     }
 
+    /**
+     * DSGVO: Recht auf Loeschung. Entfernt den Kunden vollstaendig aus dem System —
+     * seine CustomerCards und die zugehoerigen Apple-Geraeteregistrierungen
+     * (Push-Tokens). Hinweis: In der Google Wallet kann eine bereits gespeicherte
+     * Karte separat per API auf EXPIRED gesetzt werden; das hier entfernt die
+     * personenbezogenen Daten aus DEINEM System.
+     */
+    @Transactional
+    public void deleteCustomerData(String customerId) {
+        Customer customer = customerRepo.findById(customerId)
+                .orElseThrow(() -> new NoSuchElementException("Kunde nicht gefunden: " + customerId));
+
+        List<CustomerCard> cards = customerCardRepo.findByCustomer(customer);
+        for (CustomerCard cc : cards) {
+            // serialNumber der Apple-Registrierung == CustomerCard-ID
+            appleDeviceRepo.deleteBySerialNumber(cc.getId());
+        }
+        customerCardRepo.deleteAll(cards);
+        customerRepo.delete(customer);
+
+        log.info("DSGVO-Loeschung: Kunde {} mit {} Karte(n) entfernt", customerId, cards.size());
+    }
+
     @Transactional
     public ScanResult processScan(String qrPayload, Shop shop, int count) {
-        // Defense-in-Depth: Eingabe hart begrenzen, unabhaengig vom Controller.
-        if (count < 1) count = 1;
-        if (count > MAX_STAMPS_PER_SCAN) count = MAX_STAMPS_PER_SCAN;
-
         String customerId;
         String cardId;
         try {
