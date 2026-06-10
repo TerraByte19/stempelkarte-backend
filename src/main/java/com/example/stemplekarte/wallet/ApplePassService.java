@@ -126,11 +126,11 @@ public class ApplePassService {
                 ? "Glückwunsch! Deine Karte ist voll (%@). 🎉"
                 : "Update! Du hast jetzt %@ Stempel.";
 
+        // KEIN altText mehr → unter dem QR-Code wird die CUST-ID NICHT mehr angezeigt
         PKBarcode barcode = PKBarcode.builder()
                 .format(PKBarcodeFormat.PKBarcodeFormatQR)
                 .message(qrPayload)
                 .messageEncoding(StandardCharsets.UTF_8)
-                .altText(cc.getCustomer().getId())
                 .build();
 
         var genericPass = PKGenericPass.builder()
