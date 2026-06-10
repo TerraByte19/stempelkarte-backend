@@ -202,10 +202,10 @@ public class GoogleWalletService {
                         .setLabel("Belohnung")
                         .setBalance(new LoyaltyPointsBalance()
                                 .setString(cc.getCard().getRewardText())))
+                // KEIN setAlternateText mehr → unter dem QR-Code wird die CUST-ID NICHT mehr angezeigt
                 .setBarcode(new Barcode()
                         .setType("QR_CODE")
-                        .setValue(qrValue)
-                        .setAlternateText(cc.getCustomer().getId()));
+                        .setValue(qrValue));
 
         try {
             walletClient.loyaltyobject().get(objectId).execute();
