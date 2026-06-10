@@ -6,6 +6,7 @@ import com.example.stemplekarte.repository.ShopRepository;
 import com.example.stemplekarte.security.JwtAuthFilter;
 import com.example.stemplekarte.service.CardService;
 import com.example.stemplekarte.wallet.CloudinaryService;
+import com.example.stemplekarte.wallet.GoogleWalletService;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
@@ -21,12 +22,15 @@ public class StampDesignController {
     private final ShopRepository shopRepo;
     private final CardService cardService;
     private final CloudinaryService cloudinary;
+    private final GoogleWalletService googleWalletService;
 
     public StampDesignController(ShopRepository shopRepo, CardService cardService,
-                                 CloudinaryService cloudinary) {
+                                 CloudinaryService cloudinary,
+                                 GoogleWalletService googleWalletService) {
         this.shopRepo = shopRepo;
         this.cardService = cardService;
         this.cloudinary = cloudinary;
+        this.googleWalletService = googleWalletService;
     }
 
     private Shop currentShop(Authentication auth) {
@@ -60,6 +64,8 @@ public class StampDesignController {
                 req.stampColor(), req.emptyStampStyle());
         card.updateColors(req.colorBackground(), req.colorForeground(), req.colorLabel());
         cardService.save(card);
+        // Google Wallet Class neu schreiben → Farb-/Design-Änderung kommt bei gespeicherten Karten an
+        googleWalletService.refreshClassForCard(card);
         return toMap(card);
     }
 
@@ -74,6 +80,7 @@ public class StampDesignController {
                 CloudinaryService.ImageType.LOGO);
         card.setLogoUrl(url);
         cardService.save(card);
+        googleWalletService.refreshClassForCard(card);
         return Map.of("logoUrl", url);
     }
 
@@ -88,6 +95,7 @@ public class StampDesignController {
                 CloudinaryService.ImageType.HERO);
         card.setHeroImageUrl(url);
         cardService.save(card);
+        googleWalletService.refreshClassForCard(card);
         return Map.of("heroImageUrl", url);
     }
 
@@ -102,6 +110,7 @@ public class StampDesignController {
                 CloudinaryService.ImageType.STAMP);
         card.setStampIconUrl(url);
         cardService.save(card);
+        // Stempel-Icon betrifft nur Apple-Strip, kein Google-Class-Refresh nötig
         return Map.of("stampIconUrl", url);
     }
 

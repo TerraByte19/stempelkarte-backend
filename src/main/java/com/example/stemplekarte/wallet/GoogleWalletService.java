@@ -1,6 +1,7 @@
 package com.example.stemplekarte.wallet;
 
 import com.example.stemplekarte.config.AppProperties;
+import com.example.stemplekarte.model.Card;
 import com.example.stemplekarte.model.CustomerCard;
 import com.example.stemplekarte.model.Shop;
 import com.example.stemplekarte.repository.CustomerCardRepository;
@@ -90,7 +91,7 @@ public class GoogleWalletService {
         String objectId = objectIdFor(cc);
 
         try {
-            createOrUpdateClass(cc, classId);
+            createOrUpdateClass(cc.getCard(), classId);
             createOrUpdateObject(cc, classId, objectId);
         } catch (Exception e) {
             log.error("Google Wallet Fehler im Lifecycle: {}", e.getMessage());
@@ -128,15 +129,34 @@ public class GoogleWalletService {
             CustomerCard cc = customerCardRepo.findById(customerCardId)
                     .orElseThrow(() -> new NoSuchElementException("CustomerCard nicht gefunden: " + customerCardId));
             String classId = classIdFor(cc.getCard().getShop());
+            // Auch die Class aktualisieren, damit Design-Änderungen ankommen
+            createOrUpdateClass(cc.getCard(), classId);
             createOrUpdateObject(cc, classId, objectIdFor(cc));
         } catch (Exception e) {
             log.error("Google Wallet Update Fehler: {}", e.getMessage());
         }
     }
 
-    private void createOrUpdateClass(CustomerCard cc, String classId) throws Exception {
-        Shop shop = cc.getCard().getShop();
-        com.example.stemplekarte.model.Card card = cc.getCard();
+    /**
+     * Schreibt das Design (Farbe, Logo, Hero, Name) einer Karte in die
+     * Google Wallet Class neu — damit Änderungen aus dem Design-Panel
+     * sofort bei allen bereits gespeicherten Karten ankommen.
+     * Wird vom StampDesignController nach jeder Design-/Bild-Änderung aufgerufen.
+     */
+    @Async
+    public void refreshClassForCard(Card card) {
+        if (credentials == null || walletClient == null) return;
+        try {
+            String classId = classIdFor(card.getShop());
+            createOrUpdateClass(card, classId);
+            log.info("Google Wallet Class nach Design-Aenderung aktualisiert: {}", classId);
+        } catch (Exception e) {
+            log.error("Google Wallet Class Refresh Fehler: {}", e.getMessage());
+        }
+    }
+
+    private void createOrUpdateClass(Card card, String classId) throws Exception {
+        Shop shop = card.getShop();
 
         String bgColor = card.getColorBackground() != null ? card.getColorBackground() : shop.getColorBackground();
         String logoUrl = (card.getLogoUrl() != null && !card.getLogoUrl().isBlank()) ? card.getLogoUrl() : shop.getLogoUrl();
