@@ -141,7 +141,6 @@ public class GoogleWalletService {
      * Schreibt das Design (Farbe, Logo, Hero, Name) einer Karte in die
      * Google Wallet Class neu — damit Änderungen aus dem Design-Panel
      * sofort bei allen bereits gespeicherten Karten ankommen.
-     * Wird vom StampDesignController nach jeder Design-/Bild-Änderung aufgerufen.
      */
     @Async
     public void refreshClassForCard(Card card) {
@@ -222,10 +221,11 @@ public class GoogleWalletService {
                         .setLabel("Belohnung")
                         .setBalance(new LoyaltyPointsBalance()
                                 .setString(cc.getCard().getRewardText())))
-                // KEIN setAlternateText mehr → unter dem QR-Code wird die CUST-ID NICHT mehr angezeigt
+                // setAlternateText("") überschreibt den alten CUST-Text bei bestehenden Karten mit leer
                 .setBarcode(new Barcode()
                         .setType("QR_CODE")
-                        .setValue(qrValue));
+                        .setValue(qrValue)
+                        .setAlternateText(""));
 
         try {
             walletClient.loyaltyobject().get(objectId).execute();
