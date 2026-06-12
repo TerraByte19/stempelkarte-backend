@@ -76,7 +76,7 @@ public class CustomerService {
         // Bestätigungs-Mail nur, wenn die E-Mail noch nicht bestätigt ist
         // (sonst bekäme der Kunde bei jeder Karte erneut eine Mail).
         if (!customer.isEmailConfirmed()) {
-            emailService.sendConfirmationMail(customer, card.getShop().getName(), card.getId());
+            emailService.sendConfirmationMail(customer, card.getShop(), card.getId());
         }
 
         return cc;
@@ -170,19 +170,27 @@ public class CustomerService {
         CustomerCard cc = getOrCreateCustomerCard(customerId, cardId);
         int threshold = card.getRewardThreshold();
         ScanResult result = null;
+        int rewardsEarnedThisScan = 0;
 
         for (int i = 0; i < count; i++) {
             if (cc.getStamps() >= threshold) {
                 cc.redeemReward();
-                result = new ScanResult.Redeemed(cc, card.getRewardText() + " eingeloest!");
+                result = new ScanResult.Redeemed(cc, card.getRewardText() + " eingeloest!", rewardsEarnedThisScan);
             } else {
                 cc.addStamp();
-                result = cc.getStamps() == threshold
-                        ? new ScanResult.Full(cc, "Karte voll! " + card.getRewardText())
-                        : new ScanResult.Stamped(cc, "Stempel hinzugefuegt (%d/%d)"
-                        .formatted(cc.getStamps(), threshold));
+                if (cc.getStamps() == threshold) {
+                    rewardsEarnedThisScan++;
+                    result = new ScanResult.Full(cc, "Karte voll! " + card.getRewardText(), rewardsEarnedThisScan);
+                } else {
+                    result = new ScanResult.Stamped(cc, "Stempel hinzugefuegt (%d/%d)"
+                            .formatted(cc.getStamps(), threshold), rewardsEarnedThisScan);
+                }
             }
         }
+
+        // Meilenstein-Zähler dauerhaft erhöhen (für Apple-Wallet-Push,
+        // unabhängig vom normalen Stempelstand-Update).
+        cc.addRewardsEarned(rewardsEarnedThisScan);
 
         customerCardRepo.save(cc);
         log.info("Scan fuer Kunde {} auf Karte {} ({}x): {}", customerId, cardId, count, result.message());

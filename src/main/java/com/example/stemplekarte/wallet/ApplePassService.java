@@ -126,6 +126,15 @@ public class ApplePassService {
                 ? "Glückwunsch! Deine Karte ist voll (%@). 🎉"
                 : "Update! Du hast jetzt %@ Stempel.";
 
+        // Eigene, vom Stempelstand UNABHÄNGIGE Push-Benachrichtigung:
+        // rewardsEarnedTotal ändert sich genau dann, wenn die Karte
+        // WÄHREND dieses Scans voll wurde (auch wenn sie im selben Scan
+        // schon wieder zurückgesetzt wurde). Apple Wallet zeigt für JEDES
+        // Feld mit geändertem Wert + changeMessage eine eigene
+        // Benachrichtigung — so kommen "Stempelstand aktualisiert" UND
+        // "Belohnung verdient" als ZWEI getrennte Pushes an.
+        String rewardEarnedMsg = "🎉 " + card.getRewardText() + " verdient! Zeig die Karte beim nächsten Besuch vor.";
+
         // KEIN altText mehr → unter dem QR-Code wird die CUST-ID NICHT mehr angezeigt
         PKBarcode barcode = PKBarcode.builder()
                 .format(PKBarcodeFormat.PKBarcodeFormatQR)
@@ -159,6 +168,14 @@ public class ApplePassService {
                     .auxiliaryFieldBuilder(PKField.builder()
                             .key("name").label("KUNDE").value(cc.getCustomer().getName()));
         }
+
+        // Back-Field für die separate "Belohnung verdient"-Benachrichtigung.
+        // Unsichtbar auf der Vorderseite, aber sein changeMessage löst eine
+        // eigene Push-Benachrichtigung aus, sobald sich der Wert ändert.
+        genericPass.backFieldBuilder(PKField.builder()
+                .key("reward-milestone").label("Belohnungen erreicht")
+                .value(String.valueOf(cc.getRewardsEarnedTotal()))
+                .changeMessage(rewardEarnedMsg));
 
         PKPass pass = PKPass.builder()
                 .formatVersion(1)

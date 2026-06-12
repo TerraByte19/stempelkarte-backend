@@ -48,6 +48,17 @@ public class CustomerCard {
     @Column(name = "consent_at")
     private Instant consentAt;
 
+    // ── Belohnungs-Meilenstein-Zähler (für Wallet-Push-Benachrichtigungen) ──
+    // Zählt JEDES Mal hoch, wenn die Karte während eines Scans voll wird
+    // (unabhängig davon, ob direkt im selben Scan eingelöst wird). Im
+    // Gegensatz zu totalRewards (= tatsächliche Einlösungen) wird dieser
+    // Wert NIE zurückgesetzt — so kann Apple Wallet per changeMessage eine
+    // eigene "Belohnung verdient!"-Benachrichtigung anzeigen, sobald sich
+    // dieser Wert ändert (unabhängig vom normalen Stempelstand-Update).
+    @Column(name = "rewards_earned_total", nullable = false,
+            columnDefinition = "integer not null default 0")
+    private int rewardsEarnedTotal;
+
     protected CustomerCard() {}
 
     public static CustomerCard create(Customer customer, Card card) {
@@ -74,6 +85,18 @@ public class CustomerCard {
         this.updatedAt = Instant.now();
     }
 
+    /**
+     * Erhöht den Belohnungs-Meilenstein-Zähler, wenn die Karte während eines
+     * Scans (ggf. mehrmals bei großen count-Werten) voll wurde. Wird vom
+     * Apple-Pass als changeMessage-Trigger für eine eigene "Belohnung
+     * verdient!"-Benachrichtigung genutzt, getrennt vom Stempelstand-Update.
+     */
+    public void addRewardsEarned(int n) {
+        if (n <= 0) return;
+        this.rewardsEarnedTotal += n;
+        this.updatedAt = Instant.now();
+    }
+
     /** Checkbox bei der Anmeldung angekreuzt. */
     public void giveMarketingConsent() {
         this.marketingConsent = true;
@@ -90,6 +113,7 @@ public class CustomerCard {
     public Card getCard() { return card; }
     public int getStamps() { return stamps; }
     public int getTotalRewards() { return totalRewards; }
+    public int getRewardsEarnedTotal() { return rewardsEarnedTotal; }
     public String getAuthToken() { return authToken; }
     public Instant getCreatedAt() { return createdAt; }
     public Instant getUpdatedAt() { return updatedAt; }

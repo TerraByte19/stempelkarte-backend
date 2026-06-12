@@ -1,6 +1,7 @@
 package com.example.stemplekarte.service;
 
 import com.example.stemplekarte.model.Customer;
+import com.example.stemplekarte.model.Shop;
 import jakarta.mail.MessagingException;
 import jakarta.mail.internet.InternetAddress;
 import jakarta.mail.internet.MimeMessage;
@@ -24,6 +25,10 @@ import java.io.UnsupportedEncodingException;
  *
  * Solange MAIL_ENABLED=false ist, wird nur geloggt statt gesendet —
  * so läuft die App auch ohne fertiges Brevo-Setup.
+ *
+ * BRANDING: Mails, die im Namen eines Ladens verschickt werden
+ * (Bestätigung, Newsletter, "Karte voll"), zeigen automatisch das
+ * Hero-Bild und Logo des Ladens im Mail-Header, falls vorhanden.
  */
 @Service
 public class EmailService {
@@ -48,16 +53,18 @@ public class EmailService {
     // ── 1. Bestätigungs-Mail (Double-Opt-In) ─────────────────────────────
     // Der Bestätigungs-Link bestätigt die E-Mail UND führt direkt zur
     // Stempelkarte (mit Apple/Google Wallet Buttons), da customerId+cardId
-    // mitgegeben werden.
+    // mitgegeben werden. Zeigt Hero-Bild + Logo des Ladens im Header.
     @Async
-    public void sendConfirmationMail(Customer customer, String shopName, String cardId) {
+    public void sendConfirmationMail(Customer customer, Shop shop, String cardId) {
         if (customer.getConfirmToken() == null) return; // schon bestätigt
 
+        String shopName = shop.getName();
         String confirmUrl = baseUrl + "/mail/confirm?token=" + customer.getConfirmToken()
                 + "&customerId=" + customer.getId() + "&cardId=" + cardId;
         String deleteUrl  = baseUrl + "/mail/delete-request?c=" + customer.getId();
 
         String html = wrap(
+                shop,
                 "Hallo " + esc(customer.getName()) + ",",
                 "<p>du hast dich für die digitale Stempelkarte von <b>" + esc(shopName) + "</b> angemeldet.</p>"
                         + "<p>Bestätige deine E-Mail-Adresse, um deine Stempelkarte aufs Handy zu bekommen:</p>"
@@ -71,11 +78,14 @@ public class EmailService {
     }
 
     // ── 2. Lösch-Bestätigungs-Mail (Schritt 2, Sicherheits-Mail) ─────────
+    // Generische StampIT-Mail, kein Laden-Branding (kontoweit, nicht
+    // kartenspezifisch).
     @Async
     public void sendDeletionMail(Customer customer) {
         String deleteConfirmUrl = baseUrl + "/mail/delete-confirm?token=" + customer.getDeleteToken();
 
         String html = wrap(
+                null,
                 "Hallo " + esc(customer.getName()) + ",",
                 "<p>du hast die Löschung deiner Daten angefordert.</p>"
                         + "<p><b>Achtung:</b> Damit werden dein Konto, alle Stempelkarten und alle "
@@ -91,13 +101,23 @@ public class EmailService {
 
     // ── 3. Newsletter / Werbe-Mail eines Ladens ──────────────────────────
     // unsubscribeUrl ist Pflicht (UWG): jeder Empfänger kann sich abmelden.
+    // imageUrl ist optional: ein vom Besitzer hochgeladenes Bild, das im
+    // Newsletter-Text angezeigt wird (zusätzlich zum Hero-Bild im Header).
     @Async
-    public void sendNewsletterMail(String to, String shopName, String replyTo,
-                                   String subject, String bodyText,
+    public void sendNewsletterMail(String to, Shop shop, String replyTo,
+                                   String subject, String bodyText, String imageUrl,
                                    String unsubscribeUrl, String deleteUrl) {
+        String shopName = shop.getName();
+        String imageHtml = (imageUrl == null || imageUrl.isBlank())
+                ? ""
+                : "<img src=\"" + imageUrl + "\" alt=\"\" style=\"width:100%;border-radius:12px;"
+                + "margin-bottom:16px;display:block\">";
+
         String html = wrap(
+                shop,
                 null,
-                "<p style=\"white-space:pre-line\">" + esc(bodyText) + "</p>",
+                imageHtml
+                        + "<p style=\"white-space:pre-line\">" + esc(bodyText) + "</p>",
                 deleteUrl,
                 "<a href=\"" + unsubscribeUrl + "\" style=\"color:#888\">Keine Angebote mehr von "
                         + esc(shopName) + " erhalten (abmelden)</a>"
@@ -132,8 +152,12 @@ public class EmailService {
         }
     }
 
-    /** Einheitliches Mail-Layout. Footer-Zeilen (Lösch-Link, Abmelde-Link) optional. */
-    private String wrap(String greeting, String content, String deleteUrl, String... extraFooter) {
+    /**
+     * Einheitliches Mail-Layout. Footer-Zeilen (Lösch-Link, Abmelde-Link) optional.
+     * Wenn ein Shop übergeben wird, zeigt der Header dessen Hero-Bild (volle
+     * Breite, falls vorhanden) und darunter Logo + Laden-Name.
+     */
+    private String wrap(Shop shop, String greeting, String content, String deleteUrl, String... extraFooter) {
         StringBuilder footer = new StringBuilder();
         for (String line : extraFooter) {
             footer.append("<div style=\"margin-top:6px\">").append(line).append("</div>");
@@ -142,8 +166,10 @@ public class EmailService {
             footer.append("<div style=\"margin-top:6px\"><a href=\"").append(deleteUrl)
                     .append("\" style=\"color:#888\">Ich möchte mein Konto und meine Daten löschen</a></div>");
         }
+
         return "<div style=\"font-family:-apple-system,Segoe UI,sans-serif;max-width:520px;margin:0 auto;"
                 + "padding:24px;color:#1a1a1a\">"
+                + emailHeader(shop)
                 + (greeting != null ? "<p>" + greeting + "</p>" : "")
                 + content
                 + "<hr style=\"border:none;border-top:1px solid #eee;margin:24px 0 12px\">"
@@ -151,6 +177,40 @@ public class EmailService {
                 + "Diese Mail wurde über StampIT (digitale Stempelkarten) versendet."
                 + footer
                 + "</div></div>";
+    }
+
+    /**
+     * Branding-Header einer Mail: Hero-Bild (volle Breite) + Logo neben dem
+     * Laden-Namen. Beides optional — falls der Laden kein Logo/Hero-Bild
+     * hinterlegt hat, wird der jeweilige Teil einfach weggelassen.
+     * Ohne Shop (z.B. generische StampIT-Mails) wird gar kein Header gezeigt.
+     */
+    private String emailHeader(Shop shop) {
+        if (shop == null) return "";
+
+        StringBuilder header = new StringBuilder();
+
+        String heroUrl = shop.getHeroImageUrl();
+        if (heroUrl != null && !heroUrl.isBlank()) {
+            header.append("<img src=\"").append(heroUrl).append("\" alt=\"\" ")
+                    .append("style=\"width:100%;max-height:180px;object-fit:cover;")
+                    .append("border-radius:12px;margin-bottom:16px;display:block\">");
+        }
+
+        String logoUrl = shop.getLogoUrl();
+        boolean hasLogo = logoUrl != null && !logoUrl.isBlank();
+
+        header.append("<div style=\"display:flex;align-items:center;gap:10px;margin-bottom:16px\">");
+        if (hasLogo) {
+            header.append("<img src=\"").append(logoUrl).append("\" alt=\"\" ")
+                    .append("style=\"width:40px;height:40px;border-radius:10px;object-fit:cover;flex-shrink:0\">");
+        }
+        header.append("<span style=\"font-size:16px;font-weight:700\">")
+                .append(esc(shop.getName()))
+                .append("</span>");
+        header.append("</div>");
+
+        return header.toString();
     }
 
     private String button(String url, String label) {

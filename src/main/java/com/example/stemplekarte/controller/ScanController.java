@@ -46,7 +46,8 @@ public class ScanController {
     public record ScanResponse(
             String action, String message, String customerId,
             String cardId, int stamps, int totalRewards,
-            int rewardThreshold, int stampsAdded
+            int rewardThreshold, int stampsAdded,
+            boolean rewardEarned, String rewardText
     ) {}
 
     @Operation(summary = "QR-Code scannen und Stempel vergeben",
@@ -77,6 +78,20 @@ public class ScanController {
             log.warn("Google Wallet Update fehlgeschlagen (nicht kritisch): {}", e.getMessage());
         }
 
+        boolean rewardEarned = result.rewardsEarnedThisScan() > 0;
+
+        // ── Google Wallet: zusätzliche "Karte voll!"-Benachrichtigung ────
+        // Apple bekommt diese extra Nachricht automatisch über das
+        // changeMessage am "reward-milestone"-Feld im Pass (siehe
+        // ApplePassService) — Google braucht dafür einen expliziten Aufruf.
+        if (rewardEarned) {
+            try {
+                googleWalletService.notifyCardFull(cc.getId(), cc.getCard().getRewardText());
+            } catch (Exception e) {
+                log.warn("Google Wallet 'Karte voll'-Benachrichtigung fehlgeschlagen (nicht kritisch): {}", e.getMessage());
+            }
+        }
+
         String action = switch (result) {
             case ScanResult.Stamped s -> "stamped";
             case ScanResult.Full f -> "full";
@@ -90,7 +105,9 @@ public class ScanController {
                 cc.getStamps(),
                 cc.getTotalRewards(),
                 cc.getCard().getRewardThreshold(),
-                count
+                count,
+                rewardEarned,
+                rewardEarned ? cc.getCard().getRewardText() : null
         );
     }
 }

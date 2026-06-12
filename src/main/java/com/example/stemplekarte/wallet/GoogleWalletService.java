@@ -140,6 +140,38 @@ public class GoogleWalletService {
     }
 
     /**
+     * Sendet eine zusätzliche, eigenständige Benachrichtigung "Karte voll!"
+     * an das Gerät — unabhängig vom normalen notifyUpdate() (Stempelstand).
+     * Google Wallet zeigt Objekt-Feld-Änderungen NICHT automatisch als
+     * Benachrichtigung an (anders als Apples changeMessage), daher der
+     * explizite addMessage-Aufruf hier.
+     */
+    @Async
+    @Transactional
+    public void notifyCardFull(String customerCardId, String rewardText) {
+        if (credentials == null || walletClient == null) return;
+        try {
+            CustomerCard cc = customerCardRepo.findById(customerCardId)
+                    .orElseThrow(() -> new NoSuchElementException("CustomerCard nicht gefunden: " + customerCardId));
+            String objectId = objectIdFor(cc);
+
+            Message message = new Message()
+                    .setHeader("🎉 Karte voll!")
+                    .setBody(rewardText + " verdient! Zeig die Karte beim nächsten Besuch vor.")
+                    .setMessageType("TEXT")
+                    .setId("reward-" + customerCardId + "-" + System.currentTimeMillis());
+
+            walletClient.loyaltyobject()
+                    .addmessage(objectId, new AddMessageRequest().setMessage(message))
+                    .execute();
+
+            log.info("Google Wallet 'Karte voll'-Benachrichtigung gesendet: {}", objectId);
+        } catch (Exception e) {
+            log.error("Google Wallet 'Karte voll'-Benachrichtigung Fehler: {}", e.getMessage());
+        }
+    }
+
+    /**
      * Schreibt das Design (Farbe, Logo, Hero, Name) einer Karte in die
      * Google Wallet Class neu — damit Änderungen aus dem Design-Panel
      * sofort bei allen bereits gespeicherten Karten ankommen.
