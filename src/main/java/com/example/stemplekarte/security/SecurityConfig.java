@@ -45,13 +45,23 @@ public class SecurityConfig {
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
 
-        // Lokale Dev-URLs immer erlauben + die konfigurierten Prod-URLs
+        // Feste, bekannte Origins (Komma-getrennte ENV-Variable + lokale Dev-URLs)
         config.setAllowedOrigins(List.of(
                 frontendUrl,
                 "http://localhost:5173",
                 "http://localhost:5174",
                 "http://192.168.178.163:5173",
                 "http://192.168.178.163:5174"
+        ));
+
+        // Pattern-basierte Origins: deckt automatisch alle Subdomains von
+        // stampit-app.de (z.B. www., app., zukünftige Subdomains) sowie
+        // alle Vercel-Deployments (Produktion + Preview-Builds) ab,
+        // ohne dass bei neuen Domains/Deployments der Code geändert werden muss.
+        config.setAllowedOriginPatterns(List.of(
+                "https://*.stampit-app.de",
+                "https://stampit-app.de",
+                "https://*.vercel.app"
         ));
 
         config.addAllowedHeader("*");

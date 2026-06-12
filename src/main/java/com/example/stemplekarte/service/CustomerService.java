@@ -76,7 +76,7 @@ public class CustomerService {
         // Bestätigungs-Mail nur, wenn die E-Mail noch nicht bestätigt ist
         // (sonst bekäme der Kunde bei jeder Karte erneut eine Mail).
         if (!customer.isEmailConfirmed()) {
-            emailService.sendConfirmationMail(customer, card.getShop().getName());
+            emailService.sendConfirmationMail(customer, card.getShop().getName(), card.getId());
         }
 
         return cc;

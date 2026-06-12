@@ -113,7 +113,9 @@ public class GoogleWalletService {
                 .claim("typ", "savetowallet")
                 .claim("origins", List.of(
                         "https://stempelkarte-backend.onrender.com",
-                        "https://stempelkarte-frontend.onrender.com"
+                        "https://stempelkarte-frontend.vercel.app",
+                        "https://stampit-app.de",
+                        "https://www.stampit-app.de"
                 ))
                 .claim("payload", payload)
                 .issuedAt(new Date())

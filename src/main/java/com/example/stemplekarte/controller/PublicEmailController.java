@@ -12,6 +12,8 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 
+import java.net.URI;
+
 /**
  * Öffentliche Endpunkte für Links aus E-Mails (Kunde klickt im Mail-Programm).
  * Liefern kleine HTML-Seiten zurück — kein Login nötig.
@@ -40,17 +42,26 @@ public class PublicEmailController {
     }
 
     // ── 1. E-Mail bestätigen (Double-Opt-In) ─────────────────────────────
+    // Wenn customerId + cardId mitgegeben werden (kommt aus der
+    // Bestätigungs-Mail), wird direkt zur Stempelkarte (Apple/Google
+    // Wallet Buttons) weitergeleitet — der Link "bringt die Karte aufs Handy".
     @GetMapping("/confirm")
-    public ResponseEntity<String> confirm(@RequestParam String token) {
-        return customerRepository.findByConfirmToken(token)
-                .map(c -> {
-                    c.confirmEmail();
-                    customerRepository.save(c);
-                    return page("✅", "E-Mail bestätigt",
-                            "Danke! Deine E-Mail-Adresse ist bestätigt. Du kannst dieses Fenster schließen.");
-                })
-                .orElseGet(() -> page("⚠️", "Link ungültig",
-                        "Dieser Bestätigungs-Link ist ungültig oder wurde bereits verwendet."));
+    public ResponseEntity<String> confirm(@RequestParam String token,
+                                          @RequestParam(value = "customerId", required = false) String customerId,
+                                          @RequestParam(value = "cardId", required = false) String cardId) {
+        customerRepository.findByConfirmToken(token).ifPresent(c -> {
+            c.confirmEmail();
+            customerRepository.save(c);
+        });
+
+        if (customerId != null && !customerId.isBlank() && cardId != null && !cardId.isBlank()) {
+            return ResponseEntity.status(302)
+                    .location(URI.create("/karte/" + customerId + "/" + cardId))
+                    .body("");
+        }
+
+        return page("✅", "E-Mail bestätigt",
+                "Danke! Deine E-Mail-Adresse ist bestätigt. Du kannst dieses Fenster schließen.");
     }
 
     // ── 2. Löschung anfordern (Schritt 1: löst die Sicherheits-Mail aus) ──

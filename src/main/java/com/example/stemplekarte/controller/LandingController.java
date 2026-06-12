@@ -39,12 +39,17 @@ public class LandingController {
                                   boolean marketingConsent) {}
 
     @PostMapping("/karte-neu/register")
-    public Map<String, String> registerForCard(@RequestBody RegisterRequest req) {
+    public Map<String, Object> registerForCard(@RequestBody RegisterRequest req) {
         CustomerCard cc = customerService.registerForCard(
                 req.name(), req.email(), req.cardId(), req.marketingConsent());
         return Map.of(
                 "customerId", cc.getCustomer().getId(),
-                "cardId", cc.getCard().getId()
+                "cardId", cc.getCard().getId(),
+                // true  -> Kunde war schon bestätigt (z.B. Stammkunde bei anderem Laden)
+                //          -> Frontend leitet sofort zur Karte weiter
+                // false -> neue/unbestätigte E-Mail -> Bestätigungs-Mail wurde versendet,
+                //          Frontend zeigt "Check deine Mails"-Hinweis
+                "emailConfirmed", cc.getCustomer().isEmailConfirmed()
         );
     }
 
@@ -353,6 +358,14 @@ public class LandingController {
                                 text-align: center;
                                 display: none;
                             }
+                            .success {
+                                display: none;
+                                text-align: center;
+                                padding: 8px 0 4px;
+                            }
+                            .success-icon { font-size: 48px; margin-bottom: 12px; }
+                            .success-title { font-size: 18px; font-weight: 700; margin-bottom: 8px; }
+                            .success-text { font-size: 14px; opacity: 0.9; line-height: 1.6; }
                         </style>
                     </head>
                     <body>
@@ -372,7 +385,7 @@ public class LandingController {
                                 </div>
                             </div>
                             <div class="error" id="error"></div>
-                            <div class="form">
+                            <div class="form" id="form">
                                 <input type="text" id="name" placeholder="Dein Name" required />
                                 <input type="email" id="email" placeholder="Deine E-Mail" required />
                                 <label class="consent">
@@ -383,6 +396,15 @@ public class LandingController {
                                 <button class="btn" onclick="getCard()">
                                     Karte holen 🎴
                                 </button>
+                            </div>
+                            <div class="success" id="success">
+                                <div class="success-icon">📧</div>
+                                <div class="success-title">Fast geschafft!</div>
+                                <div class="success-text">
+                                    Wir haben dir eine E-Mail geschickt.<br>
+                                    Klick auf den Link darin, um deine Stempelkarte
+                                    direkt aufs Handy zu bekommen.
+                                </div>
                             </div>
                         </div>
                         <script>
@@ -410,7 +432,16 @@ public class LandingController {
                                     })
                                     if (!res.ok) throw new Error('register failed')
                                     const data = await res.json()
-                                    window.location.href = '/karte/' + data.customerId + '/' + data.cardId
+
+                                    if (data.emailConfirmed) {
+                                        // Bereits bestätigter Stammkunde -> direkt zur Karte
+                                        window.location.href = '/karte/' + data.customerId + '/' + data.cardId
+                                    } else {
+                                        // Neue/unbestätigte E-Mail -> Bestätigungs-Mail wurde
+                                        // versendet, die Karte gibt's erst nach Klick darauf
+                                        document.getElementById('form').style.display = 'none'
+                                        document.getElementById('success').style.display = 'block'
+                                    }
                                 } catch(e) {
                                     errorEl.style.display = 'block'
                                     errorEl.textContent = 'Fehler — bitte nochmal versuchen'

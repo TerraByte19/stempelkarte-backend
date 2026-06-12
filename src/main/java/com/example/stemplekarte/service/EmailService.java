@@ -46,25 +46,28 @@ public class EmailService {
     }
 
     // ── 1. Bestätigungs-Mail (Double-Opt-In) ─────────────────────────────
-    // Enthält den Bestätigungs-Link UND den "Daten löschen"-Link.
+    // Der Bestätigungs-Link bestätigt die E-Mail UND führt direkt zur
+    // Stempelkarte (mit Apple/Google Wallet Buttons), da customerId+cardId
+    // mitgegeben werden.
     @Async
-    public void sendConfirmationMail(Customer customer, String shopName) {
+    public void sendConfirmationMail(Customer customer, String shopName, String cardId) {
         if (customer.getConfirmToken() == null) return; // schon bestätigt
 
-        String confirmUrl = baseUrl + "/mail/confirm?token=" + customer.getConfirmToken();
+        String confirmUrl = baseUrl + "/mail/confirm?token=" + customer.getConfirmToken()
+                + "&customerId=" + customer.getId() + "&cardId=" + cardId;
         String deleteUrl  = baseUrl + "/mail/delete-request?c=" + customer.getId();
 
         String html = wrap(
                 "Hallo " + esc(customer.getName()) + ",",
                 "<p>du hast dich für die digitale Stempelkarte von <b>" + esc(shopName) + "</b> angemeldet.</p>"
-                        + "<p>Bitte bestätige deine E-Mail-Adresse, damit wir dir Angebote senden dürfen:</p>"
-                        + button(confirmUrl, "E-Mail bestätigen")
+                        + "<p>Bestätige deine E-Mail-Adresse, um deine Stempelkarte aufs Handy zu bekommen:</p>"
+                        + button(confirmUrl, "Stempelkarte aufs Handy holen")
                         + "<p style=\"font-size:13px;color:#888\">Wenn du das nicht warst, ignoriere diese Mail einfach.</p>",
                 deleteUrl
         );
 
         send(customer.getEmail(), shopName, null,
-                "Bitte bestätige deine E-Mail – " + shopName, html);
+                "Deine Stempelkarte – " + shopName, html);
     }
 
     // ── 2. Lösch-Bestätigungs-Mail (Schritt 2, Sicherheits-Mail) ─────────
