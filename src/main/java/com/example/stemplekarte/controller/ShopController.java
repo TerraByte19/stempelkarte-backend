@@ -260,10 +260,11 @@ public class ShopController {
 
             emailService.sendNewsletterMail(
                     cc.getCustomer().getEmail(),
-                    shop.getName(),
+                    shop,
                     shop.getEmail(),               // Reply-To = der Laden
                     req.subject(),
                     req.body(),
+                    null,
                     unsubscribeUrl,
                     deleteUrl
             );
