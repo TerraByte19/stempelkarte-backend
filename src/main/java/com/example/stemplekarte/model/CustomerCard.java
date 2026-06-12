@@ -36,6 +36,18 @@ public class CustomerCard {
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
+    // ── Werbe-Einwilligung (pro Laden/Karte, DSGVO + UWG) ───────────────
+    // Checkbox "Ich möchte Angebote per E-Mail erhalten" bei der Anmeldung.
+    // columnDefinition mit Default, damit ddl-auto=update bei bestehenden
+    // Zeilen in Postgres nicht fehlschlägt.
+    @Column(name = "marketing_consent", nullable = false,
+            columnDefinition = "boolean not null default false")
+    private boolean marketingConsent;
+
+    // Zeitpunkt der Einwilligung (Nachweis für Double-Opt-In)
+    @Column(name = "consent_at")
+    private Instant consentAt;
+
     protected CustomerCard() {}
 
     public static CustomerCard create(Customer customer, Card card) {
@@ -62,6 +74,17 @@ public class CustomerCard {
         this.updatedAt = Instant.now();
     }
 
+    /** Checkbox bei der Anmeldung angekreuzt. */
+    public void giveMarketingConsent() {
+        this.marketingConsent = true;
+        this.consentAt = Instant.now();
+    }
+
+    /** Klick auf den Abmelde-Link in einer Werbe-Mail. */
+    public void revokeMarketingConsent() {
+        this.marketingConsent = false;
+    }
+
     public String getId() { return id; }
     public Customer getCustomer() { return customer; }
     public Card getCard() { return card; }
@@ -70,4 +93,6 @@ public class CustomerCard {
     public String getAuthToken() { return authToken; }
     public Instant getCreatedAt() { return createdAt; }
     public Instant getUpdatedAt() { return updatedAt; }
+    public boolean isMarketingConsent() { return marketingConsent; }
+    public Instant getConsentAt() { return consentAt; }
 }

@@ -25,21 +25,61 @@ public class CustomerService {
     private final CardRepository cardRepo;
     private final CustomerCardRepository customerCardRepo;
     private final AppleDeviceRepository appleDeviceRepo;
+    private final EmailService emailService;
     private final ObjectMapper mapper = new ObjectMapper();
 
     public CustomerService(CustomerRepository customerRepo, CardRepository cardRepo,
                            CustomerCardRepository customerCardRepo,
-                           AppleDeviceRepository appleDeviceRepo) {
+                           AppleDeviceRepository appleDeviceRepo,
+                           EmailService emailService) {
         this.customerRepo = customerRepo;
         this.cardRepo = cardRepo;
         this.customerCardRepo = customerCardRepo;
         this.appleDeviceRepo = appleDeviceRepo;
+        this.emailService = emailService;
     }
 
     @Transactional
     public Customer getOrCreate(String name, String email) {
         return customerRepo.findByEmail(email.toLowerCase().trim())
                 .orElseGet(() -> customerRepo.save(Customer.create(name, email)));
+    }
+
+    /**
+     * Anmeldung über die Kunden-Landing-Page (/karte-neu/{cardId}).
+     * - Erstellt Kunde + CustomerCard (oder findet bestehende).
+     * - Speichert die Werbe-Einwilligung pro Karte/Laden (Checkbox).
+     * - Versendet bei Bedarf die Bestätigungs-Mail (Double-Opt-In).
+     */
+    @Transactional
+    public CustomerCard registerForCard(String name, String email, String cardId,
+                                        boolean marketingConsent) {
+        Card card = cardRepo.findById(cardId)
+                .orElseThrow(() -> new NoSuchElementException("Karte nicht gefunden: " + cardId));
+
+        Customer customer = getOrCreate(name, email);
+        // Bestandskunde ohne Token: jetzt einen vergeben (für Bestätigungs-Link)
+        if (!customer.isEmailConfirmed() && customer.getConfirmToken() == null) {
+            customer.ensureConfirmToken();
+            customerRepo.save(customer);
+        }
+
+        CustomerCard cc = customerCardRepo.findByCustomerAndCard(customer, card)
+                .orElseGet(() -> customerCardRepo.save(CustomerCard.create(customer, card)));
+
+        // Einwilligung speichern (nur wenn neu, nicht ungewollt zurücksetzen)
+        if (marketingConsent && !cc.isMarketingConsent()) {
+            cc.giveMarketingConsent();
+            customerCardRepo.save(cc);
+        }
+
+        // Bestätigungs-Mail nur, wenn die E-Mail noch nicht bestätigt ist
+        // (sonst bekäme der Kunde bei jeder Karte erneut eine Mail).
+        if (!customer.isEmailConfirmed()) {
+            emailService.sendConfirmationMail(customer, card.getShop().getName());
+        }
+
+        return cc;
     }
 
     public Customer getById(String id) {

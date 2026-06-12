@@ -11,6 +11,8 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.Map;
+
 @RestController
 public class LandingController {
 
@@ -26,6 +28,24 @@ public class LandingController {
         this.customerService = customerService;
         this.cardService = cardService;
         this.googleWalletService = googleWalletService;
+    }
+
+    // ── Karten-Anmeldung mit Werbe-Einwilligung (von /karte-neu/ aufgerufen) ──
+    // Ersetzt den alten Aufruf POST /api/customer, weil wir hier zusätzlich
+    // - die Karte direkt verknüpfen
+    // - die Marketing-Einwilligung pro Karte speichern
+    // - die Bestätigungs-Mail (Double-Opt-In) auslösen.
+    public record RegisterRequest(String name, String email, String cardId,
+                                  boolean marketingConsent) {}
+
+    @PostMapping("/karte-neu/register")
+    public Map<String, String> registerForCard(@RequestBody RegisterRequest req) {
+        CustomerCard cc = customerService.registerForCard(
+                req.name(), req.email(), req.cardId(), req.marketingConsent());
+        return Map.of(
+                "customerId", cc.getCustomer().getId(),
+                "cardId", cc.getCard().getId()
+        );
     }
 
     // Bestehende Kunden-Landing-Page (mit Stempeln)
@@ -295,7 +315,7 @@ public class LandingController {
                             .info-title { font-size: 16px; font-weight: 600; margin-bottom: 6px; }
                             .info-text { font-size: 13px; opacity: 0.85; line-height: 1.5; }
                             .form { display: flex; flex-direction: column; gap: 12px; }
-                            input {
+                            input[type=text], input[type=email] {
                                 padding: 12px 16px;
                                 border-radius: 10px;
                                 border: none;
@@ -303,6 +323,18 @@ public class LandingController {
                                 outline: none;
                                 width: 100%%;
                             }
+                            /* Werbe-Checkbox: gut sicht- und bedienbar, aber unaufdringlich */
+                            .consent {
+                                display: flex;
+                                gap: 10px;
+                                align-items: flex-start;
+                                font-size: 13px;
+                                opacity: 0.95;
+                                padding: 10px 4px;
+                                line-height: 1.45;
+                                cursor: pointer;
+                            }
+                            .consent input { width: 18px; height: 18px; margin-top: 2px; flex-shrink: 0; }
                             .btn {
                                 padding: 14px;
                                 border-radius: 12px;
@@ -343,6 +375,11 @@ public class LandingController {
                             <div class="form">
                                 <input type="text" id="name" placeholder="Dein Name" required />
                                 <input type="email" id="email" placeholder="Deine E-Mail" required />
+                                <label class="consent">
+                                    <input type="checkbox" id="consent" />
+                                    <span>Ich möchte Angebote von %s per E-Mail erhalten.
+                                          Abmeldung jederzeit über den Link in jeder Mail möglich.</span>
+                                </label>
                                 <button class="btn" onclick="getCard()">
                                     Karte holen 🎴
                                 </button>
@@ -352,6 +389,7 @@ public class LandingController {
                             async function getCard() {
                                 const name = document.getElementById('name').value.trim()
                                 const email = document.getElementById('email').value.trim()
+                                const consent = document.getElementById('consent').checked
                                 const errorEl = document.getElementById('error')
 
                                 if (!name || !email) {
@@ -361,13 +399,18 @@ public class LandingController {
                                 }
 
                                 try {
-                                    const res = await fetch('/api/customer', {
+                                    const res = await fetch('/karte-neu/register', {
                                         method: 'POST',
                                         headers: { 'Content-Type': 'application/json' },
-                                        body: JSON.stringify({ name, email })
+                                        body: JSON.stringify({
+                                            name, email,
+                                            cardId: '%s',
+                                            marketingConsent: consent
+                                        })
                                     })
-                                    const customer = await res.json()
-                                    window.location.href = '/karte/' + customer.id + '/%s'
+                                    if (!res.ok) throw new Error('register failed')
+                                    const data = await res.json()
+                                    window.location.href = '/karte/' + data.customerId + '/' + data.cardId
                                 } catch(e) {
                                     errorEl.style.display = 'block'
                                     errorEl.textContent = 'Fehler — bitte nochmal versuchen'
@@ -380,6 +423,7 @@ public class LandingController {
                     shopName, bgColor, bgColor,
                     logoUrl.isBlank() ? "" : "<img src='" + logoUrl + "' class='logo' alt='Logo'>",
                     shopName, card.getName(),
+                    shopName,
                     cardId
             );
 

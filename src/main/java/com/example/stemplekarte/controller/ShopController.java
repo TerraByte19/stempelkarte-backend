@@ -7,12 +7,14 @@ import com.example.stemplekarte.model.StaffToken;
 import com.example.stemplekarte.repository.CustomerCardRepository;
 import com.example.stemplekarte.security.JwtAuthFilter;
 import com.example.stemplekarte.service.CardService;
+import com.example.stemplekarte.service.EmailService;
 import com.example.stemplekarte.service.ShopService;
 import com.example.stemplekarte.wallet.CloudinaryService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.constraints.NotBlank;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
@@ -32,13 +34,19 @@ public class ShopController {
     private final CardService cardService;
     private final CustomerCardRepository customerCardRepo;
     private final CloudinaryService cloudinaryService;
+    private final EmailService emailService;
+
+    @Value("${stempelkarte.base-url:http://localhost:8080}")
+    private String baseUrl;
 
     public ShopController(ShopService shopService, CardService cardService,
-                          CustomerCardRepository customerCardRepo, CloudinaryService cloudinaryService) {
+                          CustomerCardRepository customerCardRepo, CloudinaryService cloudinaryService,
+                          EmailService emailService) {
         this.shopService = shopService;
         this.cardService = cardService;
         this.customerCardRepo = customerCardRepo;
         this.cloudinaryService = cloudinaryService;
+        this.emailService = emailService;
     }
 
     public record UpdateProfileRequest(String name, String logoUrl,
@@ -208,5 +216,60 @@ public class ShopController {
         Shop shop = currentShop(auth);
         return shopService.getStaffTokens(shop.getId()).stream()
                 .map(StaffTokenResponse::from).toList();
+    }
+
+    // --- NEWSLETTER ---
+
+    public record NewsletterRequest(@NotBlank String subject, @NotBlank String body) {}
+
+    @Operation(summary = "Anzahl Kunden mit Werbe-Einwilligung (Vorschau für Newsletter)")
+    @GetMapping("/newsletter/recipients")
+    public Map<String, Object> newsletterRecipients(Authentication auth) {
+        Shop shop = currentShop(auth);
+        List<CustomerCard> all =
+                customerCardRepo.findByCard_ShopAndMarketingConsentTrue(shop);
+        // Bestätigte (Double-Opt-In) zählen separat — nur die bekommen wirklich Mails
+        long confirmed = all.stream()
+                .filter(cc -> cc.getCustomer().isEmailConfirmed())
+                .count();
+        return Map.of(
+                "total", all.size(),
+                "confirmed", confirmed
+        );
+    }
+
+    @Operation(summary = "Newsletter an alle Kunden mit Einwilligung versenden")
+    @PostMapping("/newsletter")
+    public Map<String, Object> sendNewsletter(@org.springframework.web.bind.annotation.RequestBody
+                                              NewsletterRequest req,
+                                              Authentication auth) {
+        Shop shop = currentShop(auth);
+        List<CustomerCard> recipients =
+                customerCardRepo.findByCard_ShopAndMarketingConsentTrue(shop);
+
+        int sent = 0;
+        int skipped = 0;
+        for (CustomerCard cc : recipients) {
+            // Double-Opt-In: nur an bestätigte E-Mails senden (gesetzlich Pflicht)
+            if (!cc.getCustomer().isEmailConfirmed()) { skipped++; continue; }
+
+            String unsubscribeUrl = baseUrl + "/mail/unsubscribe"
+                    + "?cc=" + cc.getId() + "&t=" + cc.getAuthToken();
+            String deleteUrl = baseUrl + "/mail/delete-request"
+                    + "?c=" + cc.getCustomer().getId();
+
+            emailService.sendNewsletterMail(
+                    cc.getCustomer().getEmail(),
+                    shop.getName(),
+                    shop.getEmail(),               // Reply-To = der Laden
+                    req.subject(),
+                    req.body(),
+                    unsubscribeUrl,
+                    deleteUrl
+            );
+            sent++;
+        }
+
+        return Map.of("sent", sent, "skippedUnconfirmed", skipped);
     }
 }

@@ -12,12 +12,33 @@ spring:
     virtual:
       enabled: true
 
+  # ── E-Mail-Versand (Brevo SMTP) ──────────────────────────────────────
+  # Zugangsdaten kommen aus Render-Umgebungsvariablen, NICHT in den Code!
+  mail:
+    host: ${MAIL_HOST:smtp-relay.brevo.com}
+    port: ${MAIL_PORT:587}
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+
 stempelkarte:
   reward-threshold: 10
   jwt-secret: ${JWT_SECRET:stempelkarte-super-secret-key-mindestens-32-zeichen-lang}
   admin-secret: ${ADMIN_SECRET:admin-geheim-nur-lokal}
   upload-path: ${UPLOAD_PATH:./uploads}
   base-url: ${APP_BASE_URL:http://localhost:8080}
+
+  # ── E-Mail-Einstellungen ─────────────────────────────────────────────
+  # enabled=false: Mails werden nur geloggt (sicher für Dev/vor Brevo-Setup)
+  # from: die bei Brevo verifizierte Absender-Adresse
+  mail:
+    enabled: ${MAIL_ENABLED:false}
+    from: ${MAIL_FROM:}
 
   apple:
     pass-type-identifier: ${APPLE_PASS_TYPE_ID:pass.com.cafeespresso.stempelkarte}

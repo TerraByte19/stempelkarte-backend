@@ -20,4 +20,8 @@ public interface CustomerCardRepository extends JpaRepository<CustomerCard, Stri
     List<CustomerCard> findByCard(Card card);
     Optional<CustomerCard> findByAuthTokenAndCard(String authToken, Card card);
     int countByCard_Shop(Shop shop);
+
+    // Newsletter: alle Karten eines Ladens, deren Kunde Werbung zugestimmt hat
+    @EntityGraph(attributePaths = {"customer"})
+    List<CustomerCard> findByCard_ShopAndMarketingConsentTrue(Shop shop);
 }
