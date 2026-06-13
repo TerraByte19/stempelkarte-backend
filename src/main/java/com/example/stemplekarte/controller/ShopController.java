@@ -283,8 +283,10 @@ public class ShopController {
                                                      ImageUploadRequest req,
                                                      Authentication auth) {
         Shop shop = currentShop(auth);
-        // Nutzt denselben Cloudinary-Upload-Mechanismus wie Logo/Hero-Bild-Uploads.
-        String url = cloudinaryService.upload(req.base64(), req.extension(), CloudinaryService.ImageType.HERO);
+        // Eindeutige public_id pro Upload (Shop + Zeitstempel), damit sich
+        // mehrere Newsletter-Bilder nicht gegenseitig überschreiben.
+        String publicId = "newsletter-" + shop.getId() + "-" + System.currentTimeMillis();
+        String url = cloudinaryService.upload(req.base64(), publicId, CloudinaryService.ImageType.NEWSLETTER);
         return Map.of("url", url);
     }
 }

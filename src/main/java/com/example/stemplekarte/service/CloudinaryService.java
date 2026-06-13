@@ -25,7 +25,7 @@ public class CloudinaryService {
         this.cloudinary = cloudinary;
     }
 
-    public enum ImageType { LOGO, HERO, STAMP }
+    public enum ImageType { LOGO, HERO, STAMP, NEWSLETTER }
 
     /**
      * Lädt ein Base64-Bild hoch, formatiert es passend zum Typ und gibt die
@@ -55,12 +55,20 @@ public class CloudinaryService {
                         .crop("fill")
                         .gravity("center")     // zentriert den Ausschnitt
                         .quality("auto").fetchFormat("png");
+                // Newsletter-Bilder: NICHT zuschneiden, nur auf max. Breite
+                // begrenzen. crop("limit") behält das Seitenverhältnis und
+                // verkleinert nur, wenn das Bild breiter als 1000px ist —
+                // so wird nichts abgeschnitten.
+                case NEWSLETTER -> new Transformation<>()
+                        .width(1000).crop("limit")
+                        .quality("auto").fetchFormat("jpg");
             };
 
             String folder = switch (type) {
                 case LOGO  -> "stampit/logos";
                 case HERO  -> "stampit/heroes";
                 case STAMP -> "stampit/stamps";
+                case NEWSLETTER -> "stampit/newsletters";
             };
 
             // WICHTIG: transformation.generate() wandelt das Objekt in einen String um,
