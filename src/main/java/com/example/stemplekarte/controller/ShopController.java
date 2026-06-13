@@ -2,9 +2,11 @@ package com.example.stemplekarte.controller;
 
 import com.example.stemplekarte.model.Card;
 import com.example.stemplekarte.model.CustomerCard;
+import com.example.stemplekarte.model.SentNewsletter;
 import com.example.stemplekarte.model.Shop;
 import com.example.stemplekarte.model.StaffToken;
 import com.example.stemplekarte.repository.CustomerCardRepository;
+import com.example.stemplekarte.repository.SentNewsletterRepository;
 import com.example.stemplekarte.security.JwtAuthFilter;
 import com.example.stemplekarte.service.CardService;
 import com.example.stemplekarte.service.EmailService;
@@ -15,10 +17,13 @@ import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.constraints.NotBlank;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.Instant;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -35,18 +40,20 @@ public class ShopController {
     private final CustomerCardRepository customerCardRepo;
     private final CloudinaryService cloudinaryService;
     private final EmailService emailService;
+    private final SentNewsletterRepository sentNewsletterRepo;
 
     @Value("${stempelkarte.base-url:http://localhost:8080}")
     private String baseUrl;
 
     public ShopController(ShopService shopService, CardService cardService,
                           CustomerCardRepository customerCardRepo, CloudinaryService cloudinaryService,
-                          EmailService emailService) {
+                          EmailService emailService, SentNewsletterRepository sentNewsletterRepo) {
         this.shopService = shopService;
         this.cardService = cardService;
         this.customerCardRepo = customerCardRepo;
         this.cloudinaryService = cloudinaryService;
         this.emailService = emailService;
+        this.sentNewsletterRepo = sentNewsletterRepo;
     }
 
     public record UpdateProfileRequest(String name, String logoUrl,
@@ -274,7 +281,42 @@ public class ShopController {
             sent++;
         }
 
+        // Newsletter im Verlauf speichern (auch wenn 0 Empfänger — dann
+        // sieht der Laden trotzdem, dass/was er versendet hat).
+        sentNewsletterRepo.save(SentNewsletter.create(
+                shop, req.subject(), req.body(), req.imageUrls(), sent));
+
         return Map.of("sent", sent, "skippedUnconfirmed", skipped);
+    }
+
+    // Ein Eintrag im Newsletter-Verlauf
+    public record NewsletterHistoryItem(String id, String subject, String body,
+                                        List<String> imageUrls, int recipientCount,
+                                        String sentAt) {}
+
+    @Operation(summary = "Newsletter-Verlauf (seitenweise, neueste zuerst)")
+    @GetMapping("/newsletter/history")
+    public Map<String, Object> newsletterHistory(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "5") int size,
+            Authentication auth) {
+        Shop shop = currentShop(auth);
+        Page<SentNewsletter> result = sentNewsletterRepo
+                .findByShopOrderBySentAtDesc(shop, PageRequest.of(page, size));
+
+        List<NewsletterHistoryItem> items = result.getContent().stream()
+                .map(n -> new NewsletterHistoryItem(
+                        n.getId(), n.getSubject(), n.getBody(),
+                        n.getImageUrls(), n.getRecipientCount(),
+                        n.getSentAt().toString()))
+                .toList();
+
+        Map<String, Object> map = new HashMap<>();
+        map.put("items", items);
+        map.put("page", result.getNumber());
+        map.put("totalPages", result.getTotalPages());
+        map.put("totalItems", result.getTotalElements());
+        return map;
     }
 
     @Operation(summary = "Bild für Newsletter hochladen")
