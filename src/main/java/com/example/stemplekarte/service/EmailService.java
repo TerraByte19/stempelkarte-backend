@@ -15,6 +15,7 @@ import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
 import java.io.UnsupportedEncodingException;
+import java.util.List;
 
 /**
  * Versendet alle E-Mails der Plattform über SMTP (z.B. Brevo).
@@ -101,23 +102,30 @@ public class EmailService {
 
     // ── 3. Newsletter / Werbe-Mail eines Ladens ──────────────────────────
     // unsubscribeUrl ist Pflicht (UWG): jeder Empfänger kann sich abmelden.
-    // imageUrl ist optional: ein vom Besitzer hochgeladenes Bild, das im
-    // Newsletter-Text angezeigt wird (zusätzlich zum Hero-Bild im Header).
+    // imageUrls ist optional: vom Besitzer hochgeladene Bilder (z.B. Menü,
+    // Aktionsfotos), die unter dem Text angezeigt werden — zusätzlich zum
+    // Hero-Bild/Logo im Header.
     @Async
     public void sendNewsletterMail(String to, Shop shop, String replyTo,
-                                   String subject, String bodyText, String imageUrl,
+                                   String subject, String bodyText, List<String> imageUrls,
                                    String unsubscribeUrl, String deleteUrl) {
         String shopName = shop.getName();
-        String imageHtml = (imageUrl == null || imageUrl.isBlank())
-                ? ""
-                : "<img src=\"" + imageUrl + "\" alt=\"\" style=\"width:100%;border-radius:12px;"
-                + "margin-bottom:16px;display:block\">";
+
+        StringBuilder imagesHtml = new StringBuilder();
+        if (imageUrls != null) {
+            for (String url : imageUrls) {
+                if (url == null || url.isBlank()) continue;
+                imagesHtml.append("<img src=\"").append(url).append("\" alt=\"\" ")
+                        .append("style=\"width:100%;height:auto;border-radius:12px;")
+                        .append("margin-top:16px;display:block\">");
+            }
+        }
 
         String html = wrap(
                 shop,
                 null,
-                imageHtml
-                        + "<p style=\"white-space:pre-line\">" + esc(bodyText) + "</p>",
+                "<p style=\"white-space:pre-line\">" + esc(bodyText) + "</p>"
+                        + imagesHtml,
                 deleteUrl,
                 "<a href=\"" + unsubscribeUrl + "\" style=\"color:#888\">Keine Angebote mehr von "
                         + esc(shopName) + " erhalten (abmelden)</a>"
@@ -193,8 +201,7 @@ public class EmailService {
         String heroUrl = shop.getHeroImageUrl();
         if (heroUrl != null && !heroUrl.isBlank()) {
             header.append("<img src=\"").append(heroUrl).append("\" alt=\"\" ")
-                    .append("style=\"width:100%;max-height:180px;object-fit:cover;")
-                    .append("border-radius:12px;margin-bottom:16px;display:block\">");
+                    .append("style=\"width:100%;height:auto;border-radius:12px;margin-bottom:16px;display:block\">");
         }
 
         String logoUrl = shop.getLogoUrl();

@@ -220,7 +220,10 @@ public class ShopController {
 
     // --- NEWSLETTER ---
 
-    public record NewsletterRequest(@NotBlank String subject, @NotBlank String body) {}
+    // imageUrls ist optional: Liste von URLs der via /api/shop/newsletter/image
+    // hochgeladenen Bilder, die im Newsletter angezeigt werden.
+    public record NewsletterRequest(@NotBlank String subject, @NotBlank String body,
+                                    java.util.List<String> imageUrls) {}
 
     @Operation(summary = "Anzahl Kunden mit Werbe-Einwilligung (Vorschau für Newsletter)")
     @GetMapping("/newsletter/recipients")
@@ -260,11 +263,11 @@ public class ShopController {
 
             emailService.sendNewsletterMail(
                     cc.getCustomer().getEmail(),
-                    shop,
+                    shop,                           // für Branding (Logo + Hero-Bild im Header)
                     shop.getEmail(),               // Reply-To = der Laden
                     req.subject(),
                     req.body(),
-                    null,
+                    req.imageUrls(),               // optionale Newsletter-Bilder (Liste)
                     unsubscribeUrl,
                     deleteUrl
             );
@@ -272,5 +275,16 @@ public class ShopController {
         }
 
         return Map.of("sent", sent, "skippedUnconfirmed", skipped);
+    }
+
+    @Operation(summary = "Bild für Newsletter hochladen")
+    @PostMapping("/newsletter/image")
+    public Map<String, String> uploadNewsletterImage(@org.springframework.web.bind.annotation.RequestBody
+                                                     ImageUploadRequest req,
+                                                     Authentication auth) {
+        Shop shop = currentShop(auth);
+        // Nutzt denselben Cloudinary-Upload-Mechanismus wie Logo/Hero-Bild-Uploads.
+        String url = cloudinaryService.upload(req.base64(), req.extension(), CloudinaryService.ImageType.HERO);
+        return Map.of("url", url);
     }
 }
