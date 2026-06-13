@@ -58,11 +58,14 @@ public class CustomerService {
                 .orElseThrow(() -> new NoSuchElementException("Karte nicht gefunden: " + cardId));
 
         Customer customer = getOrCreate(name, email);
-        // Bestandskunde ohne Token: jetzt einen vergeben (für Bestätigungs-Link)
-        if (!customer.isEmailConfirmed() && customer.getConfirmToken() == null) {
-            customer.ensureConfirmToken();
-            customerRepo.save(customer);
-        }
+
+        // Jede Kartenanmeldung verlangt eine frische Mail-Bestätigung:
+        // emailConfirmed zurücksetzen + neuen Token vergeben, damit der
+        // Kunde die Karte erst nach Klick auf den Mail-Link bekommt.
+        // (Solange unbestätigt, wird der Kunde auch nicht im Newsletter
+        // angeschrieben — rechtlich sauber.)
+        customer.requireNewConfirmation();
+        customerRepo.save(customer);
 
         CustomerCard cc = customerCardRepo.findByCustomerAndCard(customer, card)
                 .orElseGet(() -> customerCardRepo.save(CustomerCard.create(customer, card)));
@@ -73,11 +76,8 @@ public class CustomerService {
             customerCardRepo.save(cc);
         }
 
-        // Bestätigungs-Mail nur, wenn die E-Mail noch nicht bestätigt ist
-        // (sonst bekäme der Kunde bei jeder Karte erneut eine Mail).
-        if (!customer.isEmailConfirmed()) {
-            emailService.sendConfirmationMail(customer, card.getShop(), card.getId());
-        }
+        // Bestätigungs-Mail IMMER verschicken (jede Anmeldung neu).
+        emailService.sendConfirmationMail(customer, card.getShop(), card.getId());
 
         return cc;
     }
@@ -187,10 +187,6 @@ public class CustomerService {
                 }
             }
         }
-
-        // Meilenstein-Zähler dauerhaft erhöhen (für Apple-Wallet-Push,
-        // unabhängig vom normalen Stempelstand-Update).
-        cc.addRewardsEarned(rewardsEarnedThisScan);
 
         customerCardRepo.save(cc);
         log.info("Scan fuer Kunde {} auf Karte {} ({}x): {}", customerId, cardId, count, result.message());

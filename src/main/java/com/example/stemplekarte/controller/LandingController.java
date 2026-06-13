@@ -40,17 +40,12 @@ public class LandingController {
 
     @PostMapping("/karte-neu/register")
     public Map<String, Object> registerForCard(@RequestBody RegisterRequest req) {
-        CustomerCard cc = customerService.registerForCard(
+        customerService.registerForCard(
                 req.name(), req.email(), req.cardId(), req.marketingConsent());
-        return Map.of(
-                "customerId", cc.getCustomer().getId(),
-                "cardId", cc.getCard().getId(),
-                // true  -> Kunde war schon bestätigt (z.B. Stammkunde bei anderem Laden)
-                //          -> Frontend leitet sofort zur Karte weiter
-                // false -> neue/unbestätigte E-Mail -> Bestätigungs-Mail wurde versendet,
-                //          Frontend zeigt "Check deine Mails"-Hinweis
-                "emailConfirmed", cc.getCustomer().isEmailConfirmed()
-        );
+        // Jede Anmeldung verlangt jetzt IMMER eine Mail-Bestätigung.
+        // Das Frontend zeigt daher immer den "Check deine Mails"-Screen;
+        // die Weiterleitung zur Karte passiert erst über den Link in der Mail.
+        return Map.of("status", "confirmation_sent");
     }
 
     // Bestehende Kunden-Landing-Page (mit Stempeln)
@@ -431,17 +426,12 @@ public class LandingController {
                                         })
                                     })
                                     if (!res.ok) throw new Error('register failed')
-                                    const data = await res.json()
 
-                                    if (data.emailConfirmed) {
-                                        // Bereits bestätigter Stammkunde -> direkt zur Karte
-                                        window.location.href = '/karte/' + data.customerId + '/' + data.cardId
-                                    } else {
-                                        // Neue/unbestätigte E-Mail -> Bestätigungs-Mail wurde
-                                        // versendet, die Karte gibt's erst nach Klick darauf
-                                        document.getElementById('form').style.display = 'none'
-                                        document.getElementById('success').style.display = 'block'
-                                    }
+                                    // Jede Anmeldung verlangt jetzt eine Mail-Bestätigung.
+                                    // Immer den "Check deine Mails"-Screen zeigen — die
+                                    // Weiterleitung zur Karte passiert über den Mail-Link.
+                                    document.getElementById('form').style.display = 'none'
+                                    document.getElementById('success').style.display = 'block'
                                 } catch(e) {
                                     errorEl.style.display = 'block'
                                     errorEl.textContent = 'Fehler — bitte nochmal versuchen'

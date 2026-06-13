@@ -60,6 +60,18 @@ public class Customer {
         if (this.confirmToken == null) this.confirmToken = newToken();
     }
 
+    /**
+     * Erzwingt eine neue Mail-Bestätigung: setzt emailConfirmed zurück und
+     * vergibt einen frischen Token. Wird bei JEDER neuen Kartenanmeldung
+     * aufgerufen, damit der Kunde die Karte erst nach Klick auf den
+     * Mail-Link erhält — unabhängig davon, ob er früher schon mal bestätigt
+     * hatte.
+     */
+    public void requireNewConfirmation() {
+        this.emailConfirmed = false;
+        this.confirmToken = newToken();
+    }
+
     /** Klick auf den Bestätigungs-Link in der Mail. */
     public void confirmEmail() {
         this.emailConfirmed = true;

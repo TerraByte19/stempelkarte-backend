@@ -121,19 +121,16 @@ public class ApplePassService {
         String countdownLabel = remaining > 0 ? "Stempel bis ↓" : "BELOHNUNG";
         String countdownValue = remaining > 0 ? String.valueOf(remaining) : "Bereit! 🎉";
 
-        // Dynamische Push-Nachricht auf Basis der gesammelten Stempel
-        String changeMsg = (cc.getStamps() >= threshold)
-                ? "Glückwunsch! Deine Karte ist voll (%@). 🎉"
-                : "Update! Du hast jetzt %@ Stempel.";
-
-        // Eigene, vom Stempelstand UNABHÄNGIGE Push-Benachrichtigung:
-        // rewardsEarnedTotal ändert sich genau dann, wenn die Karte
-        // WÄHREND dieses Scans voll wurde (auch wenn sie im selben Scan
-        // schon wieder zurückgesetzt wurde). Apple Wallet zeigt für JEDES
-        // Feld mit geändertem Wert + changeMessage eine eigene
-        // Benachrichtigung — so kommen "Stempelstand aktualisiert" UND
-        // "Belohnung verdient" als ZWEI getrennte Pushes an.
-        String rewardEarnedMsg = "🎉 " + card.getRewardText() + " verdient! Zeig die Karte beim nächsten Besuch vor.";
+        // Push-Nachricht fürs Handy beim Stempelstand-Update.
+        // %@ ersetzt Apple durch den neuen Stempelstand (stampRatio).
+        // Häufigster Fall: Kunde macht die Karte genau voll (Stand == Schwelle)
+        // → schöne kombinierte Nachricht mit Belohnung + Stand.
+        // Sonst (normaler Stempel ODER seltener Überzieh-Fall 8+4): schlichte,
+        // zuverlässige Nachricht mit dem neuen Stand. Die Belohnungs-Info
+        // kommt in jedem Fall zusätzlich beim Mitarbeiter im Scanner an.
+        String changeMsg = (cc.getStamps() == threshold)
+                ? "🎉 " + card.getRewardText() + " verdient! Neue Karte: %@"
+                : "Update! Dein Stempelstand: %@";
 
         // KEIN altText mehr → unter dem QR-Code wird die CUST-ID NICHT mehr angezeigt
         PKBarcode barcode = PKBarcode.builder()
@@ -168,14 +165,6 @@ public class ApplePassService {
                     .auxiliaryFieldBuilder(PKField.builder()
                             .key("name").label("KUNDE").value(cc.getCustomer().getName()));
         }
-
-        // Back-Field für die separate "Belohnung verdient"-Benachrichtigung.
-        // Unsichtbar auf der Vorderseite, aber sein changeMessage löst eine
-        // eigene Push-Benachrichtigung aus, sobald sich der Wert ändert.
-        genericPass.backFieldBuilder(PKField.builder()
-                .key("reward-milestone").label("Belohnungen erreicht")
-                .value(String.valueOf(cc.getRewardsEarnedTotal()))
-                .changeMessage(rewardEarnedMsg));
 
         PKPass pass = PKPass.builder()
                 .formatVersion(1)
