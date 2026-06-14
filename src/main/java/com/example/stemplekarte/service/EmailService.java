@@ -15,7 +15,9 @@ import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
 import java.io.UnsupportedEncodingException;
+import java.time.LocalDate;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Versendet alle E-Mails der Plattform über SMTP (z.B. Brevo).
@@ -46,6 +48,22 @@ public class EmailService {
 
     @Value("${stempelkarte.base-url:http://localhost:8080}")
     private String baseUrl;
+
+    // Globales Tages-Limit für ALLE versendeten Mails (Schutz gegen
+    // verteilte Angriffe + Brevo-Kontingent). Per ENV anpassbar, wenn du
+    // den Brevo-Plan upgradest (z.B. von 300 auf 20000).
+    // Standard 300 = Brevo-Free-Limit.
+    @Value("${stempelkarte.mail.daily-limit:300}")
+    private int dailyLimit;
+
+    // Zähler für heute versendete Mails. Wird automatisch zurückgesetzt,
+    // sobald ein neuer Tag beginnt. Liegt im Arbeitsspeicher — bei einem
+    // Server-Neustart (Render-Deploy) startet der Zähler bei 0, was
+    // unkritisch ist (im schlimmsten Fall ein paar Mails mehr).
+    private final AtomicInteger sentToday = new AtomicInteger(0);
+    private volatile LocalDate counterDate = LocalDate.now();
+    // Damit die 80%-Warnung nur einmal pro Tag geloggt wird:
+    private volatile boolean warned = false;
 
     public EmailService(JavaMailSender mailSender) {
         this.mailSender = mailSender;
@@ -145,6 +163,12 @@ public class EmailService {
             log.warn("MAIL_FROM fehlt — Mail an {} nicht gesendet", to);
             return;
         }
+        // Globales Tages-Limit prüfen (Schutz fürs Mail-Kontingent).
+        if (!reserveDailySlot()) {
+            log.error("TAGES-MAILLIMIT erreicht ({}/{}) — Mail an {} NICHT gesendet: '{}'",
+                    dailyLimit, dailyLimit, to, subject);
+            return;
+        }
         try {
             MimeMessage msg = mailSender.createMimeMessage();
             MimeMessageHelper h = new MimeMessageHelper(msg, "UTF-8");
@@ -158,6 +182,41 @@ public class EmailService {
         } catch (MessagingException | UnsupportedEncodingException | MailException e) {
             log.error("Mail-Versand an {} fehlgeschlagen: {}", to, e.getMessage());
         }
+    }
+
+    /**
+     * Reserviert einen Platz im heutigen Mail-Kontingent. Gibt true zurück,
+     * wenn noch Platz ist (Mail darf raus), sonst false (Limit erreicht).
+     *
+     * - Setzt den Zähler automatisch zurück, wenn ein neuer Tag begonnen hat.
+     * - Loggt eine Warnung, sobald 80% des Limits erreicht sind (einmal/Tag),
+     *   damit du rechtzeitig den Brevo-Plan upgraden kannst.
+     * synchronized, damit Tageswechsel + Zählung threadsicher sind.
+     */
+    private synchronized boolean reserveDailySlot() {
+        LocalDate today = LocalDate.now();
+        if (!today.equals(counterDate)) {
+            // Neuer Tag → Zähler zurücksetzen
+            counterDate = today;
+            sentToday.set(0);
+            warned = false;
+        }
+
+        int current = sentToday.get();
+        if (current >= dailyLimit) {
+            return false; // Limit erreicht
+        }
+
+        int afterThis = sentToday.incrementAndGet();
+
+        // Warnung bei 80% (nur einmal pro Tag)
+        if (!warned && afterThis >= (int) (dailyLimit * 0.8)) {
+            warned = true;
+            log.warn("⚠️ MAIL-KONTINGENT zu 80% ausgeschöpft ({}/{}). "
+                    + "Bei weiterem Wachstum Brevo-Plan upgraden und "
+                    + "stempelkarte.mail.daily-limit erhöhen.", afterThis, dailyLimit);
+        }
+        return true;
     }
 
     /**

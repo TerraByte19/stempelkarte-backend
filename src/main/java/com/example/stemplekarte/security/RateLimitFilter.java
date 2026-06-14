@@ -37,7 +37,7 @@ public class RateLimitFilter extends OncePerRequestFilter {
     private static final long WINDOW_MS = 60_000L;
 
     // Limits pro Minute je nach Endpoint-Typ
-    private static final int LIMIT_MAIL = 10;    // Mail-auslösende Endpoints (streng)
+    private static final int LIMIT_MAIL = 3;    // Mail-auslösende Endpoints (streng)
     private static final int LIMIT_SCAN = 70;   // Scanner (Mitarbeiter scannen schnell)
     private static final int LIMIT_DEFAULT = 60; // sonstige öffentliche Endpoints
 
