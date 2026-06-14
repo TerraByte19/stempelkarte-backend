@@ -102,8 +102,6 @@ public class SecurityConfig {
                         .anyRequest().denyAll()
                 )
                 .headers(h -> h.frameOptions(f -> f.disable()))
-                .addFilterBefore(new RateLimitFilter(),
-                        UsernamePasswordAuthenticationFilter.class)
                 .addFilterBefore(new JwtAuthFilter(jwtService, shopRepo),
                         UsernamePasswordAuthenticationFilter.class)
                 .addFilterBefore(new StaffTokenFilter(staffTokenRepo),

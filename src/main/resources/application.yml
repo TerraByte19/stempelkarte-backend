@@ -66,3 +66,13 @@ cloudinary:
   cloud-name: ${CLOUDINARY_CLOUD_NAME:dzu73ui9i}
   api-key: ${CLOUDINARY_API_KEY:587366334988363}
   api-secret: ${CLOUDINARY_API_SECRET:}
+
+# ── Server / Tomcat ───────────────────────────────────────────────────
+# Begrenzt die maximale Größe eines HTTP-Request-Bodys. Schützt vor
+# übergroßen JSON-Uploads (Base64-Bilder). Die eigentliche Bild-
+# Größenprüfung (5 MB) passiert in CloudinaryService; dieser Deckel (8 MB)
+# fängt alles darüber ab, bevor es den Server belastet.
+server:
+  tomcat:
+    max-http-form-post-size: 8MB
+    max-swallow-size: 8MB

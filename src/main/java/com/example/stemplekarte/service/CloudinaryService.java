@@ -27,6 +27,11 @@ public class CloudinaryService {
 
     public enum ImageType { LOGO, HERO, STAMP, NEWSLETTER }
 
+    // Maximale Bildgröße (dekodierte Bytes). Schützt vor riesigen Uploads,
+    // die Cloudinary-Kosten + Server-Speicher belasten würden. 5 MB ist für
+    // Logos/Hero/Newsletter-Bilder mehr als genug.
+    private static final int MAX_IMAGE_BYTES = 5 * 1024 * 1024; // 5 MB
+
     /**
      * Lädt ein Base64-Bild hoch, formatiert es passend zum Typ und gibt die
      * öffentliche HTTPS-URL zurück.
@@ -37,7 +42,25 @@ public class CloudinaryService {
      */
     public String upload(String base64, String publicId, ImageType type) {
         try {
+            if (base64 == null || base64.isBlank()) {
+                throw new IllegalArgumentException("Kein Bild übermittelt");
+            }
+            // Schneller Vorab-Check über die Base64-Länge: Base64 ist ~4/3 so
+            // groß wie die Rohdaten. So lehnen wir Riesen-Uploads ab, BEVOR wir
+            // sie überhaupt komplett dekodieren.
+            long approxBytes = (long) (base64.length() * 3L / 4L);
+            if (approxBytes > MAX_IMAGE_BYTES) {
+                throw new IllegalArgumentException(
+                        "Bild zu groß (max. " + (MAX_IMAGE_BYTES / (1024 * 1024)) + " MB)");
+            }
+
             byte[] bytes = Base64.getDecoder().decode(base64);
+
+            // Exakte Prüfung nach dem Dekodieren (Sicherheitsnetz)
+            if (bytes.length > MAX_IMAGE_BYTES) {
+                throw new IllegalArgumentException(
+                        "Bild zu groß (max. " + (MAX_IMAGE_BYTES / (1024 * 1024)) + " MB)");
+            }
 
             Transformation<?> transformation = switch (type) {
                 case LOGO -> new Transformation<>()
@@ -85,6 +108,11 @@ public class CloudinaryService {
             String url = (String) result.get("secure_url");
             log.info("Cloudinary Upload OK ({}): {}", type, url);
             return url;
+        } catch (IllegalArgumentException e) {
+            // Validierungsfehler (z.B. zu groß / leer) sauber durchreichen,
+            // damit der Nutzer die echte Meldung sieht.
+            log.warn("Bild-Upload abgelehnt ({}): {}", type, e.getMessage());
+            throw e;
         } catch (Exception e) {
             log.error("Cloudinary Upload fehlgeschlagen ({}): {}", type, e.getMessage());
             throw new RuntimeException("Bild-Upload fehlgeschlagen: " + e.getMessage(), e);

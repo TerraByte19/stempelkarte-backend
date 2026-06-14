@@ -152,7 +152,63 @@ public class AdminController {
         return ResponseEntity.ok(result);
     }
 
-    @PostMapping("/shops/{shopId}/toggle")
+    @GetMapping("/stats")
+    public ResponseEntity<Map<String, Object>> getGlobalStats() {
+        List<Shop> allShops = shopRepo.findAll();
+
+        int totalShops = allShops.size();
+        int activeShops = 0;
+        int totalCustomers = 0;
+        int totalStamps = 0;
+        int totalRewards = 0;
+        int totalCards = 0;
+
+        List<Map<String, Object>> perShop = new java.util.ArrayList<>();
+
+        for (Shop shop : allShops) {
+            if (shop.isActive()) activeShops++;
+            List<Card> shopCards = cardRepo.findByShop(shop);
+            totalCards += shopCards.size();
+
+            int shopCustomers = 0;
+            int shopStamps = 0;
+            int shopRewards = 0;
+            for (Card card : shopCards) {
+                List<CustomerCard> ccs = customerCardRepo.findByCard(card);
+                shopCustomers += ccs.size();
+                shopStamps += ccs.stream().mapToInt(CustomerCard::getStamps).sum();
+                shopRewards += ccs.stream().mapToInt(CustomerCard::getTotalRewards).sum();
+            }
+
+            totalCustomers += shopCustomers;
+            totalStamps += shopStamps;
+            totalRewards += shopRewards;
+
+            Map<String, Object> shopMap = new HashMap<>();
+            shopMap.put("shopId", shop.getId());
+            shopMap.put("shopName", shop.getName());
+            shopMap.put("active", shop.isActive());
+            shopMap.put("customerCount", shopCustomers);
+            shopMap.put("totalStamps", shopStamps);
+            shopMap.put("totalRewards", shopRewards);
+            shopMap.put("cardCount", shopCards.size());
+            perShop.add(shopMap);
+        }
+
+        // Nach Kundenzahl absteigend sortieren (aktivste Shops zuerst)
+        perShop.sort((a, b) -> Integer.compare(
+                (int) b.get("customerCount"), (int) a.get("customerCount")));
+
+        Map<String, Object> stats = new HashMap<>();
+        stats.put("totalShops", totalShops);
+        stats.put("activeShops", activeShops);
+        stats.put("totalCustomers", totalCustomers);
+        stats.put("totalStamps", totalStamps);
+        stats.put("totalRewards", totalRewards);
+        stats.put("totalCards", totalCards);
+        stats.put("perShop", perShop);
+        return ResponseEntity.ok(stats);
+    }
     public ResponseEntity<Map<String, Object>> toggleShop(@PathVariable String shopId) {
         Shop shop = shopRepo.findById(shopId)
                 .orElseThrow(() -> new RuntimeException("Shop nicht gefunden"));

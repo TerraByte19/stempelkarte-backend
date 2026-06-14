@@ -15,7 +15,9 @@ import com.example.stemplekarte.wallet.CloudinaryService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -207,6 +209,60 @@ public class ShopController {
         }).toList();
     }
 
+    @Operation(summary = "Gesamt-Statistik des Shops (aggregiert über alle Karten)")
+    @GetMapping("/stats/summary")
+    public Map<String, Object> statsSummary(Authentication auth) {
+        Shop shop = currentShop(auth);
+        List<Card> cards = cardService.getByShop(shop);
+
+        int totalCustomers = 0;
+        int totalStamps = 0;
+        int totalRewards = 0;
+        int activeCards = 0;
+
+        List<Map<String, Object>> perCard = new java.util.ArrayList<>();
+
+        for (Card card : cards) {
+            List<CustomerCard> ccs = customerCardRepo.findByCard(card);
+            int customers = ccs.size();
+            int stamps = ccs.stream().mapToInt(CustomerCard::getStamps).sum();
+            int rewards = ccs.stream().mapToInt(CustomerCard::getTotalRewards).sum();
+
+            totalCustomers += customers;
+            totalStamps += stamps;
+            totalRewards += rewards;
+            if (card.isActive()) activeCards++;
+
+            Map<String, Object> cardMap = new HashMap<>();
+            cardMap.put("cardId", card.getId());
+            cardMap.put("cardName", card.getName());
+            cardMap.put("customerCount", customers);
+            cardMap.put("totalStamps", stamps);
+            cardMap.put("totalRewards", rewards);
+            cardMap.put("rewardThreshold", card.getRewardThreshold());
+            perCard.add(cardMap);
+        }
+
+        // Abgeleitete Kennzahlen (gerundet, gegen Division durch 0 abgesichert)
+        double avgStampsPerCustomer = totalCustomers > 0
+                ? Math.round((double) totalStamps / totalCustomers * 10) / 10.0 : 0;
+        // Einlöse-Quote: wie viele Belohnungen pro Kunde im Schnitt
+        double rewardsPerCustomer = totalCustomers > 0
+                ? Math.round((double) totalRewards / totalCustomers * 100) / 100.0 : 0;
+
+        Map<String, Object> summary = new HashMap<>();
+        summary.put("shopName", shop.getName());
+        summary.put("totalCards", cards.size());
+        summary.put("activeCards", activeCards);
+        summary.put("totalCustomers", totalCustomers);
+        summary.put("totalStamps", totalStamps);
+        summary.put("totalRewards", totalRewards);
+        summary.put("avgStampsPerCustomer", avgStampsPerCustomer);
+        summary.put("rewardsPerCustomer", rewardsPerCustomer);
+        summary.put("perCard", perCard);
+        return summary;
+    }
+
     @Operation(summary = "Staff-Token erstellen")
     @PostMapping("/staff-token")
     public StaffTokenResponse createStaffToken(@RequestBody Map<String, String> body,
@@ -229,8 +285,11 @@ public class ShopController {
 
     // imageUrls ist optional: Liste von URLs der via /api/shop/newsletter/image
     // hochgeladenen Bilder, die im Newsletter angezeigt werden.
-    public record NewsletterRequest(@NotBlank String subject, @NotBlank String body,
-                                    java.util.List<String> imageUrls) {}
+    // Längen-Limits schützen Server/DB vor übergroßen Eingaben.
+    public record NewsletterRequest(
+            @NotBlank @Size(max = 200) String subject,
+            @NotBlank @Size(max = 10000) String body,
+            @Size(max = 10) java.util.List<String> imageUrls) {}
 
     @Operation(summary = "Anzahl Kunden mit Werbe-Einwilligung (Vorschau für Newsletter)")
     @GetMapping("/newsletter/recipients")
@@ -248,9 +307,37 @@ public class ShopController {
         );
     }
 
+    @Operation(summary = "Test-Newsletter nur an die eigene Shop-E-Mail senden (Vorschau)")
+    @PostMapping("/newsletter/test")
+    public Map<String, Object> sendTestNewsletter(@Valid @org.springframework.web.bind.annotation.RequestBody
+                                                  NewsletterRequest req,
+                                                  Authentication auth) {
+        Shop shop = currentShop(auth);
+
+        // Test-Versand geht NUR an die eigene Shop-E-Mail, wird NICHT im
+        // Verlauf gespeichert und zählt nicht als echter Kunden-Versand.
+        // Die Abmelde-/Lösch-Links zeigen auf Beispielwerte, damit die Mail
+        // exakt wie eine echte aussieht (Buttons sind im Test nicht aktiv).
+        String unsubscribeUrl = baseUrl + "/mail/unsubscribe?cc=TEST&t=TEST";
+        String deleteUrl = baseUrl + "/mail/delete-request?c=TEST";
+
+        emailService.sendNewsletterMail(
+                shop.getEmail(),               // nur an den Laden selbst
+                shop,                          // Branding (Logo + Hero-Bild)
+                shop.getEmail(),               // Reply-To
+                "[TEST] " + req.subject(),     // Betreff als Test markiert
+                req.body(),
+                req.imageUrls(),
+                unsubscribeUrl,
+                deleteUrl
+        );
+
+        return Map.of("sentTo", shop.getEmail());
+    }
+
     @Operation(summary = "Newsletter an alle Kunden mit Einwilligung versenden")
     @PostMapping("/newsletter")
-    public Map<String, Object> sendNewsletter(@org.springframework.web.bind.annotation.RequestBody
+    public Map<String, Object> sendNewsletter(@Valid @org.springframework.web.bind.annotation.RequestBody
                                               NewsletterRequest req,
                                               Authentication auth) {
         Shop shop = currentShop(auth);
