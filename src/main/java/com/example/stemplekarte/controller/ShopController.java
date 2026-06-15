@@ -1,12 +1,9 @@
 package com.example.stemplekarte.controller;
 
-import com.example.stemplekarte.model.Card;
-import com.example.stemplekarte.model.CustomerCard;
-import com.example.stemplekarte.model.SentNewsletter;
-import com.example.stemplekarte.model.Shop;
-import com.example.stemplekarte.model.StaffToken;
+import com.example.stemplekarte.model.*;
 import com.example.stemplekarte.repository.CustomerCardRepository;
 import com.example.stemplekarte.repository.SentNewsletterRepository;
+import com.example.stemplekarte.repository.ScanLogRepository;
 import com.example.stemplekarte.security.JwtAuthFilter;
 import com.example.stemplekarte.service.CardService;
 import com.example.stemplekarte.service.EmailService;
@@ -43,19 +40,22 @@ public class ShopController {
     private final CloudinaryService cloudinaryService;
     private final EmailService emailService;
     private final SentNewsletterRepository sentNewsletterRepo;
+    private final ScanLogRepository scanLogRepo;
 
     @Value("${stempelkarte.base-url:http://localhost:8080}")
     private String baseUrl;
 
     public ShopController(ShopService shopService, CardService cardService,
                           CustomerCardRepository customerCardRepo, CloudinaryService cloudinaryService,
-                          EmailService emailService, SentNewsletterRepository sentNewsletterRepo) {
+                          EmailService emailService, SentNewsletterRepository sentNewsletterRepo,
+                          ScanLogRepository scanLogRepo) {
         this.shopService = shopService;
         this.cardService = cardService;
         this.customerCardRepo = customerCardRepo;
         this.cloudinaryService = cloudinaryService;
         this.emailService = emailService;
         this.sentNewsletterRepo = sentNewsletterRepo;
+        this.scanLogRepo = scanLogRepo;
     }
 
     public record UpdateProfileRequest(String name, String logoUrl,
@@ -218,12 +218,20 @@ public class ShopController {
         int totalCustomers = 0;
         int totalStamps = 0;
         int totalRewards = 0;
-        int activeCards = 0;
+
+        int customersWithReward = 0;   // Kunden mit mind. 1 Belohnung
+        int customersNearReward = 0;   // Kunden ≥ 80% der Stempel (kurz vor Ziel)
+        int customersWithConsent = 0;  // Kunden mit Marketing-Einwilligung
+        int activeCustomers30d = 0;    // Kunden in den letzten 30 Tagen gestempelt
+        double fillSum = 0;            // Summe der Füllgrade (für Durchschnitt)
+
+        Instant thirtyDaysAgo = Instant.now().minus(30, java.time.temporal.ChronoUnit.DAYS);
 
         List<Map<String, Object>> perCard = new java.util.ArrayList<>();
 
         for (Card card : cards) {
             List<CustomerCard> ccs = customerCardRepo.findByCard(card);
+            int threshold = Math.max(1, card.getRewardThreshold());
             int customers = ccs.size();
             int stamps = ccs.stream().mapToInt(CustomerCard::getStamps).sum();
             int rewards = ccs.stream().mapToInt(CustomerCard::getTotalRewards).sum();
@@ -231,7 +239,15 @@ public class ShopController {
             totalCustomers += customers;
             totalStamps += stamps;
             totalRewards += rewards;
-            if (card.isActive()) activeCards++;
+
+            for (CustomerCard cc : ccs) {
+                if (cc.getTotalRewards() > 0) customersWithReward++;
+                if (cc.getStamps() >= threshold * 0.8) customersNearReward++;
+                if (cc.isMarketingConsent()) customersWithConsent++;
+                if (cc.getUpdatedAt() != null && cc.getUpdatedAt().isAfter(thirtyDaysAgo))
+                    activeCustomers30d++;
+                fillSum += (double) cc.getStamps() / threshold;
+            }
 
             Map<String, Object> cardMap = new HashMap<>();
             cardMap.put("cardId", card.getId());
@@ -246,20 +262,48 @@ public class ShopController {
         // Abgeleitete Kennzahlen (gerundet, gegen Division durch 0 abgesichert)
         double avgStampsPerCustomer = totalCustomers > 0
                 ? Math.round((double) totalStamps / totalCustomers * 10) / 10.0 : 0;
-        // Einlöse-Quote: wie viele Belohnungen pro Kunde im Schnitt
-        double rewardsPerCustomer = totalCustomers > 0
-                ? Math.round((double) totalRewards / totalCustomers * 100) / 100.0 : 0;
+        // Einlöse-Quote in Prozent: Anteil Kunden mit mind. 1 Belohnung
+        int redemptionRate = totalCustomers > 0
+                ? (int) Math.round((double) customersWithReward / totalCustomers * 100) : 0;
+        // Durchschnittlicher Füllgrad in Prozent
+        int avgFillPercent = totalCustomers > 0
+                ? (int) Math.round(fillSum / totalCustomers * 100) : 0;
+
+        // 30-Tage-Verlauf: Stempel & Belohnungen pro Tag aus dem ScanLog
+        List<ScanLog> recent = scanLogRepo
+                .findByShopIdAndScannedAtAfterOrderByScannedAtAsc(shop.getId(), thirtyDaysAgo);
+        // Pro Tag (YYYY-MM-DD) aufsummieren
+        java.util.Map<String, int[]> byDay = new java.util.TreeMap<>();
+        java.time.ZoneId zone = java.time.ZoneId.systemDefault();
+        for (ScanLog sl : recent) {
+            String day = sl.getScannedAt().atZone(zone).toLocalDate().toString();
+            int[] v = byDay.computeIfAbsent(day, k -> new int[2]);
+            v[0] += sl.getStampsAdded();
+            v[1] += sl.getRewardsEarned();
+        }
+        List<Map<String, Object>> history = new java.util.ArrayList<>();
+        for (var e : byDay.entrySet()) {
+            Map<String, Object> dayMap = new HashMap<>();
+            dayMap.put("date", e.getKey());
+            dayMap.put("stamps", e.getValue()[0]);
+            dayMap.put("rewards", e.getValue()[1]);
+            history.add(dayMap);
+        }
 
         Map<String, Object> summary = new HashMap<>();
         summary.put("shopName", shop.getName());
         summary.put("totalCards", cards.size());
-        summary.put("activeCards", activeCards);
         summary.put("totalCustomers", totalCustomers);
         summary.put("totalStamps", totalStamps);
         summary.put("totalRewards", totalRewards);
         summary.put("avgStampsPerCustomer", avgStampsPerCustomer);
-        summary.put("rewardsPerCustomer", rewardsPerCustomer);
+        summary.put("redemptionRate", redemptionRate);
+        summary.put("customersNearReward", customersNearReward);
+        summary.put("avgFillPercent", avgFillPercent);
+        summary.put("customersWithConsent", customersWithConsent);
+        summary.put("activeCustomers30d", activeCustomers30d);
         summary.put("perCard", perCard);
+        summary.put("history", history);
         return summary;
     }
 

@@ -5,6 +5,7 @@ import com.example.stemplekarte.repository.AppleDeviceRepository;
 import com.example.stemplekarte.repository.CardRepository;
 import com.example.stemplekarte.repository.CustomerCardRepository;
 import com.example.stemplekarte.repository.CustomerRepository;
+import com.example.stemplekarte.repository.ScanLogRepository;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
@@ -26,17 +27,20 @@ public class CustomerService {
     private final CustomerCardRepository customerCardRepo;
     private final AppleDeviceRepository appleDeviceRepo;
     private final EmailService emailService;
+    private final ScanLogRepository scanLogRepo;
     private final ObjectMapper mapper = new ObjectMapper();
 
     public CustomerService(CustomerRepository customerRepo, CardRepository cardRepo,
                            CustomerCardRepository customerCardRepo,
                            AppleDeviceRepository appleDeviceRepo,
-                           EmailService emailService) {
+                           EmailService emailService,
+                           ScanLogRepository scanLogRepo) {
         this.customerRepo = customerRepo;
         this.cardRepo = cardRepo;
         this.customerCardRepo = customerCardRepo;
         this.appleDeviceRepo = appleDeviceRepo;
         this.emailService = emailService;
+        this.scanLogRepo = scanLogRepo;
     }
 
     @Transactional
@@ -189,6 +193,16 @@ public class CustomerService {
         }
 
         customerCardRepo.save(cc);
+
+        // Scan protokollieren (für Verlaufs-Statistik). Schlägt das Logging
+        // fehl, darf der Scan selbst NICHT scheitern — daher abgesichert.
+        try {
+            scanLogRepo.save(ScanLog.create(
+                    shop.getId(), cardId, customerId, count, rewardsEarnedThisScan));
+        } catch (Exception e) {
+            log.warn("ScanLog konnte nicht gespeichert werden: {}", e.getMessage());
+        }
+
         log.info("Scan fuer Kunde {} auf Karte {} ({}x): {}", customerId, cardId, count, result.message());
         return result;
     }
