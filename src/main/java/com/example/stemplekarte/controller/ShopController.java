@@ -272,9 +272,50 @@ public class ShopController {
         // 30-Tage-Verlauf: Stempel & Belohnungen pro Tag aus dem ScanLog
         List<ScanLog> recent = scanLogRepo
                 .findByShopIdAndScannedAtAfterOrderByScannedAtAsc(shop.getId(), thirtyDaysAgo);
+
+        // Stempel & Belohnungen: diese Woche (7 Tage) und diesen Monat (30 Tage)
+        Instant sevenDaysAgo = Instant.now().minus(7, java.time.temporal.ChronoUnit.DAYS);
+        int stampsThisWeek = 0, stampsThisMonth = 0;
+        int rewardsThisWeek = 0, rewardsThisMonth = 0;
+        // Verteilung über Wochentage (1=Mo … 7=So) und Stunden (0–23)
+        int[] byWeekday = new int[8];   // Index 1–7 genutzt
+        int[] byHour = new int[24];
+        java.time.ZoneId zone = java.time.ZoneId.systemDefault();
+
+        for (ScanLog sl : recent) {
+            stampsThisMonth += sl.getStampsAdded();
+            rewardsThisMonth += sl.getRewardsEarned();
+            if (sl.getScannedAt().isAfter(sevenDaysAgo)) {
+                stampsThisWeek += sl.getStampsAdded();
+                rewardsThisWeek += sl.getRewardsEarned();
+            }
+            var zdt = sl.getScannedAt().atZone(zone);
+            byWeekday[zdt.getDayOfWeek().getValue()] += sl.getStampsAdded();
+            byHour[zdt.getHour()] += sl.getStampsAdded();
+        }
+
+        // Bester Wochentag + beste Stunde (nur wenn es überhaupt Scans gab)
+        String[] dayNames = {"", "Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag"};
+        String bestDay = null;
+        int bestDayCount = 0;
+        for (int i = 1; i <= 7; i++) if (byWeekday[i] > bestDayCount) { bestDayCount = byWeekday[i]; bestDay = dayNames[i]; }
+        int bestHour = -1, bestHourCount = 0;
+        for (int h = 0; h < 24; h++) if (byHour[h] > bestHourCount) { bestHourCount = byHour[h]; bestHour = h; }
+
+        // Wachstum: neue Kundenkarten diese Woche vs. letzte Woche
+        Instant fourteenDaysAgo = Instant.now().minus(14, java.time.temporal.ChronoUnit.DAYS);
+        int newThisWeek = 0, newLastWeek = 0;
+        for (Card card : cards) {
+            for (CustomerCard cc : customerCardRepo.findByCard(card)) {
+                Instant created = cc.getCreatedAt();
+                if (created == null) continue;
+                if (created.isAfter(sevenDaysAgo)) newThisWeek++;
+                else if (created.isAfter(fourteenDaysAgo)) newLastWeek++;
+            }
+        }
+
         // Pro Tag (YYYY-MM-DD) aufsummieren
         java.util.Map<String, int[]> byDay = new java.util.TreeMap<>();
-        java.time.ZoneId zone = java.time.ZoneId.systemDefault();
         for (ScanLog sl : recent) {
             String day = sl.getScannedAt().atZone(zone).toLocalDate().toString();
             int[] v = byDay.computeIfAbsent(day, k -> new int[2]);
@@ -302,6 +343,14 @@ public class ShopController {
         summary.put("avgFillPercent", avgFillPercent);
         summary.put("customersWithConsent", customersWithConsent);
         summary.put("activeCustomers30d", activeCustomers30d);
+        summary.put("stampsThisWeek", stampsThisWeek);
+        summary.put("stampsThisMonth", stampsThisMonth);
+        summary.put("rewardsThisWeek", rewardsThisWeek);
+        summary.put("rewardsThisMonth", rewardsThisMonth);
+        summary.put("bestDay", bestDay);                 // null, wenn noch keine Scans
+        summary.put("bestHour", bestHour);               // -1, wenn noch keine Scans
+        summary.put("newCustomersThisWeek", newThisWeek);
+        summary.put("newCustomersLastWeek", newLastWeek);
         summary.put("perCard", perCard);
         summary.put("history", history);
         return summary;
