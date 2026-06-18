@@ -183,22 +183,22 @@ public class PassTemplateGenerator {
             }
         } else {
             if ("number".equalsIgnoreCase(emptyStyle)) {
-                g.setColor(new Color(255, 255, 255, 110));
+                g.setColor(new Color(255, 255, 255, 85));
                 g.setStroke(new BasicStroke((float) Math.max(2, d * 0.045)));
                 g.draw(new Ellipse2D.Double(cx - r, cy - r, d, d));
-                g.setColor(new Color(255, 255, 255, 175));
+                g.setColor(new Color(255, 255, 255, 140));
                 g.setFont(new Font("Arial", Font.BOLD, (int) (d * 0.42)));
                 FontMetrics fm = g.getFontMetrics();
                 String s = String.valueOf(number);
                 g.drawString(s, (float) (cx - fm.stringWidth(s) / 2.0),
                         (float) (cy + fm.getAscent() / 2.0 - fm.getDescent() / 2.0));
             } else {
-                g.setColor(new Color(255, 255, 255, 60));
+                g.setColor(new Color(255, 255, 255, 45));
                 g.fill(new Ellipse2D.Double(cx - r, cy - r, d, d));
                 if (useCustom) {
-                    drawImageInCircle(g, customIcon, cx, cy, d * 0.92, 0.45f);
+                    drawImageInCircle(g, customIcon, cx, cy, d * 0.92, 0.35f);
                 } else {
-                    drawPreset(g, preset, cx, cy, d * 0.55, new Color(255, 255, 255), 120);
+                    drawPreset(g, preset, cx, cy, d * 0.55, new Color(255, 255, 255), 90);
                 }
             }
         }

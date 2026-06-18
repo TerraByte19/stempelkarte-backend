@@ -173,6 +173,7 @@ public class CustomerService {
 
         CustomerCard cc = getOrCreateCustomerCard(customerId, cardId);
         int threshold = card.getRewardThreshold();
+
         ScanResult result = null;
         int rewardsEarnedThisScan = 0;
 
@@ -205,5 +206,40 @@ public class CustomerService {
 
         log.info("Scan fuer Kunde {} auf Karte {} ({}x): {}", customerId, cardId, count, result.message());
         return result;
+    }
+
+    /**
+     * Setzt eine Kundenkarte komplett zurück (Stempel + Belohnungszähler auf 0).
+     * Wird vom Reset-Button im Scanner genutzt. Parst denselben QR-Payload wie
+     * beim Stempeln und prüft, dass die Karte zum Shop des Mitarbeiters gehört.
+     */
+    @Transactional
+    public CustomerCard resetCard(String qrPayload, Shop shop) {
+        String customerId;
+        String cardId;
+        try {
+            JsonNode node = mapper.readTree(qrPayload);
+            customerId = node.path("cid").asText();
+            cardId = node.path("cardId").asText();
+            if (customerId.isBlank() || cardId.isBlank()) {
+                throw new IllegalArgumentException("QR enthaelt keine Kunden- oder Karten-ID");
+            }
+        } catch (Exception e) {
+            throw new IllegalArgumentException("Ungueltiger QR-Code: " + e.getMessage());
+        }
+
+        Card card = cardRepo.findById(cardId)
+                .orElseThrow(() -> new NoSuchElementException("Karte nicht gefunden"));
+
+        if (!card.getShop().getId().equals(shop.getId())) {
+            throw new IllegalArgumentException("Diese Karte gehoert nicht zu deinem Shop");
+        }
+
+        CustomerCard cc = getOrCreateCustomerCard(customerId, cardId);
+        cc.resetAll();
+        customerCardRepo.save(cc);
+
+        log.info("Karte zurueckgesetzt: Kunde {} auf Karte {}", customerId, cardId);
+        return cc;
     }
 }

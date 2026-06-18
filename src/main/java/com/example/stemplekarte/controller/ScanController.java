@@ -110,4 +110,42 @@ public class ScanController {
                 rewardEarned ? cc.getCard().getRewardText() : null
         );
     }
+
+    public record ResetRequest(@NotBlank String qrPayload) {}
+
+    @Operation(summary = "Karte zurücksetzen (Stempel + Belohnungen auf 0)",
+            description = "Erfordert X-Staff-Token Header. Setzt die Karte komplett zurück.")
+    @PostMapping("/reset")
+    public ScanResponse reset(@Valid @RequestBody ResetRequest req, Authentication auth) {
+        if (auth == null || !(auth.getPrincipal() instanceof StaffTokenFilter.StaffPrincipal)) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Kein gueltiger Staff-Token");
+        }
+
+        Shop shop = ((StaffTokenFilter.StaffPrincipal) auth.getPrincipal()).staff().getShop();
+        var cc = service.resetCard(req.qrPayload(), shop);
+
+        // Wallet-Karten auf dem Handy sofort aktualisieren (still)
+        try {
+            apnsPushService.notifyUpdate(cc.getId());
+        } catch (Exception e) {
+            log.warn("APNs Push nach Reset fehlgeschlagen (nicht kritisch): {}", e.getMessage());
+        }
+        try {
+            googleWalletService.notifyUpdate(cc.getId());
+        } catch (Exception e) {
+            log.warn("Google Wallet Update nach Reset fehlgeschlagen (nicht kritisch): {}", e.getMessage());
+        }
+
+        return new ScanResponse(
+                "reset", "Karte zurückgesetzt",
+                cc.getCustomer().getId(),
+                cc.getCard().getId(),
+                cc.getStamps(),
+                cc.getTotalRewards(),
+                cc.getCard().getRewardThreshold(),
+                0,
+                false,
+                null
+        );
+    }
 }
