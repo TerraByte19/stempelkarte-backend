@@ -6,6 +6,8 @@ import com.example.stemplekarte.model.CustomerCard;
 import com.example.stemplekarte.service.CardService;
 import com.example.stemplekarte.service.CustomerService;
 import com.example.stemplekarte.wallet.GoogleWalletService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -15,6 +17,19 @@ import java.util.Map;
 
 @RestController
 public class LandingController {
+
+    private static final Logger log = LoggerFactory.getLogger(LandingController.class);
+
+    /** Baut aus einem Text einen sicheren JS-String-Literal (inkl. Anfuehrungszeichen). */
+    private static String toJsString(String s) {
+        if (s == null) return "\"\"";
+        String escaped = s.replace("\\", "\\\\")
+                .replace("\"", "\\\"")
+                .replace("\n", " ")
+                .replace("\r", " ")
+                .replace("<", "\\u003c");
+        return "\"" + escaped + "\"";
+    }
 
     private final CustomerService customerService;
     private final CardService cardService;
@@ -210,22 +225,50 @@ public class LandingController {
                             </div>
                         </div>
                         <script>
-                            // HIER GEÄNDERT: Automatischer Live-Reload, wenn gestempelt wurde
-                            const currentStamps = %d;
+                            // Live-Aktualisierung OHNE Seiten-Reload: der Zaehler wird direkt
+                            // im DOM ersetzt. So haengt nichts mehr am HTML-Cache des Handys
+                            // (frueher: location.reload() konnte die alte Seite aus dem Cache
+                            // holen -> Zaehler blieb stehen / Reload-Schleife).
                             const custId = '%s';
                             const cId = '%s';
-                            
-                            setInterval(async () => {
+                            const threshold = %d;
+                            const rewardText = %s;
+                            let shownStamps = %d;
+
+                            function renderStamps(n) {
+                                shownStamps = n;
+                                var h = '';
+                                for (var i = 1; i <= threshold; i++) {
+                                    h += (i <= n)
+                                        ? "<div class='stamp filled'>☕</div>"
+                                        : "<div class='stamp empty'>" + i + "</div>";
+                                }
+                                var grid = document.querySelector('.stamps-grid');
+                                if (grid) grid.innerHTML = h;
+                                var prog = document.querySelector('.progress');
+                                if (prog) prog.textContent = n + ' von ' + threshold + ' Stempeln';
+                                var rw = document.querySelector('.reward-text');
+                                if (rw) rw.textContent = (n >= threshold)
+                                    ? '🎉 ' + rewardText + ' verfügbar!'
+                                    : 'Noch ' + (threshold - n) + ' Stempel bis: ' + rewardText;
+                            }
+
+                            async function check() {
                                 try {
-                                    const res = await fetch(`/api/customer/${custId}/card/${cId}`);
-                                    if (res.ok) {
-                                        const data = await res.json();
-                                        if (data.stamps !== currentStamps) {
-                                            window.location.reload();
-                                        }
+                                    const url = '/api/customer/' + custId + '/card/' + cId + '?shown=' + shownStamps;
+                                    const res = await fetch(url, { cache: 'no-store' });
+                                    if (!res.ok) return;
+                                    const data = await res.json();
+                                    if (typeof data.stamps === 'number' && data.stamps !== shownStamps) {
+                                        renderStamps(data.stamps);
                                     }
                                 } catch (e) {}
-                            }, 2500);
+                            }
+
+                            setInterval(check, 4000);
+                            document.addEventListener('visibilitychange', function () { if (!document.hidden) check(); });
+                            window.addEventListener('pageshow', check);
+                            window.addEventListener('online', check);
 
                             const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
                             const isAndroid = /Android/.test(navigator.userAgent);
@@ -249,10 +292,18 @@ public class LandingController {
                     googleSaveUrl.isBlank() ? "" :
                             "<a href='" + googleSaveUrl + "' class='btn-google' id='google-btn'>" +
                                     "🤖 Zu Google Wallet hinzufügen</a>",
-                    stamps, customerId, cardId // Parameter für das JS-Polling
+                    // Parameter fuer das JS: custId, cId, threshold, rewardText (als JS-String), stamps
+                    customerId, cardId, threshold, toJsString(card.getRewardText()), stamps
             );
 
-            return ResponseEntity.ok(html);
+            log.info("Landing-Karte geladen: customerCard={} card={} stamps={} threshold={}",
+                    cc.getId(), cardId, stamps, threshold);
+
+            // no-store: das Handy darf diese HTML-Seite nicht zwischenspeichern,
+            // sonst zeigt ein spaeterer Aufruf einen veralteten Stempelstand.
+            return ResponseEntity.ok()
+                    .header(org.springframework.http.HttpHeaders.CACHE_CONTROL, "no-store")
+                    .body(html);
 
         } catch (Exception e) {
             return ResponseEntity.ok("""

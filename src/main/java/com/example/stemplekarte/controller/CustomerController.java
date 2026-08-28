@@ -11,9 +11,13 @@ import com.google.zxing.client.j2se.MatrixToImageWriter;
 import com.google.zxing.qrcode.QRCodeWriter;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -28,6 +32,8 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/customer")
 public class CustomerController {
+
+    private static final Logger log = LoggerFactory.getLogger(CustomerController.class);
 
     @Value("${stempelkarte.base-url:http://localhost:8080}")
     private String baseUrl;
@@ -83,9 +89,28 @@ public class CustomerController {
     @Operation(summary = "Status einer bestimmten Karte des Kunden")
     @GetMapping("/{customerId}/card/{cardId}")
     public CustomerCardResponse getCard(@PathVariable String customerId,
-                                        @PathVariable String cardId) {
+                                        @PathVariable String cardId,
+                                        HttpServletRequest request,
+                                        HttpServletResponse response) {
+        // no-store: das Kunden-Handy soll diesen Stand nie aus dem Browser-Cache
+        // servieren - der Live-Abgleich der Karte haengt daran.
+        response.setHeader(HttpHeaders.CACHE_CONTROL, "no-store");
+
         CustomerCard cc = customerService.getOrCreateCustomerCard(customerId, cardId);
-        return CustomerCardResponse.from(cc);
+        CustomerCardResponse dto = CustomerCardResponse.from(cc);
+
+        // Mitschreiben, um seltene "Stempel kommt beim Kunden nicht an"-Faelle
+        // nachvollziehen zu koennen: welcher Stand wurde geliefert, an welches Geraet.
+        String gezeigt = request.getParameter("shown");   // vom Handy mitgeschickter, gerade angezeigter Stand
+        String ua = request.getHeader("User-Agent");
+        if (gezeigt != null && !gezeigt.equals(String.valueOf(dto.stamps()))) {
+            log.info("Karten-Abgleich ABWEICHUNG: customerCard={} card={} handyZeigte={} serverHat={} ua=\"{}\"",
+                    cc.getId(), cardId, gezeigt, dto.stamps(), ua);
+        } else {
+            log.info("Karten-Abgleich: customerCard={} card={} stamps={} ua=\"{}\"",
+                    cc.getId(), cardId, dto.stamps(), ua);
+        }
+        return dto;
     }
 
     @Operation(summary = "QR-Code als PNG fuer Stempel-Scan")
