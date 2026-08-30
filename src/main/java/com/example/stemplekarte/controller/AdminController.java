@@ -146,6 +146,7 @@ public class AdminController {
             map.put("cardCount", cardCount);
             map.put("customerCount", customerCount);
             map.put("maxTokens", shop.getMaxTokens());
+            map.put("language", shop.getLanguageOrDefault());
             return map;
         }).toList();
 
@@ -209,6 +210,9 @@ public class AdminController {
         stats.put("perShop", perShop);
         return ResponseEntity.ok(stats);
     }
+
+    /** Laden sperren/entsperren. Das Frontend (Admin.jsx) schickt POST. */
+    @PostMapping("/shops/{shopId}/toggle")
     public ResponseEntity<Map<String, Object>> toggleShop(@PathVariable String shopId) {
         Shop shop = shopRepo.findById(shopId)
                 .orElseThrow(() -> new RuntimeException("Shop nicht gefunden"));
@@ -219,6 +223,30 @@ public class AdminController {
         result.put("id", shop.getId());
         result.put("name", shop.getName());
         result.put("active", shop.isActive());
+        return ResponseEntity.ok(result);
+    }
+
+    public record LanguageRequest(String language) {}
+
+    /** Sprache eines Ladens setzen ("de" oder "ar"). Steuert Kundenkarte,
+     *  Anmeldeseite, Bestaetigungsseiten und E-Mails dieses Ladens. */
+    @PostMapping("/shops/{shopId}/language")
+    public ResponseEntity<Map<String, Object>> setShopLanguage(@PathVariable String shopId,
+                                                              @RequestBody LanguageRequest req) {
+        String lang = req.language() == null ? "" : req.language().trim().toLowerCase();
+        if (!lang.equals("de") && !lang.equals("ar")) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Sprache muss 'de' oder 'ar' sein"));
+        }
+        Shop shop = shopRepo.findById(shopId)
+                .orElseThrow(() -> new RuntimeException("Shop nicht gefunden"));
+        shop.setLanguage(lang);
+        shopRepo.save(shop);
+        log.info("Admin: Sprache von Shop {} ({}) auf '{}' gesetzt", shop.getName(), shopId, lang);
+
+        Map<String, Object> result = new HashMap<>();
+        result.put("id", shop.getId());
+        result.put("name", shop.getName());
+        result.put("language", shop.getLanguageOrDefault());
         return ResponseEntity.ok(result);
     }
 

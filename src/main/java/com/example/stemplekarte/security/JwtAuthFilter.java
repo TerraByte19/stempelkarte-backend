@@ -44,8 +44,10 @@ public class JwtAuthFilter extends OncePerRequestFilter {
                     SecurityContextHolder.getContext().setAuthentication(auth);
                 } else {
                     // ── Shop-Token ────────────────────────────────────────
+                    // filter(isActive): ein vom Admin gesperrter Laden fliegt
+                    // sofort raus, nicht erst wenn sein Token ablaeuft.
                     String shopId = jwtService.extractShopId(token);
-                    shopRepo.findById(shopId).ifPresent(shop -> {
+                    shopRepo.findById(shopId).filter(com.example.stemplekarte.model.Shop::isActive).ifPresent(shop -> {
                         var auth = new UsernamePasswordAuthenticationToken(
                                 new ShopPrincipal(shop),
                                 null,

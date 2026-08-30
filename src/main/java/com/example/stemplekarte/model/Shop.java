@@ -61,6 +61,12 @@ public class Shop {
     @Column(name = "max_tokens", nullable = false, columnDefinition = "integer default 3")
     private int maxTokens = 3;
 
+    // Sprache des Ladens: "de" oder "ar". null/leer = "de" (alle Bestandslaeden).
+    // Steuert Kundenkarte, Anmeldeseite, Bestaetigungsseiten und E-Mails.
+    // Nullable -> ddl-auto:update braucht keinen DB-Reset.
+    @Column(name = "language", length = 5)
+    private String language;
+
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
@@ -157,4 +163,11 @@ public class Shop {
     public int getMaxTokens() { return maxTokens; }
     public Instant getCreatedAt() { return createdAt; }
     public Instant getUpdatedAt() { return updatedAt; }
+
+    public String getLanguage() { return language; }
+    public void setLanguage(String language) { this.language = language; }
+    /** null/leer (Bestandslaeden) gilt als Deutsch. */
+    public String getLanguageOrDefault() {
+        return (language == null || language.isBlank()) ? "de" : language;
+    }
 }
