@@ -211,43 +211,30 @@ public class AdminController {
         return ResponseEntity.ok(stats);
     }
 
-    /** Laden sperren/entsperren. Das Frontend (Admin.jsx) schickt POST. */
+    /** Laden sperren/entsperren. Das Frontend (Admin.jsx) schickt POST.
+     *  Abgehaertet: kein Shop -> 404, sonst wird die tatsaechliche Fehlermeldung
+     *  zurueckgegeben statt eines nackten 500. */
     @PostMapping("/shops/{shopId}/toggle")
     public ResponseEntity<Map<String, Object>> toggleShop(@PathVariable String shopId) {
-        Shop shop = shopRepo.findById(shopId)
-                .orElseThrow(() -> new RuntimeException("Shop nicht gefunden"));
-        shop.setActive(!shop.isActive());
-        shopRepo.save(shop);
+        try {
+            Shop shop = shopRepo.findById(shopId).orElse(null);
+            if (shop == null) {
+                return ResponseEntity.status(404).body(Map.of("error", "Shop nicht gefunden: " + shopId));
+            }
+            shop.setActive(!shop.isActive());
+            shopRepo.save(shop);
 
-        Map<String, Object> result = new HashMap<>();
-        result.put("id", shop.getId());
-        result.put("name", shop.getName());
-        result.put("active", shop.isActive());
-        return ResponseEntity.ok(result);
-    }
-
-    public record LanguageRequest(String language) {}
-
-    /** Sprache eines Ladens setzen ("de" oder "ar"). Steuert Kundenkarte,
-     *  Anmeldeseite, Bestaetigungsseiten und E-Mails dieses Ladens. */
-    @PostMapping("/shops/{shopId}/language")
-    public ResponseEntity<Map<String, Object>> setShopLanguage(@PathVariable String shopId,
-                                                              @RequestBody LanguageRequest req) {
-        String lang = req.language() == null ? "" : req.language().trim().toLowerCase();
-        if (!lang.equals("de") && !lang.equals("ar")) {
-            return ResponseEntity.badRequest().body(Map.of("error", "Sprache muss 'de' oder 'ar' sein"));
+            Map<String, Object> result = new HashMap<>();
+            result.put("id", shop.getId());
+            result.put("name", shop.getName());
+            result.put("active", shop.isActive());
+            return ResponseEntity.ok(result);
+        } catch (Exception e) {
+            log.error("toggleShop({}) fehlgeschlagen: {}", shopId, e.toString(), e);
+            return ResponseEntity.status(500).body(Map.of(
+                    "error", "Sperren fehlgeschlagen",
+                    "detail", String.valueOf(e.getMessage())));
         }
-        Shop shop = shopRepo.findById(shopId)
-                .orElseThrow(() -> new RuntimeException("Shop nicht gefunden"));
-        shop.setLanguage(lang);
-        shopRepo.save(shop);
-        log.info("Admin: Sprache von Shop {} ({}) auf '{}' gesetzt", shop.getName(), shopId, lang);
-
-        Map<String, Object> result = new HashMap<>();
-        result.put("id", shop.getId());
-        result.put("name", shop.getName());
-        result.put("language", shop.getLanguageOrDefault());
-        return ResponseEntity.ok(result);
     }
 
     /**
@@ -286,21 +273,32 @@ public class AdminController {
         return ResponseEntity.ok(Map.of("message", "Shop " + shop.getName() + " geloescht"));
     }
 
-    public record CreateShopRequest(String email, String password, String name, int maxTokens) {}
+    public record CreateShopRequest(String email, String password, String name, int maxTokens,
+                                    String language) {}
 
     @PostMapping("/shops/create")
     public ResponseEntity<Map<String, Object>> createShop(@RequestBody CreateShopRequest req) {
         try {
             int maxTokens = req.maxTokens() > 0 ? req.maxTokens() : 3;
+            // Sprache wird HIER einmal festgelegt und ist danach nicht mehr
+            // aenderbar (bewusst - der Laden bleibt in einer Sprache). de|ar,
+            // alles andere -> de.
+            String language = "ar".equalsIgnoreCase(
+                    req.language() == null ? "" : req.language().trim()) ? "ar" : "de";
+
             Shop shop = shopService.register(req.email(), req.password(), req.name(), maxTokens);
+            shop.setLanguage(language);
+            shopRepo.save(shop);
+
             Map<String, Object> result = new HashMap<>();
             result.put("id", shop.getId());
             result.put("name", shop.getName());
             result.put("email", shop.getEmail());
             result.put("maxTokens", shop.getMaxTokens());
+            result.put("language", shop.getLanguageOrDefault());
             return ResponseEntity.ok(result);
         } catch (Exception e) {
-            return ResponseEntity.status(400).body(Map.of("error", e.getMessage()));
+            return ResponseEntity.status(400).body(Map.of("error", String.valueOf(e.getMessage())));
         }
     }
 
