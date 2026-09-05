@@ -22,10 +22,14 @@ import java.security.KeyFactory;
 import java.security.PrivateKey;
 import java.security.spec.PKCS8EncodedKeySpec;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.Base64;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
 @Service
 public class ApnsPushService {
@@ -40,6 +44,18 @@ public class ApnsPushService {
     private final ObjectMapper mapper = new ObjectMapper();
     private final HttpClient httpClient;
 
+    // Kurzer Nachschlag-Rhythmus: Apples Background-Push ist "best effort" - ein
+    // einzelner Push geht selten mal verloren (Handy kurz offline / Stromsparmodus).
+    // Darum nach dem ersten Push noch 2x nachschieben. apns-collapse-id sorgt
+    // dafuer, dass die Wiederholungen auf dem Geraet zu EINEM Update zusammenfallen.
+    private static final long[] RETRY_DELAYS_SEC = {25, 90};
+    private final ScheduledExecutorService retryScheduler =
+            Executors.newSingleThreadScheduledExecutor(r -> {
+                Thread t = new Thread(r, "apns-retry");
+                t.setDaemon(true);
+                return t;
+            });
+
     public ApnsPushService(AppProperties props, AppleDeviceRepository deviceRepo) {
         this.props = props;
         this.deviceRepo = deviceRepo;
@@ -50,13 +66,33 @@ public class ApnsPushService {
     }
 
     @Async
-    @Transactional
     public void notifyUpdate(String serialNumber) {
         if (!props.apns().enabled()) {
             log.debug("APNs deaktiviert. Kein Push fuer {}.", serialNumber);
             return;
         }
 
+        // 1. Push sofort ...
+        pushOnce(serialNumber);
+
+        // 2. ... und ein-, zweimal kurz nachschieben, falls der erste verloren geht.
+        for (long delay : RETRY_DELAYS_SEC) {
+            try {
+                retryScheduler.schedule(() -> {
+                    try {
+                        pushOnce(serialNumber);
+                    } catch (Exception e) {
+                        log.warn("APNs Nachschlag-Push fehlgeschlagen fuer {}: {}", serialNumber, e.getMessage());
+                    }
+                }, delay, TimeUnit.SECONDS);
+            } catch (Exception e) {
+                log.warn("APNs Nachschlag konnte nicht geplant werden: {}", e.getMessage());
+            }
+        }
+    }
+
+    @Transactional
+    public void pushOnce(String serialNumber) {
         List<AppleDeviceRegistration> devices = deviceRepo.findBySerialNumber(serialNumber);
         if (devices.isEmpty()) {
             log.debug("Keine registrierten Apple Geraete fuer {}.", serialNumber);
@@ -75,6 +111,13 @@ public class ApnsPushService {
                 ? "https://api.sandbox.push.apple.com"
                 : "https://api.push.apple.com";
 
+        // apns-expiration: APNs haelt den Push bis zu 1h vor und stellt erneut zu,
+        // falls das Geraet gerade offline war (0 = sofort verwerfen - das war der Bug).
+        String expiration = String.valueOf(Instant.now().getEpochSecond() + 3600);
+        // collapse-id: mehrere Pushes fuer dieselbe Karte werden auf dem Geraet
+        // zu einem zusammengefasst (max 64 Byte - CC-... ist kurz genug).
+        String collapseId = serialNumber.length() > 64 ? serialNumber.substring(0, 64) : serialNumber;
+
         for (AppleDeviceRegistration device : devices) {
             try {
                 String body = mapper.writeValueAsString(Map.of("aps", Map.of()));
@@ -84,6 +127,8 @@ public class ApnsPushService {
                         .header("apns-topic", props.apple().passTypeIdentifier())
                         .header("apns-push-type", "background")
                         .header("apns-priority", "5")
+                        .header("apns-expiration", expiration)
+                        .header("apns-collapse-id", collapseId)
                         .POST(HttpRequest.BodyPublishers.ofString(body))
                         .build();
 
