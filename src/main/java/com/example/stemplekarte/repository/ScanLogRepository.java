@@ -11,4 +11,7 @@ public interface ScanLogRepository extends JpaRepository<ScanLog, String> {
     // Alle Scans eines Shops ab einem Zeitpunkt (für Verlaufs-Statistik),
     // älteste zuerst.
     List<ScanLog> findByShopIdAndScannedAtAfterOrderByScannedAtAsc(String shopId, Instant after);
+
+    // Alle Scans eines Shops, neueste zuerst (Debug/Support-Auswertung).
+    List<ScanLog> findByShopIdOrderByScannedAtDesc(String shopId);
 }
