@@ -2,6 +2,7 @@ package com.example.stemplekarte.controller;
 
 import com.example.stemplekarte.model.Customer;
 import com.example.stemplekarte.model.CustomerCard;
+import com.example.stemplekarte.service.CardEventHub;
 import com.example.stemplekarte.service.CardService;
 import com.example.stemplekarte.service.CustomerService;
 import com.example.stemplekarte.wallet.ApplePassService;
@@ -23,6 +24,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.io.ByteArrayOutputStream;
 import java.util.List;
@@ -42,15 +44,18 @@ public class CustomerController {
     private final CardService cardService;
     private final GoogleWalletService googleWalletService;
     private final ApplePassService applePassService;
+    private final CardEventHub cardEventHub;
 
     public CustomerController(CustomerService customerService,
                               CardService cardService,
                               GoogleWalletService googleWalletService,
-                              ApplePassService applePassService) {
+                              ApplePassService applePassService,
+                              CardEventHub cardEventHub) {
         this.customerService = customerService;
         this.cardService = cardService;
         this.googleWalletService = googleWalletService;
         this.applePassService = applePassService;
+        this.cardEventHub = cardEventHub;
     }
 
     public record CreateCustomerRequest(@NotBlank String name, @Email @NotBlank String email) {}
@@ -111,6 +116,15 @@ public class CustomerController {
                     cc.getId(), cardId, dto.stamps(), ua);
         }
         return dto;
+    }
+
+    @Operation(summary = "Live-Stream des Stempelstands (SSE) fuer die offene Kartenseite",
+            description = "Sendet bei jedem Scan sofort den neuen Stand. Faellt der Stream aus, "
+                    + "greift auf der Seite weiterhin das Polling.")
+    @GetMapping(value = "/{customerId}/card/{cardId}/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public SseEmitter stream(@PathVariable String customerId, @PathVariable String cardId) {
+        CustomerCard cc = customerService.getOrCreateCustomerCard(customerId, cardId);
+        return cardEventHub.subscribe(cc.getId());
     }
 
     @Operation(summary = "QR-Code als PNG fuer Stempel-Scan")

@@ -265,7 +265,19 @@ public class LandingController {
                                 } catch (e) {}
                             }
 
-                            setInterval(check, 4000);
+                            // Live-Push per SSE: neuer Stempel erscheint sofort, ohne aufs
+                            // Polling zu warten. Faellt der Stream aus, laeuft das Polling weiter.
+                            try {
+                                var es = new EventSource('/api/customer/' + custId + '/card/' + cId + '/stream');
+                                es.addEventListener('stamps', function (ev) {
+                                    try {
+                                        var d = JSON.parse(ev.data);
+                                        if (typeof d.stamps === 'number' && d.stamps !== shownStamps) renderStamps(d.stamps);
+                                    } catch (e) {}
+                                });
+                            } catch (e) {}
+
+                            setInterval(check, 3000);
                             document.addEventListener('visibilitychange', function () { if (!document.hidden) check(); });
                             window.addEventListener('pageshow', check);
                             window.addEventListener('online', check);
