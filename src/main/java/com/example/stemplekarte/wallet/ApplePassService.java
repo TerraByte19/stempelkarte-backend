@@ -25,6 +25,8 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Base64;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 @Service
 public class ApplePassService {
@@ -38,6 +40,17 @@ public class ApplePassService {
     private final AppProperties props;
     private final PassTemplateGenerator templateGenerator;
     private final PKSigningInformation signingInfo;
+
+    // Fertig signierte .pkpass-Bytes zwischenspeichern. iOS holt denselben Pass
+    // nach einem Push oft mehrfach kurz hintereinander - jedes Mal neu zu bauen
+    // (Stempel-PNG zeichnen + signieren + zippen) kostet auf der kleinen Instanz
+    // 1-3 s. Schluessel = customerCard-ID, Eintrag gilt nur solange updatedAt
+    // gleich bleibt UND hoechstens 5 Min (Sicherheitsnetz fuer Design-Aenderungen
+    // am Laden, die updatedAt der Karte nicht anfassen).
+    private record PassCacheEntry(long updatedAtMillis, long cachedAtMillis, byte[] bytes) {}
+    private static final long PASS_CACHE_TTL_MS = 5 * 60 * 1000L;
+    private static final int PASS_CACHE_MAX = 1000;
+    private final Map<String, PassCacheEntry> passCache = new ConcurrentHashMap<>();
 
     public ApplePassService(AppProperties props, PassTemplateGenerator templateGenerator) {
         this.props = props;
@@ -93,6 +106,24 @@ public class ApplePassService {
             throw new IllegalStateException("Apple Wallet Zertifikate nicht konfiguriert.");
         }
 
+        long updatedAt = cc.getUpdatedAt() != null ? cc.getUpdatedAt().toEpochMilli() : 0L;
+        long now = System.currentTimeMillis();
+
+        PassCacheEntry cached = passCache.get(cc.getId());
+        if (cached != null
+                && cached.updatedAtMillis() == updatedAt
+                && (now - cached.cachedAtMillis()) < PASS_CACHE_TTL_MS) {
+            return cached.bytes();
+        }
+
+        byte[] bytes = buildPass(cc);
+
+        if (passCache.size() >= PASS_CACHE_MAX) passCache.clear();
+        passCache.put(cc.getId(), new PassCacheEntry(updatedAt, now, bytes));
+        return bytes;
+    }
+
+    private byte[] buildPass(CustomerCard cc) throws Exception {
         Card card = cc.getCard();
         Shop shop = card.getShop();
         int threshold = card.getRewardThreshold();
@@ -105,9 +136,11 @@ public class ApplePassService {
         String fgColor = (card.getColorForeground() != null && !card.getColorForeground().isBlank()) ? card.getColorForeground() : shop.getColorForeground();
         String labelColor = (card.getColorLabel() != null && !card.getColorLabel().isBlank()) ? card.getColorLabel() : shop.getColorLabel();
 
-        String qrPayload = "{\"cid\":\"%s\",\"cardId\":\"%s\",\"ts\":%d}"
-                .formatted(cc.getCustomer().getId(), card.getId(),
-                        System.currentTimeMillis());
+        // Konstanter QR-Inhalt: nur cid + cardId. Kein Zeitstempel mehr, damit
+        // sich das QR-Bild nicht bei jedem Scan aendert (der Scanner liest nur
+        // cid/cardId). Stabileres Bild = besseres Caching bei Apple.
+        String qrPayload = "{\"cid\":\"%s\",\"cardId\":\"%s\"}"
+                .formatted(cc.getCustomer().getId(), card.getId());
 
         String templatePath = templateGenerator.generateTemplate(cc);
         String reward = rewardText(cc.getStamps(), threshold, card.getRewardText());

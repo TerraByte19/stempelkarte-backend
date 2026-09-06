@@ -237,9 +237,10 @@ public class GoogleWalletService {
     }
 
     private void createOrUpdateObject(CustomerCard cc, String classId, String objectId) throws Exception {
+        // Konstanter QR-Inhalt: nur cid + cardId (kein Zeitstempel), damit sich
+        // das QR-Bild nicht bei jedem Update aendert. Der Scanner liest nur cid/cardId.
         String qrValue = "{\"cid\":\"" + cc.getCustomer().getId() +
-                "\",\"cardId\":\"" + cc.getCard().getId() +
-                "\",\"ts\":" + System.currentTimeMillis() + "}";
+                "\",\"cardId\":\"" + cc.getCard().getId() + "\"}";
 
         LoyaltyObject loyaltyObject = new LoyaltyObject()
                 .setId(objectId)
