@@ -229,7 +229,18 @@ public class DebugController {
     public Map<String, Object> wallet(
             @RequestParam(name = "shop") String shopQuery,
             @RequestParam(name = "limit", defaultValue = "40") int limit) {
+        try {
+            return walletInner(shopQuery, limit);
+        } catch (Exception e) {
+            StringWriter sw = new StringWriter();
+            e.printStackTrace(new PrintWriter(sw));
+            Map<String, Object> err = new TreeMap<>();
+            err.put("FATAL", sw.toString().lines().limit(25).collect(Collectors.joining("\n")));
+            return err;
+        }
+    }
 
+    private Map<String, Object> walletInner(String shopQuery, int limit) {
         String base = props.baseUrl();
         String wsUrl = (base != null ? base : "") + "/wallet/";
         WalletConfig cfg = new WalletConfig(
