@@ -207,7 +207,7 @@ public class DebugController {
 
     // Bei jedem Wallet-Fix-Push hochzaehlen -> zeigt zweifelsfrei, ob der
     // aktuelle Stand auf Render live ist.
-    private static final String WALLET_FIX_VERSION = "v4 (Push-bei-Register + Browser-Karte no-cache)";
+    private static final String WALLET_FIX_VERSION = "v5 (Push-bei-Register + Verdaechtig-Check)";
 
     public record WalletConfig(
             String codeVersion,
@@ -222,10 +222,11 @@ public class DebugController {
     public record WalletCardRow(
             String customerCardId, String customerName, int stamps, int totalRewards,
             Instant createdAt, Instant updatedAt,
-            int deviceCount, List<DeviceRow> devices) {}
+            int deviceCount, boolean verdaechtig, List<DeviceRow> devices) {}
 
     public record WalletShopReport(String shopId, String shopName, boolean active,
                                    int cardsChecked, int cardsWithoutDevice, int cardsWithDevice,
+                                   int verdaechtig, List<String> verdaechtigeKarten,
                                    List<WalletCardRow> cards, String error) {}
 
     @Operation(summary = "Apple-Wallet-Diagnose: webServiceURL, APNs-Konfig, Geraete-Registrierungen je Karte")
@@ -284,10 +285,20 @@ public class DebugController {
                         .collect(Collectors.toMap(Customer::getId, x -> x));
 
                 List<WalletCardRow> rows = new ArrayList<>();
+                List<String> verdaechtigeKarten = new ArrayList<>();
                 int without = 0, with = 0;
+                Instant vorDreissigMin = Instant.now().minusSeconds(30 * 60);
                 for (CustomerCard cc : ccs) {
                     List<AppleDeviceRegistration> regs = deviceRepo.findBySerialNumber(cc.getId());
                     if (regs.isEmpty()) without++; else with++;
+                    // Fingerabdruck des Bugs: Karte hat Stempel, wurde vor mehr
+                    // als 30 Min angelegt, aber es ist NIE ein Geraet angemeldet
+                    // worden -> die Wallet-Karte auf dem Handy haengt fest.
+                    boolean verdaechtig = regs.isEmpty()
+                            && cc.getStamps() > 0
+                            && cc.getCreatedAt() != null
+                            && cc.getCreatedAt().isBefore(vorDreissigMin);
+                    if (verdaechtig) verdaechtigeKarten.add(cc.getId());
                     List<DeviceRow> drs = regs.stream().map(r -> new DeviceRow(
                             mask(r.getDeviceLibraryIdentifier()), mask(r.getPushToken()),
                             r.getRegisteredAt())).toList();
@@ -295,15 +306,16 @@ public class DebugController {
                     rows.add(new WalletCardRow(cc.getId(),
                             cust != null ? cust.getName() : "(unbekannt)",
                             cc.getStamps(), cc.getTotalRewards(),
-                            cc.getCreatedAt(), cc.getUpdatedAt(), regs.size(), drs));
+                            cc.getCreatedAt(), cc.getUpdatedAt(), regs.size(), verdaechtig, drs));
                 }
                 reports.add(new WalletShopReport(shop.getId(), shop.getName(), shop.isActive(),
-                        rows.size(), without, with, rows, null));
+                        rows.size(), without, with,
+                        verdaechtigeKarten.size(), verdaechtigeKarten, rows, null));
             } catch (Exception e) {
                 StringWriter sw = new StringWriter();
                 e.printStackTrace(new PrintWriter(sw));
                 reports.add(new WalletShopReport(shop.getId(), shop.getName(), shop.isActive(),
-                        0, 0, 0, List.of(),
+                        0, 0, 0, 0, List.of(), List.of(),
                         sw.toString().lines().limit(12).collect(Collectors.joining(" | "))));
             }
         }
