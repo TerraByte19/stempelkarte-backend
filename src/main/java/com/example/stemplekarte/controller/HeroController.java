@@ -8,6 +8,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.HashMap;
 import java.util.Map;
 
 @Tag(name = "Hero", description = "Hero-Image-Upload fuer Laden")
@@ -23,7 +24,7 @@ public class HeroController {
         this.cloudinary = cloudinary;
     }
 
-    public record HeroUploadRequest(String base64, String extension) {}
+    public record HeroUploadRequest(String base64, String extension, String originalBase64) {}
 
     @PostMapping("/hero")
     public Map<String, String> uploadHero(@RequestBody HeroUploadRequest req,
@@ -32,10 +33,17 @@ public class HeroController {
 
         String url = cloudinary.upload(req.base64(), "hero-" + shop.getId(),
                 CloudinaryService.ImageType.HERO);
-
         shop.setHeroImageUrl(url);
-        shopRepo.save(shop);
 
-        return Map.of("heroImageUrl", url);
+        Map<String, String> out = new HashMap<>();
+        out.put("heroImageUrl", url);
+        if (req.originalBase64() != null && !req.originalBase64().isBlank()) {
+            String orig = cloudinary.upload(req.originalBase64(), "hero-orig-" + shop.getId(),
+                    CloudinaryService.ImageType.ORIGINAL);
+            shop.setHeroOriginalUrl(orig);
+            out.put("heroOriginalUrl", orig);
+        }
+        shopRepo.save(shop);
+        return out;
     }
 }

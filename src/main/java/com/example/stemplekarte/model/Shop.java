@@ -27,6 +27,16 @@ public class Shop {
     @Column(name = "hero_image_url")
     private String heroImageUrl;
 
+    // Unbeschnittene Ausgangsbilder - fuer spaeteres erneutes Zuschneiden.
+    @Column(name = "logo_original_url")
+    private String logoOriginalUrl;
+
+    @Column(name = "hero_original_url")
+    private String heroOriginalUrl;
+
+    @Column(name = "stamp_icon_original_url")
+    private String stampIconOriginalUrl;
+
     @Column(name = "color_background", length = 32)
     private String colorBackground;
 
@@ -143,6 +153,13 @@ public class Shop {
         this.stampIconUrl = stampIconUrl;
         this.updatedAt = Instant.now();
     }
+
+    public void setLogoOriginalUrl(String v) { this.logoOriginalUrl = v; this.updatedAt = Instant.now(); }
+    public void setHeroOriginalUrl(String v) { this.heroOriginalUrl = v; this.updatedAt = Instant.now(); }
+    public void setStampIconOriginalUrl(String v) { this.stampIconOriginalUrl = v; this.updatedAt = Instant.now(); }
+    public String getLogoOriginalUrl() { return logoOriginalUrl; }
+    public String getHeroOriginalUrl() { return heroOriginalUrl; }
+    public String getStampIconOriginalUrl() { return stampIconOriginalUrl; }
 
     public String getId() { return id; }
     public String getEmail() { return email; }

@@ -50,6 +50,13 @@ public class Card {
     @Column(name = "hero_image_url")
     private String heroImageUrl;
 
+    // Unbeschnittene Ausgangsbilder - fuer spaeteres erneutes Zuschneiden.
+    @Column(name = "logo_original_url")
+    private String logoOriginalUrl;
+
+    @Column(name = "hero_original_url")
+    private String heroOriginalUrl;
+
     // ── Stempel-Design (pro Karte) ────────────────────────────────────────
     @Column(name = "wallet_style", length = 16)
     private String walletStyle;
@@ -62,6 +69,9 @@ public class Card {
 
     @Column(name = "stamp_icon_url")
     private String stampIconUrl;
+
+    @Column(name = "stamp_icon_original_url")
+    private String stampIconOriginalUrl;
 
     @Column(name = "stamp_color", length = 32)
     private String stampColor;
@@ -118,6 +128,9 @@ public class Card {
     public void setLogoUrl(String logoUrl) { this.logoUrl = logoUrl; }
     public void setHeroImageUrl(String heroImageUrl) { this.heroImageUrl = heroImageUrl; }
     public void setStampIconUrl(String stampIconUrl) { this.stampIconUrl = stampIconUrl; }
+    public void setLogoOriginalUrl(String v) { this.logoOriginalUrl = v; }
+    public void setHeroOriginalUrl(String v) { this.heroOriginalUrl = v; }
+    public void setStampIconOriginalUrl(String v) { this.stampIconOriginalUrl = v; }
 
     public String getId() { return id; }
     public Shop getShop() { return shop; }
@@ -132,6 +145,9 @@ public class Card {
     public String getColorLabel() { return colorLabel != null ? colorLabel : "#FAC875"; }
     public String getLogoUrl() { return logoUrl; }
     public String getHeroImageUrl() { return heroImageUrl; }
+    public String getLogoOriginalUrl() { return logoOriginalUrl; }
+    public String getHeroOriginalUrl() { return heroOriginalUrl; }
+    public String getStampIconOriginalUrl() { return stampIconOriginalUrl; }
     public String getWalletStyle() { return walletStyle != null ? walletStyle : "number"; }
     public String getStampIconType() { return stampIconType != null ? stampIconType : "preset"; }
     public String getStampPreset() { return stampPreset != null ? stampPreset : "coffee"; }

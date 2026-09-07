@@ -43,7 +43,16 @@ public class StampDesignController {
             String colorBackground, String colorForeground, String colorLabel
     ) {}
 
-    public record ImageUploadRequest(String base64, String extension) {}
+    // originalBase64 (optional): unbeschnittenes Bild fuers spaetere
+    // erneute Zuschneiden.
+    public record ImageUploadRequest(String base64, String extension, String originalBase64) {}
+
+    private boolean hasOriginal(ImageUploadRequest req) {
+        return req.originalBase64() != null && !req.originalBase64().isBlank();
+    }
+    private String uploadOriginal(ImageUploadRequest req, String publicId) {
+        return cloudinary.upload(req.originalBase64(), publicId, CloudinaryService.ImageType.ORIGINAL);
+    }
 
     // ── Design einer Karte abrufen ────────────────────────────────────────
     @GetMapping("/cards/{cardId}/design")
@@ -79,9 +88,16 @@ public class StampDesignController {
         String url = cloudinary.upload(req.base64(), "logo-" + card.getId(),
                 CloudinaryService.ImageType.LOGO);
         card.setLogoUrl(url);
+        Map<String, String> out = new HashMap<>();
+        out.put("logoUrl", url);
+        if (hasOriginal(req)) {
+            String orig = uploadOriginal(req, "logo-orig-" + card.getId());
+            card.setLogoOriginalUrl(orig);
+            out.put("logoOriginalUrl", orig);
+        }
         cardService.save(card);
         googleWalletService.refreshClassForCard(card);
-        return Map.of("logoUrl", url);
+        return out;
     }
 
     // ── Hero/Banner für eine Karte hochladen ──────────────────────────────
@@ -94,9 +110,16 @@ public class StampDesignController {
         String url = cloudinary.upload(req.base64(), "hero-" + card.getId(),
                 CloudinaryService.ImageType.HERO);
         card.setHeroImageUrl(url);
+        Map<String, String> out = new HashMap<>();
+        out.put("heroImageUrl", url);
+        if (hasOriginal(req)) {
+            String orig = uploadOriginal(req, "hero-orig-" + card.getId());
+            card.setHeroOriginalUrl(orig);
+            out.put("heroOriginalUrl", orig);
+        }
         cardService.save(card);
         googleWalletService.refreshClassForCard(card);
-        return Map.of("heroImageUrl", url);
+        return out;
     }
 
     // ── Stempel-Icon für eine Karte hochladen ─────────────────────────────
@@ -109,9 +132,16 @@ public class StampDesignController {
         String url = cloudinary.upload(req.base64(), "stamp-" + card.getId(),
                 CloudinaryService.ImageType.STAMP);
         card.setStampIconUrl(url);
+        Map<String, String> out = new HashMap<>();
+        out.put("stampIconUrl", url);
+        if (hasOriginal(req)) {
+            String orig = uploadOriginal(req, "stamp-orig-" + card.getId());
+            card.setStampIconOriginalUrl(orig);
+            out.put("stampIconOriginalUrl", orig);
+        }
         cardService.save(card);
         // Stempel-Icon betrifft nur Apple-Strip, kein Google-Class-Refresh nötig
-        return Map.of("stampIconUrl", url);
+        return out;
     }
 
     // ── Alte Shop-weite Endpoints (Rückwärtskompatibilität) ────────────────
@@ -125,6 +155,7 @@ public class StampDesignController {
         map.put("stampColor", shop.getStampColor() != null ? shop.getStampColor() : "#6F4E37");
         map.put("emptyStampStyle", shop.getEmptyStampStyle() != null ? shop.getEmptyStampStyle() : "number");
         map.put("stampIconUrl", shop.getStampIconUrl() != null ? shop.getStampIconUrl() : "");
+        map.put("stampIconOriginalUrl", shop.getStampIconOriginalUrl() != null ? shop.getStampIconOriginalUrl() : "");
         return map;
     }
 
@@ -144,8 +175,15 @@ public class StampDesignController {
         String url = cloudinary.upload(req.base64(), "stamp-" + shop.getId(),
                 CloudinaryService.ImageType.STAMP);
         shop.setStampIconUrl(url);
+        Map<String, String> out = new HashMap<>();
+        out.put("stampIconUrl", url);
+        if (hasOriginal(req)) {
+            String orig = uploadOriginal(req, "stamp-orig-" + shop.getId());
+            shop.setStampIconOriginalUrl(orig);
+            out.put("stampIconOriginalUrl", orig);
+        }
         shopRepo.save(shop);
-        return Map.of("stampIconUrl", url);
+        return out;
     }
 
     private Map<String, Object> toMap(Card card) {
@@ -161,6 +199,9 @@ public class StampDesignController {
         map.put("colorLabel", card.getColorLabel());
         map.put("logoUrl", card.getLogoUrl() != null ? card.getLogoUrl() : "");
         map.put("heroImageUrl", card.getHeroImageUrl() != null ? card.getHeroImageUrl() : "");
+        map.put("logoOriginalUrl", card.getLogoOriginalUrl() != null ? card.getLogoOriginalUrl() : "");
+        map.put("heroOriginalUrl", card.getHeroOriginalUrl() != null ? card.getHeroOriginalUrl() : "");
+        map.put("stampIconOriginalUrl", card.getStampIconOriginalUrl() != null ? card.getStampIconOriginalUrl() : "");
         return map;
     }
 }

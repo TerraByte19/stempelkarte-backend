@@ -25,7 +25,10 @@ public class CloudinaryService {
         this.cloudinary = cloudinary;
     }
 
-    public enum ImageType { LOGO, HERO, STAMP, NEWSLETTER }
+    // ORIGINAL = unbeschnittenes Ausgangsbild (nur auf max. Kantenlaenge
+    // begrenzt), damit der Inhaber Logo/Stempel spaeter erneut zuschneiden
+    // kann, ohne die Datei neu hochzuladen.
+    public enum ImageType { LOGO, HERO, STAMP, NEWSLETTER, ORIGINAL }
 
     // Maximale Bildgröße (dekodierte Bytes). Schützt vor riesigen Uploads,
     // die Cloudinary-Kosten + Server-Speicher belasten würden. 5 MB ist für
@@ -85,6 +88,11 @@ public class CloudinaryService {
                 case NEWSLETTER -> new Transformation<>()
                         .width(1000).crop("limit")
                         .quality("auto").fetchFormat("jpg");
+                // Original: nichts abschneiden, nur auf max. 1600px Kante
+                // begrenzen, PNG (Transparenz bleibt fuer spaeteres Zuschneiden).
+                case ORIGINAL -> new Transformation<>()
+                        .width(1600).height(1600).crop("limit")
+                        .quality("auto").fetchFormat("png");
             };
 
             String folder = switch (type) {
@@ -92,6 +100,7 @@ public class CloudinaryService {
                 case HERO  -> "stampit/heroes";
                 case STAMP -> "stampit/stamps";
                 case NEWSLETTER -> "stampit/newsletters";
+                case ORIGINAL -> "stampit/originals";
             };
 
             // WICHTIG: transformation.generate() wandelt das Objekt in einen String um,

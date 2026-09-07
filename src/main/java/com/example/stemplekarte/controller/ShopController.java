@@ -149,6 +149,8 @@ public class ShopController {
         map.put("colorLabel", shop.getColorLabel());
         map.put("logoUrl", shop.getLogoUrl() != null ? shop.getLogoUrl() : "");
         map.put("heroImageUrl", shop.getHeroImageUrl() != null ? shop.getHeroImageUrl() : "");
+        map.put("logoOriginalUrl", shop.getLogoOriginalUrl() != null ? shop.getLogoOriginalUrl() : "");
+        map.put("heroOriginalUrl", shop.getHeroOriginalUrl() != null ? shop.getHeroOriginalUrl() : "");
         return map;
     }
 
