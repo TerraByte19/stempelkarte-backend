@@ -17,6 +17,10 @@ public interface ScanLogRepository extends JpaRepository<ScanLog, String> {
     // Alle Scans eines Shops, neueste zuerst (Debug/Support-Auswertung).
     List<ScanLog> findByShopIdOrderByScannedAtDesc(String shopId);
 
+    // Alle Scans eines Shops in einem Zeitfenster (Tages-Detail: Stunden-
+    // verteilung fuer EINEN Tag).
+    List<ScanLog> findByShopIdAndScannedAtBetweenOrderByScannedAtAsc(String shopId, Instant from, Instant to);
+
     // Wie viele UNTERSCHIEDLICHE Kunden haben seit <after> mindestens einmal
     // gescannt. Ehrliche "aktiv"-Kennzahl - der CustomerCard.updatedAt-Weg
     // zaehlt auch frisch angelegte Karten und Admin-Resets als "aktiv".

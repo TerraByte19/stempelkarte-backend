@@ -19,9 +19,11 @@ import jakarta.validation.constraints.Size;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.time.Instant;
 import java.time.ZoneId;
@@ -374,7 +376,49 @@ public class ShopController {
         summary.put("newCustomersLastWeek", newLastWeek);
         summary.put("perCard", perCard);
         summary.put("history", history);
+
+        // Stempel je Wochentag (Mo..So) und je Stunde (0..23) ueber die 30 Tage
+        // - fuer "ruhigster Tag" und die Stunden-Uebersicht im Frontend.
+        int[] byWeekdayOut = new int[7];
+        for (int i = 1; i <= 7; i++) byWeekdayOut[i - 1] = byWeekday[i];
+        summary.put("byWeekday", byWeekdayOut);
+        summary.put("byHour", byHour);
         return summary;
+    }
+
+    // Tages-Detail: Stunden-Verteilung der Stempel fuer EINEN Tag. Wird
+    // aufgerufen, wenn im Verlaufs-Diagramm ein Balken angetippt wird.
+    @Operation(summary = "Stempel eines einzelnen Tages nach Stunde")
+    @GetMapping("/stats/day")
+    public Map<String, Object> statsDay(@RequestParam String date, Authentication auth) {
+        Shop shop = currentShop(auth);
+        java.time.LocalDate d;
+        try {
+            d = java.time.LocalDate.parse(date);
+        } catch (Exception e) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Ungueltiges Datum (erwartet JJJJ-MM-TT)");
+        }
+        Instant from = d.atStartOfDay(ZONE).toInstant();
+        Instant to = d.plusDays(1).atStartOfDay(ZONE).toInstant();
+
+        List<ScanLog> logs = scanLogRepo
+                .findByShopIdAndScannedAtBetweenOrderByScannedAtAsc(shop.getId(), from, to);
+
+        int[] byHour = new int[24];
+        int stamps = 0, rewards = 0;
+        for (ScanLog sl : logs) {
+            int h = sl.getScannedAt().atZone(ZONE).getHour();
+            byHour[h] += sl.getStampsAdded();
+            stamps += sl.getStampsAdded();
+            rewards += sl.getRewardsEarned();
+        }
+
+        Map<String, Object> out = new HashMap<>();
+        out.put("date", date);
+        out.put("byHour", byHour);
+        out.put("stamps", stamps);
+        out.put("rewards", rewards);
+        return out;
     }
 
     @Operation(summary = "Staff-Token erstellen")
