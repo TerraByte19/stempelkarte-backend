@@ -311,10 +311,15 @@ public class LandingController {
             log.info("Landing-Karte geladen: customerCard={} card={} stamps={} threshold={}",
                     cc.getId(), cardId, stamps, threshold);
 
-            // no-store: das Handy darf diese HTML-Seite nicht zwischenspeichern,
-            // sonst zeigt ein spaeterer Aufruf einen veralteten Stempelstand.
+            // no-cache (NICHT no-store): der Browser darf die Seite im
+            // Back-Forward-Cache halten, muss sie aber vor Benutzung neu
+            // pruefen. "no-store" verbietet den bfcache komplett -> auf dem
+            // iPhone wird die Seite bei jedem App-Wechsel voll neu geladen ->
+            // kurzes weisses Aufblitzen ("Design verschwindet, kommt wieder").
+            // Ein veralteter Zaehler ist kein Problem mehr: renderStamps() +
+            // der pageshow/visibilitychange-Handler ziehen den Stand live nach.
             return ResponseEntity.ok()
-                    .header(org.springframework.http.HttpHeaders.CACHE_CONTROL, "no-store")
+                    .header(org.springframework.http.HttpHeaders.CACHE_CONTROL, "no-cache")
                     .body(html);
 
         } catch (Exception e) {

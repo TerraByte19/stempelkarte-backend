@@ -207,7 +207,7 @@ public class DebugController {
 
     // Bei jedem Wallet-Fix-Push hochzaehlen -> zeigt zweifelsfrei, ob der
     // aktuelle Stand auf Render live ist.
-    private static final String WALLET_FIX_VERSION = "v3 (Push-bei-Register + 5 Fixes)";
+    private static final String WALLET_FIX_VERSION = "v4 (Push-bei-Register + Browser-Karte no-cache)";
 
     public record WalletConfig(
             String codeVersion,
