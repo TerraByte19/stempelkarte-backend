@@ -4,6 +4,7 @@ import com.example.stemplekarte.model.AppleDeviceRegistration;
 import com.example.stemplekarte.model.CustomerCard;
 import com.example.stemplekarte.repository.AppleDeviceRepository;
 import com.example.stemplekarte.service.CustomerService;
+import com.example.stemplekarte.wallet.ApnsPushService;
 import com.example.stemplekarte.wallet.ApplePassService;
 import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
@@ -13,6 +14,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.Instant;
@@ -29,13 +32,16 @@ public class AppleWalletWebService {
     private final AppleDeviceRepository deviceRepo;
     private final CustomerService customerService;
     private final ApplePassService applePass;
+    private final ApnsPushService apnsPush;
 
     public AppleWalletWebService(AppleDeviceRepository deviceRepo,
                                  CustomerService customerService,
-                                 ApplePassService applePass) {
+                                 ApplePassService applePass,
+                                 ApnsPushService apnsPush) {
         this.deviceRepo = deviceRepo;
         this.customerService = customerService;
         this.applePass = applePass;
+        this.apnsPush = apnsPush;
     }
 
     @PostMapping("/devices/{deviceId}/registrations/{passType}/{serial}")
@@ -56,8 +62,27 @@ public class AppleWalletWebService {
         var pk = new AppleDeviceRegistration.PK(deviceId, serial);
         boolean exists = deviceRepo.existsById(pk);
         deviceRepo.save(AppleDeviceRegistration.of(deviceId, serial, pushToken));
-        log.info("Apple Geraet registriert: device={} serial={}",
-                deviceId.substring(0, 8), serial);
+        log.info("Apple Geraet registriert: device={} serial={} (neu={})",
+                deviceId.substring(0, 8), serial, !exists);
+
+        // Registrierungs-Rennen bei frischen Paessen schliessen: der Kunde
+        // meldet sich an, fuegt den Pass hinzu und wird oft SEKUNDEN spaeter
+        // gestempelt - da ist noch kein Geraet registriert, der Push nach dem
+        // Scan geht ins Leere, und danach triggert nichts mehr. Darum jetzt:
+        // sobald sich ein Geraet NEU registriert, direkt einen Push an genau
+        // diese Karte schicken, damit das frische Geraet den aktuellen Stand
+        // holt. Erst NACH dem Commit, sonst findet pushOnce die Zeile nicht.
+        if (!exists) {
+            if (TransactionSynchronizationManager.isSynchronizationActive()) {
+                TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                    @Override public void afterCommit() {
+                        try { apnsPush.notifyUpdate(serial); } catch (Exception ignored) {}
+                    }
+                });
+            } else {
+                try { apnsPush.notifyUpdate(serial); } catch (Exception ignored) {}
+            }
+        }
 
         return ResponseEntity.status(exists ? HttpStatus.OK : HttpStatus.CREATED).build();
     }
