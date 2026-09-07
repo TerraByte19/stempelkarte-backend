@@ -1,6 +1,7 @@
 package com.example.stemplekarte.controller;
 
 import com.example.stemplekarte.model.*;
+import com.example.stemplekarte.repository.CardRepository;
 import com.example.stemplekarte.repository.CustomerCardRepository;
 import com.example.stemplekarte.repository.SentNewsletterRepository;
 import com.example.stemplekarte.repository.ScanLogRepository;
@@ -23,6 +24,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.Instant;
+import java.time.ZoneId;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -34,8 +36,14 @@ import java.util.UUID;
 @RequestMapping("/api/shop")
 public class ShopController {
 
+    // Alle Laeden sind in Deutschland - Statistik-Zeitzone fest. (Der Server
+    // laeuft auf Render in UTC; ZoneId.systemDefault() verschob "beste Stunde"
+    // um 1-2 h und schob Mitternachts-Scans auf den falschen Tag.)
+    private static final ZoneId ZONE = ZoneId.of("Europe/Berlin");
+
     private final ShopService shopService;
     private final CardService cardService;
+    private final CardRepository cardRepo;
     private final CustomerCardRepository customerCardRepo;
     private final CloudinaryService cloudinaryService;
     private final EmailService emailService;
@@ -46,11 +54,13 @@ public class ShopController {
     private String baseUrl;
 
     public ShopController(ShopService shopService, CardService cardService,
+                          CardRepository cardRepo,
                           CustomerCardRepository customerCardRepo, CloudinaryService cloudinaryService,
                           EmailService emailService, SentNewsletterRepository sentNewsletterRepo,
                           ScanLogRepository scanLogRepo) {
         this.shopService = shopService;
         this.cardService = cardService;
+        this.cardRepo = cardRepo;
         this.customerCardRepo = customerCardRepo;
         this.cloudinaryService = cloudinaryService;
         this.emailService = emailService;
@@ -213,74 +223,89 @@ public class ShopController {
     @GetMapping("/stats/summary")
     public Map<String, Object> statsSummary(Authentication auth) {
         Shop shop = currentShop(auth);
-        List<Card> cards = cardService.getByShop(shop);
+        // ALLE Karten (auch deaktivierte) fuer die Lebenszeit-Summen - sonst
+        // verschwinden Kunden/Stempel, sobald ein Laden eine Karte "loescht"
+        // (= deaktiviert). Die perCard-Liste unten zeigt nur die aktiven.
+        List<Card> alleKarten = cardRepo.findByShop(shop);
 
-        int totalCustomers = 0;
-        int totalStamps = 0;
-        int totalRewards = 0;
+        // "vergeben" = alle je vergebenen Stempel. CustomerCard.stamps wird beim
+        // Einloesen auf 0 gesetzt; die eingeloesten Stempel rechnen wir ueber
+        // totalRewards*threshold zurueck. offeneStempel = aktueller Wallet-Stand
+        // (kann sinken - das ist eine Verbindlichkeit, keine Aktivitaet).
+        long stampsGranted = 0;
+        long openStamps = 0;
+        long einloesungen = 0;
+        long cardRows = 0;              // customer_card-Zeilen (fuer Fuellgrad-Schnitt)
 
-        int customersWithReward = 0;   // Kunden mit mind. 1 Belohnung
-        int customersNearReward = 0;   // Kunden ≥ 80% der Stempel (kurz vor Ziel)
-        int customersWithConsent = 0;  // Kunden mit Marketing-Einwilligung
-        int activeCustomers30d = 0;    // Kunden in den letzten 30 Tagen gestempelt
-        double fillSum = 0;            // Summe der Füllgrade (für Durchschnitt)
+        int customersNearReward = 0;   // Karten >= 80% und noch nicht am Ziel
+        int customersWithConsent = 0;  // customer_card-Zeilen mit Marketing-Einwilligung
+        double fillSum = 0;            // Summe der Fuellgrade (pro customer_card)
 
         Instant thirtyDaysAgo = Instant.now().minus(30, java.time.temporal.ChronoUnit.DAYS);
+        Instant sevenDaysAgo  = Instant.now().minus(7,  java.time.temporal.ChronoUnit.DAYS);
+        Instant fourteenDaysAgo = Instant.now().minus(14, java.time.temporal.ChronoUnit.DAYS);
 
         List<Map<String, Object>> perCard = new java.util.ArrayList<>();
+        int newThisWeek = 0, newLastWeek = 0;
 
-        for (Card card : cards) {
+        for (Card card : alleKarten) {
             List<CustomerCard> ccs = customerCardRepo.findByCard(card);
             int threshold = Math.max(1, card.getRewardThreshold());
-            int customers = ccs.size();
             int stamps = ccs.stream().mapToInt(CustomerCard::getStamps).sum();
             int rewards = ccs.stream().mapToInt(CustomerCard::getTotalRewards).sum();
 
-            totalCustomers += customers;
-            totalStamps += stamps;
-            totalRewards += rewards;
+            openStamps    += stamps;
+            einloesungen  += rewards;
+            stampsGranted += (long) stamps + (long) rewards * threshold;
+            cardRows      += ccs.size();
 
             for (CustomerCard cc : ccs) {
-                if (cc.getTotalRewards() > 0) customersWithReward++;
-                if (cc.getStamps() >= threshold * 0.8) customersNearReward++;
+                if (cc.getStamps() >= threshold * 0.8 && cc.getStamps() < threshold) customersNearReward++;
                 if (cc.isMarketingConsent()) customersWithConsent++;
-                if (cc.getUpdatedAt() != null && cc.getUpdatedAt().isAfter(thirtyDaysAgo))
-                    activeCustomers30d++;
-                fillSum += (double) cc.getStamps() / threshold;
+                fillSum += Math.min(1.0, (double) cc.getStamps() / threshold);
+
+                Instant created = cc.getCreatedAt();
+                if (created != null) {
+                    if (created.isAfter(sevenDaysAgo)) newThisWeek++;
+                    else if (created.isAfter(fourteenDaysAgo)) newLastWeek++;
+                }
             }
 
-            Map<String, Object> cardMap = new HashMap<>();
-            cardMap.put("cardId", card.getId());
-            cardMap.put("cardName", card.getName());
-            cardMap.put("customerCount", customers);
-            cardMap.put("totalStamps", stamps);
-            cardMap.put("totalRewards", rewards);
-            cardMap.put("rewardThreshold", card.getRewardThreshold());
-            perCard.add(cardMap);
+            if (card.isActive()) {
+                Map<String, Object> cardMap = new HashMap<>();
+                cardMap.put("cardId", card.getId());
+                cardMap.put("cardName", card.getName());
+                cardMap.put("customerCount", ccs.size());
+                cardMap.put("totalStamps", stamps);
+                cardMap.put("totalRewards", rewards);
+                cardMap.put("rewardThreshold", card.getRewardThreshold());
+                perCard.add(cardMap);
+            }
         }
 
-        // Abgeleitete Kennzahlen (gerundet, gegen Division durch 0 abgesichert)
-        double avgStampsPerCustomer = totalCustomers > 0
-                ? Math.round((double) totalStamps / totalCustomers * 10) / 10.0 : 0;
-        // Einlöse-Quote in Prozent: Anteil Kunden mit mind. 1 Belohnung
-        int redemptionRate = totalCustomers > 0
-                ? (int) Math.round((double) customersWithReward / totalCustomers * 100) : 0;
-        // Durchschnittlicher Füllgrad in Prozent
-        int avgFillPercent = totalCustomers > 0
-                ? (int) Math.round(fillSum / totalCustomers * 100) : 0;
+        // Personen statt customer_card-Zeilen (bei mehreren Karten pro Laden
+        // sonst dieselbe Person mehrfach).
+        long customerCount = customerCardRepo.countDistinctCustomersByShop(shop);
+        long customersWithReward = customerCardRepo.countDistinctCustomersWithRewardByShop(shop);
+        // "aktiv" ehrlich: mindestens ein Scan in 30 Tagen (nicht: Karte in den
+        // 30 Tagen angelegt - das war der alte updatedAt-Weg).
+        long activeCustomers30d = scanLogRepo.countDistinctCustomersSince(shop.getId(), thirtyDaysAgo);
 
-        // 30-Tage-Verlauf: Stempel & Belohnungen pro Tag aus dem ScanLog
+        double avgStampsPerCustomer = customerCount > 0
+                ? Math.round((double) stampsGranted / customerCount * 10) / 10.0 : 0;
+        int redemptionRate = customerCount > 0
+                ? (int) Math.round((double) customersWithReward / customerCount * 100) : 0;
+        int avgFillPercent = cardRows > 0
+                ? (int) Math.round(fillSum / cardRows * 100) : 0;
+
+        // 30-Tage-Verlauf aus dem ScanLog
         List<ScanLog> recent = scanLogRepo
                 .findByShopIdAndScannedAtAfterOrderByScannedAtAsc(shop.getId(), thirtyDaysAgo);
 
-        // Stempel & Belohnungen: diese Woche (7 Tage) und diesen Monat (30 Tage)
-        Instant sevenDaysAgo = Instant.now().minus(7, java.time.temporal.ChronoUnit.DAYS);
         int stampsThisWeek = 0, stampsThisMonth = 0;
         int rewardsThisWeek = 0, rewardsThisMonth = 0;
-        // Verteilung über Wochentage (1=Mo … 7=So) und Stunden (0–23)
-        int[] byWeekday = new int[8];   // Index 1–7 genutzt
+        int[] byWeekday = new int[8];   // Index 1-7
         int[] byHour = new int[24];
-        java.time.ZoneId zone = java.time.ZoneId.systemDefault();
 
         for (ScanLog sl : recent) {
             stampsThisMonth += sl.getStampsAdded();
@@ -289,12 +314,11 @@ public class ShopController {
                 stampsThisWeek += sl.getStampsAdded();
                 rewardsThisWeek += sl.getRewardsEarned();
             }
-            var zdt = sl.getScannedAt().atZone(zone);
+            var zdt = sl.getScannedAt().atZone(ZONE);
             byWeekday[zdt.getDayOfWeek().getValue()] += sl.getStampsAdded();
             byHour[zdt.getHour()] += sl.getStampsAdded();
         }
 
-        // Bester Wochentag + beste Stunde (nur wenn es überhaupt Scans gab)
         String[] dayNames = {"", "Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag"};
         String bestDay = null;
         int bestDayCount = 0;
@@ -302,23 +326,19 @@ public class ShopController {
         int bestHour = -1, bestHourCount = 0;
         for (int h = 0; h < 24; h++) if (byHour[h] > bestHourCount) { bestHourCount = byHour[h]; bestHour = h; }
 
-        // Wachstum: neue Kundenkarten diese Woche vs. letzte Woche
-        Instant fourteenDaysAgo = Instant.now().minus(14, java.time.temporal.ChronoUnit.DAYS);
-        int newThisWeek = 0, newLastWeek = 0;
-        for (Card card : cards) {
-            for (CustomerCard cc : customerCardRepo.findByCard(card)) {
-                Instant created = cc.getCreatedAt();
-                if (created == null) continue;
-                if (created.isAfter(sevenDaysAgo)) newThisWeek++;
-                else if (created.isAfter(fourteenDaysAgo)) newLastWeek++;
-            }
-        }
-
-        // Pro Tag (YYYY-MM-DD) aufsummieren
+        // Verlauf: LUECKENLOS - jeder Tag der letzten 30, auch ohne Scans (0).
+        // (Vorher fehlten scanlose Tage; das Frontend zeichnete sie als
+        // schraege Linie statt als Nulllinie.)
         java.util.Map<String, int[]> byDay = new java.util.TreeMap<>();
+        java.time.LocalDate von = thirtyDaysAgo.atZone(ZONE).toLocalDate();
+        java.time.LocalDate bis = Instant.now().atZone(ZONE).toLocalDate();
+        for (java.time.LocalDate d = von; !d.isAfter(bis); d = d.plusDays(1)) {
+            byDay.put(d.toString(), new int[2]);
+        }
         for (ScanLog sl : recent) {
-            String day = sl.getScannedAt().atZone(zone).toLocalDate().toString();
-            int[] v = byDay.computeIfAbsent(day, k -> new int[2]);
+            String day = sl.getScannedAt().atZone(ZONE).toLocalDate().toString();
+            int[] v = byDay.get(day);
+            if (v == null) { v = new int[2]; byDay.put(day, v); }
             v[0] += sl.getStampsAdded();
             v[1] += sl.getRewardsEarned();
         }
@@ -333,10 +353,11 @@ public class ShopController {
 
         Map<String, Object> summary = new HashMap<>();
         summary.put("shopName", shop.getName());
-        summary.put("totalCards", cards.size());
-        summary.put("totalCustomers", totalCustomers);
-        summary.put("totalStamps", totalStamps);
-        summary.put("totalRewards", totalRewards);
+        summary.put("totalCards", cardService.getByShop(shop).size());  // nur aktive
+        summary.put("totalCustomers", customerCount);                   // Personen
+        summary.put("totalStamps", stampsGranted);                      // je vergeben (Lebenszeit)
+        summary.put("openStamps", openStamps);                          // aktueller Wallet-Stand
+        summary.put("totalRewards", einloesungen);                      // Einloesungen
         summary.put("avgStampsPerCustomer", avgStampsPerCustomer);
         summary.put("redemptionRate", redemptionRate);
         summary.put("customersNearReward", customersNearReward);
@@ -347,8 +368,8 @@ public class ShopController {
         summary.put("stampsThisMonth", stampsThisMonth);
         summary.put("rewardsThisWeek", rewardsThisWeek);
         summary.put("rewardsThisMonth", rewardsThisMonth);
-        summary.put("bestDay", bestDay);                 // null, wenn noch keine Scans
-        summary.put("bestHour", bestHour);               // -1, wenn noch keine Scans
+        summary.put("bestDay", bestDay);
+        summary.put("bestHour", bestHour);
         summary.put("newCustomersThisWeek", newThisWeek);
         summary.put("newCustomersLastWeek", newLastWeek);
         summary.put("perCard", perCard);

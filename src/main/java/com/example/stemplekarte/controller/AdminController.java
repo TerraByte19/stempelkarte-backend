@@ -137,7 +137,8 @@ public class AdminController {
     public ResponseEntity<List<Map<String, Object>>> getAllShops() {
         List<Map<String, Object>> result = shopRepo.findAll().stream().map(shop -> {
             int cardCount = cardRepo.findByShopAndActiveTrue(shop).size();
-            int customerCount = customerCardRepo.countByCard_Shop(shop);
+            // Personen, nicht customer_card-Zeilen (bei Mehrfachkarten sonst doppelt).
+            long customerCount = customerCardRepo.countDistinctCustomersByShop(shop);
             Map<String, Object> map = new HashMap<>();
             map.put("id", shop.getId());
             map.put("name", shop.getName());
@@ -159,30 +160,32 @@ public class AdminController {
 
         int totalShops = allShops.size();
         int activeShops = 0;
-        int totalCustomers = 0;
-        int totalStamps = 0;
-        int totalRewards = 0;
-        int totalCards = 0;
+        long totalCustomers = 0;
+        long totalStamps = 0;     // je vergeben (Lebenszeit), nicht offener Stand
+        long totalRewards = 0;    // Einloesungen
+        int totalCards = 0;       // nur aktive Karten
 
         List<Map<String, Object>> perShop = new java.util.ArrayList<>();
 
         for (Shop shop : allShops) {
             if (shop.isActive()) activeShops++;
-            List<Card> shopCards = cardRepo.findByShop(shop);
-            totalCards += shopCards.size();
+            int activeCards = cardRepo.findByShopAndActiveTrue(shop).size();
+            totalCards += activeCards;
 
-            int shopCustomers = 0;
-            int shopStamps = 0;
-            int shopRewards = 0;
-            for (Card card : shopCards) {
+            long shopCustomers = customerCardRepo.countDistinctCustomersByShop(shop);
+            long shopGranted = 0;   // stamps + rewards*threshold, ueber ALLE Karten
+            long shopRewards = 0;
+            for (Card card : cardRepo.findByShop(shop)) {
+                int threshold = Math.max(1, card.getRewardThreshold());
                 List<CustomerCard> ccs = customerCardRepo.findByCard(card);
-                shopCustomers += ccs.size();
-                shopStamps += ccs.stream().mapToInt(CustomerCard::getStamps).sum();
-                shopRewards += ccs.stream().mapToInt(CustomerCard::getTotalRewards).sum();
+                int stamps = ccs.stream().mapToInt(CustomerCard::getStamps).sum();
+                int rewards = ccs.stream().mapToInt(CustomerCard::getTotalRewards).sum();
+                shopGranted += (long) stamps + (long) rewards * threshold;
+                shopRewards += rewards;
             }
 
             totalCustomers += shopCustomers;
-            totalStamps += shopStamps;
+            totalStamps += shopGranted;
             totalRewards += shopRewards;
 
             Map<String, Object> shopMap = new HashMap<>();
@@ -190,15 +193,16 @@ public class AdminController {
             shopMap.put("shopName", shop.getName());
             shopMap.put("active", shop.isActive());
             shopMap.put("customerCount", shopCustomers);
-            shopMap.put("totalStamps", shopStamps);
+            shopMap.put("totalStamps", shopGranted);
             shopMap.put("totalRewards", shopRewards);
-            shopMap.put("cardCount", shopCards.size());
+            shopMap.put("cardCount", activeCards);
             perShop.add(shopMap);
         }
 
         // Nach Kundenzahl absteigend sortieren (aktivste Shops zuerst)
-        perShop.sort((a, b) -> Integer.compare(
-                (int) b.get("customerCount"), (int) a.get("customerCount")));
+        perShop.sort((a, b) -> Long.compare(
+                ((Number) b.get("customerCount")).longValue(),
+                ((Number) a.get("customerCount")).longValue()));
 
         Map<String, Object> stats = new HashMap<>();
         stats.put("totalShops", totalShops);
