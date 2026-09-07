@@ -48,7 +48,10 @@ public class ApplePassService {
     // gleich bleibt UND hoechstens 5 Min (Sicherheitsnetz fuer Design-Aenderungen
     // am Laden, die updatedAt der Karte nicht anfassen).
     private record PassCacheEntry(long updatedAtMillis, long cachedAtMillis, byte[] bytes) {}
-    private static final long PASS_CACHE_TTL_MS = 5 * 60 * 1000L;
+    // Nur ein kurzer Burst-Schutz: iOS holt denselben Pass nach einem Push oft
+    // 2-3x in wenigen Sekunden. TTL bewusst klein, damit kein veralteter Pass
+    // haengen bleibt (frueher 5 Min - zu lang).
+    private static final long PASS_CACHE_TTL_MS = 20 * 1000L;
     private static final int PASS_CACHE_MAX = 1000;
     private final Map<String, PassCacheEntry> passCache = new ConcurrentHashMap<>();
 
@@ -207,7 +210,10 @@ public class ApplePassService {
                 .serialNumber(cc.getId())
                 .description(card.getName())
                 .logoText(shop.getName())
-                .groupingIdentifier(card.getId())
+                // KEIN groupingIdentifier: laut Apple nur fuer Bordkarten und
+                // Event-Tickets zulaessig. Auf einer StoreCard koennen neuere
+                // iOS den aktualisierten Pass bei der Validierung ablehnen ->
+                // Karte installiert, aktualisiert aber nie.
                 .foregroundColor(hexToRgb(fgColor))
                 .backgroundColor(hexToRgb(bgColor))
                 .labelColor(hexToRgb(labelColor))

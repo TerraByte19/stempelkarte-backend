@@ -44,11 +44,15 @@ public class ApnsPushService {
     private final ObjectMapper mapper = new ObjectMapper();
     private final HttpClient httpClient;
 
-    // Kurzer Nachschlag-Rhythmus: Apples Background-Push ist "best effort" - ein
-    // einzelner Push geht selten mal verloren (Handy kurz offline / Stromsparmodus).
-    // Darum nach dem ersten Push noch 2x nachschieben. apns-collapse-id sorgt
-    // dafuer, dass die Wiederholungen auf dem Geraet zu EINEM Update zusammenfallen.
-    private static final long[] RETRY_DELAYS_SEC = {25, 90};
+    // Apple limitiert Pass-Pushes auf ~3 pro Tag pro Karte. Darueber hinaus
+    // verwirft der Wallet-Dienst stille Pushes komplett (APNs meldet trotzdem
+    // "200 OK") und holt die Karte GAR NICHT mehr - das war der eigentliche
+    // Fehler: die frueheren 3 Pushes pro Scan (sofort + 25s + 90s) haben das
+    // Tageslimit sofort verbraucht. Jetzt: EIN Push pro Scan. Der Notnagel bei
+    // verlorenem Push ist iOS' eigener Poll gegen die webServiceURL
+    // (siehe AppleWalletWebService#serialsForDevice - liefert jetzt zuverlaessig
+    // die geaenderten Karten).
+    private static final long[] RETRY_DELAYS_SEC = {};
     private final ScheduledExecutorService retryScheduler =
             Executors.newSingleThreadScheduledExecutor(r -> {
                 Thread t = new Thread(r, "apns-retry");

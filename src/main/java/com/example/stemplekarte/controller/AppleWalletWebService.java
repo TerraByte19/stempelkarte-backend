@@ -16,6 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -71,10 +72,42 @@ public class AppleWalletWebService {
         if (regs.isEmpty()) {
             return ResponseEntity.noContent().build();
         }
+
+        // "passesUpdatedSince" ist der Wert, den wir beim letzten Aufruf als
+        // "lastUpdated" zurueckgegeben haben (Epoch-Millis als String). iOS
+        // schickt ihn zurueck; wir liefern nur Karten, die SEITHER geaendert
+        // wurden. Fehlt/unlesbar -> 0 -> alle Karten. Das ist der eigentliche
+        // Selbstheilungs-Weg, wenn ein Push verloren geht.
+        long sinceMs = 0L;
+        if (since != null && !since.isBlank()) {
+            try { sinceMs = Long.parseLong(since.trim()); } catch (NumberFormatException ignored) {}
+        }
+
+        List<String> changed = new ArrayList<>();
+        long maxUpdated = 0L;
+        for (AppleDeviceRegistration reg : regs) {
+            String serial = reg.getSerialNumber();
+            long updated;
+            try {
+                CustomerCard cc = customerService.getCustomerCardById(serial);
+                updated = cc.getUpdatedAt() != null ? cc.getUpdatedAt().toEpochMilli() : 0L;
+            } catch (Exception e) {
+                // Karte gibt es nicht mehr -> trotzdem melden, damit iOS sie
+                // abfragt und ueber 404 sauber entfernt.
+                changed.add(serial);
+                continue;
+            }
+            if (updated > maxUpdated) maxUpdated = updated;
+            if (updated > sinceMs) changed.add(serial);
+        }
+
+        if (changed.isEmpty()) {
+            return ResponseEntity.noContent().build();
+        }
+        long tag = Math.max(maxUpdated, sinceMs); // Tag darf nie zurueckspringen
         return ResponseEntity.ok(Map.of(
-                "serialNumbers", regs.stream()
-                        .map(AppleDeviceRegistration::getSerialNumber).toList(),
-                "lastUpdated", String.valueOf(Instant.now().toEpochMilli())
+                "serialNumbers", changed,
+                "lastUpdated", String.valueOf(tag)
         ));
     }
 
@@ -96,6 +129,11 @@ public class AppleWalletWebService {
         return ResponseEntity.ok()
                 .contentType(MediaType.parseMediaType("application/vnd.apple.pkpass"))
                 .header("Last-Modified", appleDateHeader)
+                // Kein Zwischenspeichern durch Render-Proxy / iOS-URL-Cache -
+                // sonst kann eine veraltete Pass-Datei ausgeliefert werden,
+                // obwohl der Stempelstand schon neu ist.
+                .header("Cache-Control", "no-store, no-cache, must-revalidate")
+                .header("Pragma", "no-cache")
                 .body(pass);
     }
 
