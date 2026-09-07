@@ -205,7 +205,12 @@ public class DebugController {
     // laeuft APNs ueberhaupt, und haben frische Karten eine Geraete-
     // Registrierung (ohne die kann iOS die Karte NIE nachladen).
 
+    // Bei jedem Wallet-Fix-Push hochzaehlen -> zeigt zweifelsfrei, ob der
+    // aktuelle Stand auf Render live ist.
+    private static final String WALLET_FIX_VERSION = "v3 (Push-bei-Register + 5 Fixes)";
+
     public record WalletConfig(
+            String codeVersion,
             String activeProfiles, String baseUrl, String computedWebServiceUrl,
             boolean webServiceUrlHttps, String passTypeIdentifier,
             boolean apnsEnabled, boolean apnsSandbox,
@@ -244,6 +249,7 @@ public class DebugController {
         String base = props.baseUrl();
         String wsUrl = (base != null ? base : "") + "/wallet/";
         WalletConfig cfg = new WalletConfig(
+                WALLET_FIX_VERSION,
                 String.join(",", env.getActiveProfiles()),
                 base, wsUrl, wsUrl.startsWith("https://"),
                 props.apple() != null ? props.apple().passTypeIdentifier() : null,
