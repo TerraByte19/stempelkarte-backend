@@ -1,9 +1,12 @@
 package com.example.stemplekarte.controller;
 
+import com.example.stemplekarte.config.AppProperties;
 import com.example.stemplekarte.model.Card;
 import com.example.stemplekarte.model.Customer;
 import com.example.stemplekarte.model.CustomerCard;
+import com.example.stemplekarte.model.AppleDeviceRegistration;
 import com.example.stemplekarte.model.Shop;
+import com.example.stemplekarte.repository.AppleDeviceRepository;
 import com.example.stemplekarte.repository.CardRepository;
 import com.example.stemplekarte.repository.CustomerCardRepository;
 import com.example.stemplekarte.repository.CustomerRepository;
@@ -11,6 +14,7 @@ import com.example.stemplekarte.repository.ScanLogRepository;
 import com.example.stemplekarte.repository.ShopRepository;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import org.springframework.core.env.Environment;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -48,15 +52,22 @@ public class DebugController {
     private final CustomerCardRepository customerCardRepo;
     private final CustomerRepository customerRepo;
     private final ScanLogRepository scanLogRepo;
+    private final AppleDeviceRepository deviceRepo;
+    private final AppProperties props;
+    private final Environment env;
 
     public DebugController(ShopRepository shopRepo, CardRepository cardRepo,
                           CustomerCardRepository customerCardRepo,
-                          CustomerRepository customerRepo, ScanLogRepository scanLogRepo) {
+                          CustomerRepository customerRepo, ScanLogRepository scanLogRepo,
+                          AppleDeviceRepository deviceRepo, AppProperties props, Environment env) {
         this.shopRepo = shopRepo;
         this.cardRepo = cardRepo;
         this.customerCardRepo = customerCardRepo;
         this.customerRepo = customerRepo;
         this.scanLogRepo = scanLogRepo;
+        this.deviceRepo = deviceRepo;
+        this.props = props;
+        this.env = env;
     }
 
     public record CardRow(
@@ -186,6 +197,119 @@ public class DebugController {
 
     private static String safeLang(Shop s) {
         try { return s.getLanguageOrDefault(); } catch (Exception e) { return null; }
+    }
+
+    // ── Apple-Wallet-Diagnose ────────────────────────────────────────────
+    // Beschwerde "Stempel im System, aber nicht auf dem iPhone" - hier
+    // sichtbar: stimmt die webServiceURL im Pass (falsches Profil -> localhost),
+    // laeuft APNs ueberhaupt, und haben frische Karten eine Geraete-
+    // Registrierung (ohne die kann iOS die Karte NIE nachladen).
+
+    public record WalletConfig(
+            String activeProfiles, String baseUrl, String computedWebServiceUrl,
+            boolean webServiceUrlHttps, String passTypeIdentifier,
+            boolean apnsEnabled, boolean apnsSandbox,
+            boolean apnsKeyIdSet, boolean apnsTeamIdSet, boolean apnsAuthKeyFileExists,
+            boolean signingCertB64Exists, boolean wwdrCertExists) {}
+
+    public record DeviceRow(String deviceIdMasked, String pushTokenMasked, Instant registeredAt) {}
+
+    public record WalletCardRow(
+            String customerCardId, String customerName, int stamps, int totalRewards,
+            Instant createdAt, Instant updatedAt,
+            int deviceCount, List<DeviceRow> devices) {}
+
+    public record WalletShopReport(String shopId, String shopName, boolean active,
+                                   int cardsChecked, int cardsWithoutDevice, int cardsWithDevice,
+                                   List<WalletCardRow> cards, String error) {}
+
+    @Operation(summary = "Apple-Wallet-Diagnose: webServiceURL, APNs-Konfig, Geraete-Registrierungen je Karte")
+    @GetMapping("/wallet")
+    @Transactional(readOnly = true)
+    public Map<String, Object> wallet(
+            @RequestParam(name = "shop") String shopQuery,
+            @RequestParam(name = "limit", defaultValue = "40") int limit) {
+
+        String base = props.baseUrl();
+        String wsUrl = (base != null ? base : "") + "/wallet/";
+        WalletConfig cfg = new WalletConfig(
+                String.join(",", env.getActiveProfiles()),
+                base, wsUrl, wsUrl.startsWith("https://"),
+                props.apple() != null ? props.apple().passTypeIdentifier() : null,
+                props.apns() != null && props.apns().enabled(),
+                props.apns() != null && props.apns().useSandbox(),
+                props.apns() != null && notBlank(props.apns().keyId()),
+                props.apns() != null && notBlank(props.apns().teamId()),
+                props.apns() != null && fileExists(props.apns().authKeyPath()),
+                fileExists("/etc/secrets/pass-certificate.b64"),
+                fileExists("/etc/secrets/apple-wwdr.pem")
+        );
+
+        String needle = shopQuery.toLowerCase().trim();
+        List<Shop> shops = shopRepo.findAll().stream()
+                .filter(s -> s.getName() != null && s.getName().toLowerCase().contains(needle))
+                .sorted(Comparator.comparing(Shop::getName))
+                .toList();
+
+        List<WalletShopReport> reports = new ArrayList<>();
+        for (Shop shop : shops) {
+            try {
+                List<Card> cards = cardRepo.findByShop(shop);
+                List<CustomerCard> ccs = new ArrayList<>();
+                for (Card c : cards) ccs.addAll(customerCardRepo.findByCard(c));
+                ccs.sort(Comparator.comparing(CustomerCard::getCreatedAt,
+                        Comparator.nullsLast(Comparator.reverseOrder())));
+                if (ccs.size() > limit) ccs = ccs.subList(0, limit);
+
+                Set<String> customerIds = ccs.stream()
+                        .map(cc -> cc.getCustomer().getId()).collect(Collectors.toSet());
+                Map<String, Customer> custById = customerRepo.findAllById(customerIds).stream()
+                        .collect(Collectors.toMap(Customer::getId, x -> x));
+
+                List<WalletCardRow> rows = new ArrayList<>();
+                int without = 0, with = 0;
+                for (CustomerCard cc : ccs) {
+                    List<AppleDeviceRegistration> regs = deviceRepo.findBySerialNumber(cc.getId());
+                    if (regs.isEmpty()) without++; else with++;
+                    List<DeviceRow> drs = regs.stream().map(r -> new DeviceRow(
+                            mask(r.getDeviceLibraryIdentifier()), mask(r.getPushToken()),
+                            r.getRegisteredAt())).toList();
+                    Customer cust = custById.get(cc.getCustomer().getId());
+                    rows.add(new WalletCardRow(cc.getId(),
+                            cust != null ? cust.getName() : "(unbekannt)",
+                            cc.getStamps(), cc.getTotalRewards(),
+                            cc.getCreatedAt(), cc.getUpdatedAt(), regs.size(), drs));
+                }
+                reports.add(new WalletShopReport(shop.getId(), shop.getName(), shop.isActive(),
+                        rows.size(), without, with, rows, null));
+            } catch (Exception e) {
+                StringWriter sw = new StringWriter();
+                e.printStackTrace(new PrintWriter(sw));
+                reports.add(new WalletShopReport(shop.getId(), shop.getName(), shop.isActive(),
+                        0, 0, 0, List.of(),
+                        sw.toString().lines().limit(12).collect(Collectors.joining(" | "))));
+            }
+        }
+
+        Map<String, Object> out = new TreeMap<>();
+        out.put("config", cfg);
+        out.put("query", shopQuery);
+        out.put("matchedShops", reports.size());
+        out.put("reports", reports);
+        return out;
+    }
+
+    private static boolean notBlank(String s) { return s != null && !s.isBlank(); }
+
+    private static boolean fileExists(String path) {
+        try { return path != null && java.nio.file.Files.exists(java.nio.file.Path.of(path)); }
+        catch (Exception e) { return false; }
+    }
+
+    private static String mask(String s) {
+        if (s == null) return null;
+        if (s.length() <= 10) return s.substring(0, Math.min(4, s.length())) + "...";
+        return s.substring(0, 6) + "..." + s.substring(s.length() - 4);
     }
 
     /**
