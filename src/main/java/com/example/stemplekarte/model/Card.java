@@ -125,6 +125,7 @@ public class Card {
         if (colorLabel != null) this.colorLabel = colorLabel;
     }
 
+    public void setRewardText(String rewardText) { this.rewardText = rewardText; }
     public void setLogoUrl(String logoUrl) { this.logoUrl = logoUrl; }
     public void setHeroImageUrl(String heroImageUrl) { this.heroImageUrl = heroImageUrl; }
     public void setStampIconUrl(String stampIconUrl) { this.stampIconUrl = stampIconUrl; }

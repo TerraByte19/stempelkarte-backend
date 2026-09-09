@@ -78,6 +78,26 @@ public class StampDesignController {
         return toMap(card);
     }
 
+    public record CardInfoRequest(String rewardText) {}
+
+    // ── Karten-Text (Belohnung) einer bestehenden Karte aendern ───────────
+    @PutMapping("/cards/{cardId}/info")
+    public Map<String, Object> updateCardInfo(@PathVariable String cardId,
+                                              @RequestBody CardInfoRequest req,
+                                              Authentication auth) {
+        Shop shop = currentShop(auth);
+        Card card = cardService.getByIdAndShop(cardId, shop);
+        if (req.rewardText() != null && !req.rewardText().isBlank()) {
+            card.setRewardText(req.rewardText().trim());
+        }
+        cardService.save(card);
+        // Belohnungstext steht auf der Google-Wallet-Class -> neu schreiben,
+        // damit gespeicherte Karten den neuen Text bekommen. Apple aktualisiert
+        // beim naechsten Pass-Abruf (latestPass baut aus dem aktuellen Stand).
+        googleWalletService.refreshClassForCard(card);
+        return Map.of("rewardText", card.getRewardText());
+    }
+
     // ── Logo für eine Karte hochladen ─────────────────────────────────────
     @PostMapping("/cards/{cardId}/logo")
     public Map<String, String> uploadCardLogo(@PathVariable String cardId,
