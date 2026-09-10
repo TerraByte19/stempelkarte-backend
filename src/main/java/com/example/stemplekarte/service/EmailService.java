@@ -56,6 +56,11 @@ public class EmailService {
     @Value("${stempelkarte.mail.daily-limit:300}")
     private int dailyLimit;
 
+    // Empfaenger fuer Kontaktanfragen von der Landing-Page. Leer gelassen
+    // geht die Anfrage an MAIL_FROM — die ohnehin verifizierte Adresse.
+    @Value("${stempelkarte.mail.contact-to:}")
+    private String contactTo;
+
     // Zähler für heute versendete Mails. Wird automatisch zurückgesetzt,
     // sobald ein neuer Tag beginnt. Liegt im Arbeitsspeicher — bei einem
     // Server-Neustart (Render-Deploy) startet der Zähler bei 0, was
@@ -150,6 +155,30 @@ public class EmailService {
         );
 
         send(to, shopName, replyTo, subject, html);
+    }
+
+    // ── 4. Kontaktanfrage von der Landing-Page ───────────────────────────
+    // Geht an den Betreiber, nicht an einen Laden. Reply-To ist der
+    // Interessent, damit eine Antwort direkt bei ihm landet.
+    @Async
+    public void sendContactRequestMail(String name, String shopName,
+                                       String fromEmail, String message) {
+        String to = (contactTo == null || contactTo.isBlank()) ? from : contactTo;
+        if (to == null || to.isBlank()) {
+            log.warn("Kontaktanfrage von {} nicht zustellbar — weder CONTACT_TO noch MAIL_FROM gesetzt", fromEmail);
+            return;
+        }
+
+        String html = "<div style=\"font-family:sans-serif;font-size:15px;line-height:1.6\">"
+                + "<h2 style=\"margin:0 0 12px\">Kontaktanfrage von der Website</h2>"
+                + "<p><b>Name:</b> " + esc(name) + "<br>"
+                + "<b>Laden:</b> " + esc(shopName) + "<br>"
+                + "<b>E-Mail:</b> " + esc(fromEmail) + "</p>"
+                + "<p style=\"white-space:pre-line;border-inline-start:3px solid #3C3489;"
+                + "padding-inline-start:12px;margin-top:16px\">" + esc(message) + "</p>"
+                + "</div>";
+
+        send(to, "Stampit Website", fromEmail, "Kontaktanfrage: " + shopName, html);
     }
 
     // ── intern ────────────────────────────────────────────────────────────
