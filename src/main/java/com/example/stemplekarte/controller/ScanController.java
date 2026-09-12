@@ -68,6 +68,13 @@ public class ScanController {
         ScanResult result = service.processScan(req.qrPayload(), shop, count);
         var cc = result.customerCard();
 
+        // Startpunkt jeder Wallet-Kette. Ab hier laesst sich ein Vorfall
+        // vollstaendig verfolgen: nach serial greppen und die [WALLET]-Zeilen
+        // der Reihe nach lesen.
+        log.info("[WALLET] SCAN serial={} kunde={} karte={} laden=\"{}\" stempelNeu={} anzahl={}",
+                cc.getId(), cc.getCustomer().getId(), cc.getCard().getId(),
+                shop.getName(), cc.getStamps(), count);
+
         // ── Live an die offene Kunden-Kartenseite (SSE) - sofort, ohne Polling ──
         try {
             cardEventHub.publishStamps(cc.getId(), cc.getStamps(),

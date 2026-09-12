@@ -34,14 +34,18 @@ public class AppleWalletWebService {
     private final ApplePassService applePass;
     private final ApnsPushService apnsPush;
 
+    private final com.example.stemplekarte.wallet.WalletDiagnose diagnose;
+
     public AppleWalletWebService(AppleDeviceRepository deviceRepo,
                                  CustomerService customerService,
                                  ApplePassService applePass,
-                                 ApnsPushService apnsPush) {
+                                 ApnsPushService apnsPush,
+                                 com.example.stemplekarte.wallet.WalletDiagnose diagnose) {
         this.deviceRepo = deviceRepo;
         this.customerService = customerService;
         this.applePass = applePass;
         this.apnsPush = apnsPush;
+        this.diagnose = diagnose;
     }
 
     @PostMapping("/devices/{deviceId}/registrations/{passType}/{serial}")
@@ -51,19 +55,30 @@ public class AppleWalletWebService {
                                          @PathVariable String serial,
                                          @RequestBody Map<String, String> body,
                                          HttpServletRequest request) {
+        log.info("[WALLET] REGISTER-VERSUCH serial={} device={} passType={}",
+                serial, kurz(deviceId), passType);
+
         if (!isAuthenticated(request, serial)) {
+            // Passiert, wenn der Pass auf dem iPhone einen anderen authToken
+            // traegt als die Karte in der DB - dann kann sich das Geraet NIE
+            // anmelden und die Karte haengt fuer immer auf dem alten Stand.
+            log.warn("[WALLET] REGISTER-ABGELEHNT serial={} device={} grund=AUTH_TOKEN_PASST_NICHT "
+                    + "(Pass auf dem Handy ist aelter als die Karte in der DB -> Kunde muss Pass neu hinzufuegen)",
+                    serial, kurz(deviceId));
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
         String pushToken = body.get("pushToken");
         if (pushToken == null) {
+            log.warn("[WALLET] REGISTER-ABGELEHNT serial={} device={} grund=KEIN_PUSHTOKEN_IM_BODY",
+                    serial, kurz(deviceId));
             return ResponseEntity.badRequest().build();
         }
 
         var pk = new AppleDeviceRegistration.PK(deviceId, serial);
         boolean exists = deviceRepo.existsById(pk);
         deviceRepo.save(AppleDeviceRegistration.of(deviceId, serial, pushToken));
-        log.info("Apple Geraet registriert: device={} serial={} (neu={})",
-                deviceId.substring(0, 8), serial, !exists);
+        log.info("[WALLET] REGISTER-OK serial={} device={} neu={} pushToken={}",
+                serial, kurz(deviceId), !exists, maskiere(pushToken));
 
         // Registrierungs-Rennen bei frischen Paessen schliessen: der Kunde
         // meldet sich an, fuegt den Pass hinzu und wird oft SEKUNDEN spaeter
@@ -94,7 +109,13 @@ public class AppleWalletWebService {
             @RequestParam(value = "passesUpdatedSince", required = false) String since) {
 
         List<AppleDeviceRegistration> regs = deviceRepo.findByDeviceLibraryIdentifier(deviceId);
+        log.info("[WALLET] POLL-START device={} since={} registrierteKarten={}",
+                kurz(deviceId), since, regs.size());
         if (regs.isEmpty()) {
+            // Das iPhone fragt nach Updates, wir kennen es aber gar nicht.
+            // Genau der Zustand, in dem ein Kunde ewig auf alten Stempeln sitzt.
+            log.warn("[WALLET] POLL-UNBEKANNTES-GERAET device={} -> iPhone fragt nach Updates, "
+                    + "aber keine Registrierung in der DB", kurz(deviceId));
             return ResponseEntity.noContent().build();
         }
 
@@ -127,9 +148,13 @@ public class AppleWalletWebService {
         }
 
         if (changed.isEmpty()) {
+            log.info("[WALLET] POLL-NICHTS-NEU device={} since={} maxUpdated={} -> 204",
+                    kurz(deviceId), sinceMs, maxUpdated);
             return ResponseEntity.noContent().build();
         }
         long tag = Math.max(maxUpdated, sinceMs); // Tag darf nie zurueckspringen
+        log.info("[WALLET] POLL-ANTWORT device={} since={} geaendert={} tag={}",
+                kurz(deviceId), sinceMs, changed, tag);
         return ResponseEntity.ok(Map.of(
                 "serialNumbers", changed,
                 "lastUpdated", String.valueOf(tag)
@@ -141,15 +166,46 @@ public class AppleWalletWebService {
     public ResponseEntity<byte[]> latestPass(@PathVariable String passType,
                                              @PathVariable String serial,
                                              HttpServletRequest request) throws Exception {
+        // Diese Zeile ist der Beweis, dass das iPhone auf den Push reagiert hat.
+        // Fehlt sie nach einem PUSH-OK, hat Apple den Push verworfen (Tageslimit)
+        // oder das Geraet ist offline.
+        long startNs = System.nanoTime();
+        // Abstand zum letzten Push. Das ist der Hebel, um "Handy war offline"
+        // von "Apple hat verworfen" zu trennen:
+        //   wenige Sekunden  -> alles normal
+        //   Minuten bis 1 h  -> Handy war offline, APNs hat nachgeliefert
+        //   gar keine Zeile  -> Push kam nie an (Limit, Pass geloescht, dauerhaft offline)
+        String nachPush = diagnose.seitLetztemPush(serial)
+                .map(d -> d.toSeconds() + "s")
+                .orElse("keinPushBekannt");
+        log.info("[WALLET] PASS-ABRUF-START serial={} nachLetztemPush={} pushesHeute={} ifModifiedSince={}",
+                serial, nachPush, diagnose.pushesHeute(serial),
+                request.getHeader("If-Modified-Since"));
+
         if (!isAuthenticated(request, serial)) {
+            log.warn("[WALLET] PASS-ABRUF-ABGELEHNT serial={} grund=AUTH_TOKEN_PASST_NICHT", serial);
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
 
-        CustomerCard cc = customerService.getCustomerCardById(serial);
-        byte[] pass = applePass.generatePass(cc);
+        CustomerCard cc;
+        byte[] pass;
+        try {
+            cc = customerService.getCustomerCardById(serial);
+            pass = applePass.generatePass(cc);
+        } catch (Exception e) {
+            // Schlaegt der Pass-Bau fehl, bekommt iOS einen Fehler und behaelt
+            // die alte Karte - ohne jede Meldung beim Kunden.
+            log.error("[WALLET] PASS-ABRUF-FEHLER serial={} dauerMs={}",
+                    serial, (System.nanoTime() - startNs) / 1_000_000L, e);
+            throw e;
+        }
 
         java.time.ZonedDateTime zonedDateTime = cc.getUpdatedAt().atZone(java.time.ZoneId.of("GMT"));
         String appleDateHeader = java.time.format.DateTimeFormatter.RFC_1123_DATE_TIME.format(zonedDateTime);
+
+        log.info("[WALLET] PASS-ABRUF-OK serial={} stempel={} bytes={} lastModified=\"{}\" dauerMs={}",
+                serial, cc.getStamps(), pass.length, appleDateHeader,
+                (System.nanoTime() - startNs) / 1_000_000L);
 
         return ResponseEntity.ok()
                 .contentType(MediaType.parseMediaType("application/vnd.apple.pkpass"))
@@ -169,28 +225,54 @@ public class AppleWalletWebService {
                                            @PathVariable String serial,
                                            HttpServletRequest request) {
         if (!isAuthenticated(request, serial)) {
+            log.warn("[WALLET] ABMELDUNG-ABGELEHNT serial={} device={} grund=AUTH_TOKEN_PASST_NICHT",
+                    serial, kurz(deviceId));
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
         deviceRepo.deleteByDeviceLibraryIdentifierAndSerialNumber(deviceId, serial);
-        log.info("Apple Geraet abgemeldet: device={} serial={}",
-                deviceId.substring(0, 8), serial);
+        // Kommt normalerweise nur, wenn der Kunde die Karte aus der Wallet
+        // loescht. Taucht das unerwartet auf, erklaert es ausbleibende Updates.
+        log.warn("[WALLET] ABMELDUNG serial={} device={} -> ab jetzt kein Push mehr fuer diese Karte",
+                serial, kurz(deviceId));
         return ResponseEntity.ok().build();
     }
 
     @PostMapping("/log")
     public ResponseEntity<Void> log(@RequestBody Map<String, Object> body) {
-        log.warn("Apple Wallet Log: {}", body);
+        // Apples eigene Fehlermeldungen vom Geraet. Gold wert bei Pass-Problemen.
+        log.warn("[WALLET] APPLE-GERAETE-LOG {}", body);
         return ResponseEntity.ok().build();
+    }
+
+    private static String kurz(String id) {
+        if (id == null) return "null";
+        return id.length() <= 8 ? id : id.substring(0, 8);
+    }
+
+    private static String maskiere(String s) {
+        if (s == null) return "null";
+        if (s.length() <= 10) return s.substring(0, Math.min(4, s.length())) + "...";
+        return s.substring(0, 6) + "..." + s.substring(s.length() - 4);
     }
 
     private boolean isAuthenticated(HttpServletRequest request, String serial) {
         String header = request.getHeader("Authorization");
-        if (header == null || !header.startsWith("ApplePass ")) return false;
+        if (header == null || !header.startsWith("ApplePass ")) {
+            log.warn("[WALLET] AUTH-FEHLT serial={} header={}", serial,
+                    header == null ? "(kein Authorization-Header)" : "unerwartetes Format");
+            return false;
+        }
         String token = header.substring("ApplePass ".length()).trim();
         try {
             CustomerCard cc = customerService.getCustomerCardById(serial);
-            return cc.getAuthToken().equals(token);
+            boolean ok = cc.getAuthToken().equals(token);
+            if (!ok) {
+                log.warn("[WALLET] AUTH-TOKEN-ABWEICHUNG serial={} handySchickte={} dbHat={}",
+                        serial, maskiere(token), maskiere(cc.getAuthToken()));
+            }
+            return ok;
         } catch (Exception e) {
+            log.warn("[WALLET] AUTH-KARTE-UNBEKANNT serial={} grund={}", serial, e.getMessage());
             return false;
         }
     }

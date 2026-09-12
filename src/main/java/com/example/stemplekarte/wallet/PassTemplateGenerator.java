@@ -23,6 +23,40 @@ import java.nio.file.Paths;
 @Service
 public class PassTemplateGenerator {
 
+    private static final org.slf4j.Logger log =
+            org.slf4j.LoggerFactory.getLogger(PassTemplateGenerator.class);
+
+    /**
+     * Laedt ein Bild von einer externen URL (Cloudinary) und protokolliert
+     * Start, Ende und Dauer.
+     *
+     * Wichtig fuer die Fehlersuche: {@code ImageIO.read(URL)} nutzt die
+     * Default-URLConnection - ohne Connect- und Read-Timeout. Bleibt die
+     * Gegenstelle stumm, haengt dieser Aufruf unbegrenzt und blockiert den
+     * Request, in dem der Pass gebaut wird. Im Log sieht man das daran, dass
+     * eine BILD-START-Zeile OHNE passende BILD-FERTIG-Zeile bleibt.
+     */
+    private static BufferedImage ladeBild(String zweck, String url) throws IOException {
+        log.info("[WALLET] BILD-START zweck={} url={}", zweck, url);
+        long t0 = System.nanoTime();
+        try {
+            BufferedImage img = ImageIO.read(new URL(url));
+            long dauerMs = (System.nanoTime() - t0) / 1_000_000L;
+            if (img == null) {
+                log.warn("[WALLET] BILD-LEER zweck={} url={} dauerMs={} (kein lesbares Bildformat)",
+                        zweck, url, dauerMs);
+            } else {
+                log.info("[WALLET] BILD-FERTIG zweck={} dauerMs={} groesse={}x{}",
+                        zweck, dauerMs, img.getWidth(), img.getHeight());
+            }
+            return img;
+        } catch (Exception e) {
+            log.warn("[WALLET] BILD-FEHLER zweck={} url={} dauerMs={} fehler={}",
+                    zweck, url, (System.nanoTime() - t0) / 1_000_000L, e.toString());
+            throw e instanceof IOException io ? io : new IOException(e);
+        }
+    }
+
     @Value("${stempelkarte.upload-path:./uploads}")
     private String uploadPath;
 
@@ -121,7 +155,7 @@ public class PassTemplateGenerator {
         if ("upload".equalsIgnoreCase(stampIconType)
                 && notBlank(stampIconUrl)) {
             try {
-                return ImageIO.read(new URL(stampIconUrl));
+                return ladeBild("stempel-icon", stampIconUrl);
             } catch (Exception e) {
                 return null;
             }
@@ -277,14 +311,14 @@ public class PassTemplateGenerator {
                                     String bgColor, Path templatePath) throws IOException {
         if (notBlank(logoUrl)) {
             try {
-                BufferedImage logo = ImageIO.read(new URL(logoUrl));
+                BufferedImage logo = ladeBild("laden-logo", logoUrl);
                 ImageIO.write(resizeImage(logo, 160, 50), "PNG",
                         templatePath.resolve("logo.png").toFile());
                 ImageIO.write(resizeImage(logo, 320, 100), "PNG",
                         templatePath.resolve("logo@2x.png").toFile());
                 return;
             } catch (Exception e) {
-                // Fallback auf Text-Logo
+                log.warn("[WALLET] BILD-FALLBACK zweck=laden-logo -> Text-Logo statt Bild", e);
             }
         }
         createTextLogo(shopName, bgColor, 160, 50,

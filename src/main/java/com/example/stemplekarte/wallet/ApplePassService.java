@@ -116,10 +116,22 @@ public class ApplePassService {
         if (cached != null
                 && cached.updatedAtMillis() == updatedAt
                 && (now - cached.cachedAtMillis()) < PASS_CACHE_TTL_MS) {
+            // Bei einem Treffer wird NICHT neu gebaut. Steht hier ein Treffer
+            // mit veraltetem Stempelstand, liegt der Fehler im Cache-Schluessel.
+            log.info("[WALLET] PASS-BAU-CACHE serial={} stempel={} updatedAt={} alterMs={}",
+                    cc.getId(), cc.getStamps(), updatedAt, now - cached.cachedAtMillis());
             return cached.bytes();
         }
 
+        log.info("[WALLET] PASS-BAU-START serial={} stempel={} updatedAt={}",
+                cc.getId(), cc.getStamps(), updatedAt);
+        long t0 = System.nanoTime();
         byte[] bytes = buildPass(cc);
+        long dauerMs = (System.nanoTime() - t0) / 1_000_000L;
+        // Dauert der Bau auffaellig lange, haengt fast immer ein Bild-Abruf
+        // (siehe [WALLET] BILD-* aus dem PassTemplateGenerator).
+        log.info("[WALLET] PASS-BAU-FERTIG serial={} bytes={} dauerMs={}",
+                cc.getId(), bytes.length, dauerMs);
 
         if (passCache.size() >= PASS_CACHE_MAX) passCache.clear();
         passCache.put(cc.getId(), new PassCacheEntry(updatedAt, now, bytes));

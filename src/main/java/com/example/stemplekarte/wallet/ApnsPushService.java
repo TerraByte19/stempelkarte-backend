@@ -60,9 +60,13 @@ public class ApnsPushService {
                 return t;
             });
 
-    public ApnsPushService(AppProperties props, AppleDeviceRepository deviceRepo) {
+    private final WalletDiagnose diagnose;
+
+    public ApnsPushService(AppProperties props, AppleDeviceRepository deviceRepo,
+                           WalletDiagnose diagnose) {
         this.props = props;
         this.deviceRepo = deviceRepo;
+        this.diagnose = diagnose;
         this.httpClient = HttpClient.newBuilder()
                 .version(HttpClient.Version.HTTP_2)
                 .connectTimeout(Duration.ofSeconds(10))
@@ -72,9 +76,14 @@ public class ApnsPushService {
     @Async
     public void notifyUpdate(String serialNumber) {
         if (!props.apns().enabled()) {
-            log.debug("APNs deaktiviert. Kein Push fuer {}.", serialNumber);
+            // Frueher DEBUG -> unsichtbar. Das ist ein Totalausfall des Wallet-
+            // Updates und muss im Log stehen.
+            log.warn("[WALLET] PUSH-ABBRUCH serial={} grund=APNS_DEAKTIVIERT "
+                    + "(stempelkarte.apns.enabled=false / ENV APNS_ENABLED nicht gesetzt)", serialNumber);
             return;
         }
+
+        log.info("[WALLET] PUSH-START serial={}", serialNumber);
 
         // 1. Push sofort ...
         pushOnce(serialNumber);
@@ -99,21 +108,32 @@ public class ApnsPushService {
     public void pushOnce(String serialNumber) {
         List<AppleDeviceRegistration> devices = deviceRepo.findBySerialNumber(serialNumber);
         if (devices.isEmpty()) {
-            log.debug("Keine registrierten Apple Geraete fuer {}.", serialNumber);
+            // Frueher DEBUG -> unsichtbar. Genau dieser Fall ist der Verdacht
+            // bei "Stempel im System, aber nicht auf dem iPhone": das Geraet hat
+            // sich nie unter /wallet/v1/devices/... angemeldet, der Push kann
+            // also gar nicht ankommen.
+            log.warn("[WALLET] PUSH-ABBRUCH serial={} grund=KEIN_GERAET_REGISTRIERT "
+                    + "(iPhone hat sich nie bei /wallet/v1/devices/... gemeldet)", serialNumber);
             return;
         }
+        log.info("[WALLET] PUSH-GERAETE serial={} anzahl={}", serialNumber, devices.size());
 
         String jwt;
         try {
             jwt = getProviderToken();
         } catch (Exception e) {
-            log.error("APNs JWT konnte nicht erstellt werden", e);
+            log.error("[WALLET] PUSH-ABBRUCH serial={} grund=JWT_FEHLER keyPath={} keyIdGesetzt={} teamIdGesetzt={}",
+                    serialNumber, props.apns().authKeyPath(),
+                    props.apns().keyId() != null && !props.apns().keyId().isBlank(),
+                    props.apns().teamId() != null && !props.apns().teamId().isBlank(), e);
             return;
         }
 
         String host = props.apns().useSandbox()
                 ? "https://api.sandbox.push.apple.com"
                 : "https://api.push.apple.com";
+        log.info("[WALLET] PUSH-KONFIG serial={} host={} topic={} sandbox={}",
+                serialNumber, host, props.apple().passTypeIdentifier(), props.apns().useSandbox());
 
         // apns-expiration: APNs haelt den Push bis zu 1h vor und stellt erneut zu,
         // falls das Geraet gerade offline war (0 = sofort verwerfen - das war der Bug).
@@ -136,22 +156,43 @@ public class ApnsPushService {
                         .POST(HttpRequest.BodyPublishers.ofString(body))
                         .build();
 
+                long t0 = System.nanoTime();
                 HttpResponse<String> resp = httpClient.send(req, HttpResponse.BodyHandlers.ofString());
+                long dauerMs = (System.nanoTime() - t0) / 1_000_000L;
+                String device8 = device.getDeviceLibraryIdentifier().substring(0, 8);
+                // apns-id: Apples eigene Vorgangsnummer. Damit laesst sich ein
+                // einzelner Push spaeter zweifelsfrei wiederfinden.
+                String apnsId = resp.headers().firstValue("apns-id").orElse("-");
                 if (resp.statusCode() == 200) {
-                    log.info("APNs Push OK fuer Geraet {} (Pass {})",
-                            device.getDeviceLibraryIdentifier().substring(0, 8), serialNumber);
+                    // ACHTUNG: 200 heisst nur "APNs hat es angenommen". Bei
+                    // ueberschrittenem Tageslimit (~3 Pass-Pushes/Tag/Karte)
+                    // verwirft der Wallet-Dienst den Push trotzdem still. Ob das
+                    // iPhone wirklich reagiert hat, zeigt erst die spaetere
+                    // PASS-ABRUF-Zeile zur selben serial.
+                    int heute = diagnose.pushGezaehlt(serialNumber);
+                    log.info("[WALLET] PUSH-OK serial={} device={} apnsId={} dauerMs={} pushesHeute={}",
+                            serialNumber, device8, apnsId, dauerMs, heute);
+                    if (heute > 3) {
+                        log.warn("[WALLET] PUSH-LIMIT-VERDACHT serial={} pushesHeute={} -> Apple erlaubt nur "
+                                + "~3 Pass-Pushes/Tag/Karte und verwirft weitere still (meldet trotzdem 200). "
+                                + "Bleibt jetzt der PASS-ABRUF aus, ist DAS die Ursache - nicht das Handy.",
+                                serialNumber, heute);
+                    }
                 } else {
-                    log.warn("APNs Push fehlgeschlagen ({}): {}", resp.statusCode(), resp.body());
+                    log.warn("[WALLET] PUSH-FEHLER serial={} device={} status={} apnsId={} dauerMs={} body={}",
+                            serialNumber, device8, resp.statusCode(), apnsId, dauerMs, resp.body());
                     if (resp.statusCode() == 410
                             || resp.body().contains("BadDeviceToken")
                             || resp.body().contains("Unregistered")) {
                         deviceRepo.deleteByPushToken(device.getPushToken());
-                        log.info("Toter APNs Token entfernt fuer Geraet {}",
-                                device.getDeviceLibraryIdentifier().substring(0, 8));
+                        log.warn("[WALLET] PUSH-TOKEN-TOT serial={} device={} -> Registrierung geloescht, "
+                                + "Karte bekommt ohne erneutes Hinzufuegen NIE wieder ein Update",
+                                serialNumber, device8);
                     }
                 }
             } catch (Exception e) {
-                log.error("APNs Push Exception", e);
+                log.error("[WALLET] PUSH-EXCEPTION serial={} device={}",
+                        serialNumber, device.getDeviceLibraryIdentifier().substring(0, 8), e);
             }
         }
     }
