@@ -260,23 +260,34 @@ public class ApplePassService {
     /**
      * Orte fuer die Sperrbildschirm-Erinnerung.
      *
-     * Bewusst NUR bei voller Karte: eine Karte, die sich bei jedem Vorbeigehen
-     * meldet, wird zur Nervensaege und der Kunde schaltet sie ab. Der Hinweis
-     * soll genau dann kommen, wenn es etwas zu holen gibt.
+     * Die Karte meldet sich in Ladennaehe IMMER, nicht nur wenn sie voll ist -
+     * eine halbvolle Karte am Sperrbildschirm ist genau der Anstoss, nochmal
+     * reinzugehen. Das ist auch kein Dauerfeuer: iOS zeigt die Karte nur als
+     * Vorschlag zum Hochwischen, ohne Ton und ohne Banner.
      *
-     * Leere Liste = keine Ortsbindung, iOS zeigt dann nichts an. Da der Pass
-     * bei jedem Stempel neu gebaut und ans Handy geschickt wird, wandert der
-     * Eintrag automatisch rein und nach dem Einloesen wieder raus.
+     * Der Text passt sich dem Stand an, damit der Hinweis etwas aussagt statt
+     * nur die Karte zu zeigen.
+     *
+     * Leere Liste = keine Ortsbindung, iOS zeigt dann nichts an. Das ist der
+     * Fall, wenn der Laden die Funktion aus hat oder keine Koordinaten
+     * hinterlegt sind.
      */
     private List<PKLocation> sperrbildschirmOrte(Shop shop, int stamps, int threshold,
                                                  String rewardText) {
-        if (!shop.isLockScreenActive() || stamps < threshold) {
+        if (!shop.isLockScreenActive()) {
             return List.of();
         }
+        int fehlend = threshold - stamps;
+        String hinweis = fehlend <= 0
+                ? rewardText + " wartet auf dich"
+                : fehlend == 1
+                        ? "Noch 1 Stempel bis: " + rewardText
+                        : "Noch " + fehlend + " Stempel bis: " + rewardText;
+
         return List.of(PKLocation.builder()
                 .latitude(shop.getLatitude())
                 .longitude(shop.getLongitude())
-                .relevantText(rewardText + " wartet auf dich")
+                .relevantText(hinweis)
                 .build());
     }
 
