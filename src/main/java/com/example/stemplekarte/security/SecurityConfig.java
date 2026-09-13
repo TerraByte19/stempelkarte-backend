@@ -92,8 +92,6 @@ public class SecurityConfig {
                         .requestMatchers("/wallet/**").permitAll()
                         .requestMatchers("/karte/**", "/karte-neu/**", "/logos/**").permitAll()
                         .requestMatchers("/mail/**").permitAll()
-                        // Kontaktformular der Landing-Page
-                        .requestMatchers("/api/public/**").permitAll()
                         .requestMatchers("/api/admin/login").permitAll()
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")
                         .requestMatchers("/api/shop/**").hasRole("SHOP")
