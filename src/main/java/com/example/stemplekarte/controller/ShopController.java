@@ -151,7 +151,33 @@ public class ShopController {
         map.put("heroImageUrl", shop.getHeroImageUrl() != null ? shop.getHeroImageUrl() : "");
         map.put("logoOriginalUrl", shop.getLogoOriginalUrl() != null ? shop.getLogoOriginalUrl() : "");
         map.put("heroOriginalUrl", shop.getHeroOriginalUrl() != null ? shop.getHeroOriginalUrl() : "");
+        // Sperrbildschirm-Erinnerung. lockScreenActive sagt, ob sie WIRKLICH
+        // greift - eingeschaltet ohne Koordinaten tut nichts.
+        map.put("lockScreenEnabled", Boolean.TRUE.equals(shop.getLockScreenEnabled()));
+        map.put("lockScreenActive", shop.isLockScreenActive());
+        map.put("latitude", shop.getLatitude());
+        map.put("longitude", shop.getLongitude());
         return map;
+    }
+
+    public record LockScreenRequest(Boolean enabled, Double latitude, Double longitude) {}
+
+    @Operation(summary = "Sperrbildschirm-Erinnerung ein-/ausschalten",
+            description = "Ist die Karte voll, bietet iOS sie in Ladennaehe auf dem "
+                    + "Sperrbildschirm an. Braucht die Koordinaten des Ladens. Wirkt auf "
+                    + "bestehende Wallet-Karten erst mit dem naechsten Stempel.")
+    @PutMapping("/me/lockscreen")
+    public Map<String, Object> updateLockScreen(@RequestBody LockScreenRequest req,
+                                                Authentication auth) {
+        Shop shop = currentShop(auth);
+        Shop updated = shopService.updateLockScreen(
+                shop.getId(), req.enabled(), req.latitude(), req.longitude());
+        Map<String, Object> out = new HashMap<>();
+        out.put("lockScreenEnabled", Boolean.TRUE.equals(updated.getLockScreenEnabled()));
+        out.put("lockScreenActive", updated.isLockScreenActive());
+        out.put("latitude", updated.getLatitude());
+        out.put("longitude", updated.getLongitude());
+        return out;
     }
 
     @Operation(summary = "Shop-Profil aktualisieren")

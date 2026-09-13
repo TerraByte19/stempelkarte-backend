@@ -77,6 +77,23 @@ public class Shop {
     @Column(name = "language", length = 5)
     private String language;
 
+    // ── Sperrbildschirm-Erinnerung ────────────────────────────────────────
+    // Ist die Karte voll, soll sie sich in Ladennaehe von selbst auf dem
+    // Sperrbildschirm melden. Technisch: "locations" im Apple-Pass. Das Handy
+    // erledigt den Rest, wir schicken keine Benachrichtigung.
+    //
+    // Pro Laden abschaltbar, weil es ohne Koordinaten nicht geht und nicht
+    // jeder Laden das will. Alle drei Felder nullable -> ddl-auto:update
+    // braucht keinen DB-Reset, Bestandslaeden bleiben unberuehrt (= aus).
+    @Column(name = "lock_screen_enabled")
+    private Boolean lockScreenEnabled;
+
+    @Column(name = "latitude")
+    private Double latitude;
+
+    @Column(name = "longitude")
+    private Double longitude;
+
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
@@ -186,5 +203,33 @@ public class Shop {
     /** null/leer (Bestandslaeden) gilt als Deutsch. */
     public String getLanguageOrDefault() {
         return (language == null || language.isBlank()) ? "de" : language;
+    }
+
+    // ── Sperrbildschirm-Erinnerung ────────────────────────────────────────
+
+    public Boolean getLockScreenEnabled() { return lockScreenEnabled; }
+    public Double getLatitude() { return latitude; }
+    public Double getLongitude() { return longitude; }
+
+    /**
+     * An ist die Erinnerung nur, wenn der Laden sie eingeschaltet hat UND
+     * Koordinaten hinterlegt sind. Ohne Koordinaten gibt es nichts, worauf
+     * sich das Handy beziehen koennte - dann ist der Schalter wirkungslos.
+     */
+    public boolean isLockScreenActive() {
+        return Boolean.TRUE.equals(lockScreenEnabled)
+                && latitude != null && longitude != null;
+    }
+
+    /**
+     * Koordinaten setzen und Schalter umlegen. Schaltet der Laden ab, bleiben
+     * die Koordinaten stehen - beim Wiedereinschalten muss er sie nicht neu
+     * erfassen.
+     */
+    public void updateLockScreen(Boolean enabled, Double latitude, Double longitude) {
+        if (enabled != null) this.lockScreenEnabled = enabled;
+        if (latitude != null) this.latitude = latitude;
+        if (longitude != null) this.longitude = longitude;
+        this.updatedAt = Instant.now();
     }
 }

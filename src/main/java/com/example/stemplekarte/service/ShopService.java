@@ -74,6 +74,33 @@ public class ShopService {
         return shopRepo.save(shop);
     }
 
+    /**
+     * Sperrbildschirm-Erinnerung ein-/ausschalten und Ladenkoordinaten setzen.
+     *
+     * Wirkt nicht sofort auf schon installierte Waellet-Karten: die Ortsangabe
+     * steckt IM Pass, kommt also erst mit dem naechsten Stempel aufs Handy.
+     * Genau dann ist sie auch relevant - der Eintrag entsteht ohnehin nur bei
+     * voller Karte.
+     */
+    @Transactional
+    public Shop updateLockScreen(String shopId, Boolean enabled,
+                                 Double latitude, Double longitude) {
+        if (latitude != null && (latitude < -90 || latitude > 90)) {
+            throw new IllegalArgumentException("Breitengrad muss zwischen -90 und 90 liegen");
+        }
+        if (longitude != null && (longitude < -180 || longitude > 180)) {
+            throw new IllegalArgumentException("Laengengrad muss zwischen -180 und 180 liegen");
+        }
+        Shop shop = getById(shopId);
+        if (Boolean.TRUE.equals(enabled)
+                && (latitude == null && shop.getLatitude() == null)) {
+            throw new IllegalArgumentException(
+                    "Ohne Koordinaten kann die Erinnerung nicht eingeschaltet werden");
+        }
+        shop.updateLockScreen(enabled, latitude, longitude);
+        return shopRepo.save(shop);
+    }
+
     @Transactional
     public StaffToken createStaffToken(String shopId, String label) {
         Shop shop = getById(shopId);

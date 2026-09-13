@@ -6,6 +6,7 @@ import com.example.stemplekarte.model.CustomerCard;
 import com.example.stemplekarte.model.Shop;
 import de.brendamour.jpasskit.PKBarcode;
 import de.brendamour.jpasskit.PKField;
+import de.brendamour.jpasskit.PKLocation;
 import de.brendamour.jpasskit.PKPass;
 import de.brendamour.jpasskit.enums.PKBarcodeFormat;
 import de.brendamour.jpasskit.enums.PKPassType;
@@ -214,7 +215,7 @@ public class ApplePassService {
                             .key("name").label("KUNDE").value(cc.getCustomer().getName()));
         }
 
-        PKPass pass = PKPass.builder()
+        var passBuilder = PKPass.builder()
                 .formatVersion(1)
                 .passTypeIdentifier(props.apple().passTypeIdentifier())
                 .teamIdentifier(props.apple().teamIdentifier())
@@ -232,12 +233,51 @@ public class ApplePassService {
                 .webServiceURL(new URL(props.baseUrl() + "/wallet/"))
                 .authenticationToken(cc.getAuthToken())
                 .barcodes(List.of(barcode))
-                .pass(genericPass.build())
-                .build();
+                .pass(genericPass.build());
+
+        // Ortsfelder NUR anhaengen, wenn es wirklich einen Ort gibt. Jedes Feld,
+        // das ohne Not im Pass steht, ist ein Risiko - siehe groupingIdentifier:
+        // ein einziges unpassendes Feld liess iOS den aktualisierten Pass
+        // verwerfen. Laeden ohne diese Funktion bekommen denselben Pass wie vorher.
+        List<PKLocation> orte = sperrbildschirmOrte(shop, cc.getStamps(), threshold,
+                card.getRewardText());
+        if (!orte.isEmpty()) {
+            passBuilder.maxDistance(LOCK_SCREEN_RADIUS_M).locations(orte);
+        }
+
+        PKPass pass = passBuilder.build();
 
         PKPassTemplateFolder template = new PKPassTemplateFolder(templatePath);
         return new PKFileBasedSigningUtil()
                 .createSignedAndZippedPkPassArchive(pass, template, signingInfo);
+    }
+
+    // Ab welcher Entfernung zum Laden iOS die Karte auf dem Sperrbildschirm
+    // anbietet. 150 m ist nah genug, dass der Kunde wirklich vor Ort ist, und
+    // weit genug, dass es schon beim Ankommen erscheint.
+    private static final long LOCK_SCREEN_RADIUS_M = 150L;
+
+    /**
+     * Orte fuer die Sperrbildschirm-Erinnerung.
+     *
+     * Bewusst NUR bei voller Karte: eine Karte, die sich bei jedem Vorbeigehen
+     * meldet, wird zur Nervensaege und der Kunde schaltet sie ab. Der Hinweis
+     * soll genau dann kommen, wenn es etwas zu holen gibt.
+     *
+     * Leere Liste = keine Ortsbindung, iOS zeigt dann nichts an. Da der Pass
+     * bei jedem Stempel neu gebaut und ans Handy geschickt wird, wandert der
+     * Eintrag automatisch rein und nach dem Einloesen wieder raus.
+     */
+    private List<PKLocation> sperrbildschirmOrte(Shop shop, int stamps, int threshold,
+                                                 String rewardText) {
+        if (!shop.isLockScreenActive() || stamps < threshold) {
+            return List.of();
+        }
+        return List.of(PKLocation.builder()
+                .latitude(shop.getLatitude())
+                .longitude(shop.getLongitude())
+                .relevantText(rewardText + " wartet auf dich")
+                .build());
     }
 
     private String rewardText(int stamps, int threshold, String rewardText) {
