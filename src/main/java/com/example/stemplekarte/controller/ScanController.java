@@ -58,7 +58,15 @@ public class ScanController {
             description = "Erfordert X-Staff-Token Header. count = Anzahl Stempel (1-20)")
     @PostMapping
     public ScanResponse scan(@Valid @RequestBody ScanRequest req, Authentication auth) {
-        if (auth == null || !(auth.getPrincipal() instanceof StaffTokenFilter.StaffPrincipal)) {
+        boolean tokenOk = auth != null && auth.getPrincipal() instanceof StaffTokenFilter.StaffPrincipal;
+
+        // Eingangsprotokoll: trennt die drei Faelle, die im Scanner identisch
+        // aussehen (Token weg / QR unlesbar / Karte unbekannt). Steht vor der
+        // Auth-Pruefung, damit auch ein abgelehnter Scan eine Spur hinterlaesst.
+        log.info("[SCAN] eingang token={} anzahl={} payload={}",
+                tokenOk ? "ok" : "FEHLT", req.count(), req.qrPayload());
+
+        if (!tokenOk) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Kein gueltiger Staff-Token");
         }
 
@@ -71,9 +79,15 @@ public class ScanController {
         // Startpunkt jeder Wallet-Kette. Ab hier laesst sich ein Vorfall
         // vollstaendig verfolgen: nach serial greppen und die [WALLET]-Zeilen
         // der Reihe nach lesen.
-        log.info("[WALLET] SCAN serial={} kunde={} karte={} laden=\"{}\" stempelNeu={} anzahl={}",
+        //
+        // Nur IDs protokollieren. shop stammt als Lazy-Proxy aus dem
+        // StaffTokenFilter; getId() beantwortet der Proxy selbst, getName()
+        // wuerde ihn nachladen - und hier ist die Hibernate-Session schon zu.
+        // Genau das hat jeden Scan mit einer LazyInitializationException
+        // abgebrochen, NACHDEM der Stempel bereits gesetzt war.
+        log.info("[WALLET] SCAN serial={} kunde={} karte={} laden={} stempelNeu={} anzahl={}",
                 cc.getId(), cc.getCustomer().getId(), cc.getCard().getId(),
-                shop.getName(), cc.getStamps(), count);
+                shop.getId(), cc.getStamps(), count);
 
         // ── Live an die offene Kunden-Kartenseite (SSE) - sofort, ohne Polling ──
         try {
