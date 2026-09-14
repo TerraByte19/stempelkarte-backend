@@ -7,6 +7,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.Map;
 import java.util.NoSuchElementException;
@@ -41,6 +42,16 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(IllegalStateException.class)
     public ResponseEntity<Map<String, String>> handleConflict(IllegalStateException e) {
         return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(Map.of("error", e.getMessage()));
+    }
+
+    // Bewusst gesetzte Status-Codes durchreichen. Ohne diesen Handler faengt
+    // der generische unten auch ResponseStatusException ab — ein sauberes
+    // 401 "Kein gueltiger Staff-Token" kam dann als 500 "interner Fehler" an
+    // und war von einem echten Absturz nicht zu unterscheiden.
+    @ExceptionHandler(ResponseStatusException.class)
+    public ResponseEntity<Map<String, String>> handleStatus(ResponseStatusException e) {
+        String msg = e.getReason() != null ? e.getReason() : e.getStatusCode().toString();
+        return ResponseEntity.status(e.getStatusCode()).body(Map.of("error", msg));
     }
 
     // Alles Unerwartete: intern mit Stacktrace loggen, nach aussen NUR eine
