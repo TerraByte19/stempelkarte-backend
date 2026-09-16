@@ -169,6 +169,21 @@ public class AdminController {
         return ResponseEntity.ok(statsService.summary(shop));
     }
 
+    /** Tages-Detail (Stunden-Verteilung) fuer die aufgeklappte Statistik im
+     *  Admin-Panel - Pendant zu /api/shop/stats/day, nur fuer beliebige Laeden. */
+    @GetMapping("/shops/{shopId}/stats/day")
+    public ResponseEntity<Map<String, Object>> getShopStatsDay(@PathVariable String shopId, @RequestParam String date) {
+        Shop shop = shopRepo.findById(shopId).orElse(null);
+        if (shop == null) {
+            return ResponseEntity.status(404).body(Map.of("error", "Shop nicht gefunden: " + shopId));
+        }
+        try {
+            return ResponseEntity.ok(statsService.day(shop, java.time.LocalDate.parse(date)));
+        } catch (java.time.format.DateTimeParseException e) {
+            return ResponseEntity.status(400).body(Map.of("error", "Ungueltiges Datum (erwartet JJJJ-MM-TT)"));
+        }
+    }
+
     @GetMapping("/stats")
     public ResponseEntity<Map<String, Object>> getGlobalStats() {
         List<Shop> allShops = shopRepo.findAll();

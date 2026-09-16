@@ -232,4 +232,30 @@ public class StatsService {
         summary.put("byHour", byHour);
         return summary;
     }
+
+    // Tages-Detail: Stunden-Verteilung der Stempel fuer EINEN Tag. Wird
+    // aufgerufen, wenn im Verlaufs-Diagramm ein Balken angetippt wird.
+    public Map<String, Object> day(Shop shop, LocalDate date) {
+        Instant from = date.atStartOfDay(ZONE).toInstant();
+        Instant to = date.plusDays(1).atStartOfDay(ZONE).toInstant();
+
+        List<ScanLog> logs = scanLogRepo
+                .findByShopIdAndScannedAtBetweenOrderByScannedAtAsc(shop.getId(), from, to);
+
+        int[] byHour = new int[24];
+        int stamps = 0, rewards = 0;
+        for (ScanLog sl : logs) {
+            int h = sl.getScannedAt().atZone(ZONE).getHour();
+            byHour[h] += sl.getStampsAdded();
+            stamps += sl.getStampsAdded();
+            rewards += sl.getRewardsEarned();
+        }
+
+        Map<String, Object> out = new HashMap<>();
+        out.put("date", date.toString());
+        out.put("byHour", byHour);
+        out.put("stamps", stamps);
+        out.put("rewards", rewards);
+        return out;
+    }
 }

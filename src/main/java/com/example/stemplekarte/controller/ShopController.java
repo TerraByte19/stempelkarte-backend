@@ -3,7 +3,6 @@ package com.example.stemplekarte.controller;
 import com.example.stemplekarte.model.*;
 import com.example.stemplekarte.repository.CustomerCardRepository;
 import com.example.stemplekarte.repository.SentNewsletterRepository;
-import com.example.stemplekarte.repository.ScanLogRepository;
 import com.example.stemplekarte.security.JwtAuthFilter;
 import com.example.stemplekarte.service.CardService;
 import com.example.stemplekarte.service.EmailService;
@@ -25,8 +24,6 @@ import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 
-import java.time.Instant;
-import java.time.ZoneId;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -38,18 +35,12 @@ import java.util.UUID;
 @RequestMapping("/api/shop")
 public class ShopController {
 
-    // Alle Laeden sind in Deutschland - Statistik-Zeitzone fest. (Der Server
-    // laeuft auf Render in UTC; ZoneId.systemDefault() verschob "beste Stunde"
-    // um 1-2 h und schob Mitternachts-Scans auf den falschen Tag.)
-    private static final ZoneId ZONE = ZoneId.of("Europe/Berlin");
-
     private final ShopService shopService;
     private final CardService cardService;
     private final CustomerCardRepository customerCardRepo;
     private final CloudinaryService cloudinaryService;
     private final EmailService emailService;
     private final SentNewsletterRepository sentNewsletterRepo;
-    private final ScanLogRepository scanLogRepo;
     private final StatsService statsService;
 
     @Value("${stempelkarte.base-url:http://localhost:8080}")
@@ -58,14 +49,13 @@ public class ShopController {
     public ShopController(ShopService shopService, CardService cardService,
                           CustomerCardRepository customerCardRepo, CloudinaryService cloudinaryService,
                           EmailService emailService, SentNewsletterRepository sentNewsletterRepo,
-                          ScanLogRepository scanLogRepo, StatsService statsService) {
+                          StatsService statsService) {
         this.shopService = shopService;
         this.cardService = cardService;
         this.customerCardRepo = customerCardRepo;
         this.cloudinaryService = cloudinaryService;
         this.emailService = emailService;
         this.sentNewsletterRepo = sentNewsletterRepo;
-        this.scanLogRepo = scanLogRepo;
         this.statsService = statsService;
     }
 
@@ -260,33 +250,11 @@ public class ShopController {
     @GetMapping("/stats/day")
     public Map<String, Object> statsDay(@RequestParam String date, Authentication auth) {
         Shop shop = currentShop(auth);
-        java.time.LocalDate d;
         try {
-            d = java.time.LocalDate.parse(date);
-        } catch (Exception e) {
+            return statsService.day(shop, java.time.LocalDate.parse(date));
+        } catch (java.time.format.DateTimeParseException e) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Ungueltiges Datum (erwartet JJJJ-MM-TT)");
         }
-        Instant from = d.atStartOfDay(ZONE).toInstant();
-        Instant to = d.plusDays(1).atStartOfDay(ZONE).toInstant();
-
-        List<ScanLog> logs = scanLogRepo
-                .findByShopIdAndScannedAtBetweenOrderByScannedAtAsc(shop.getId(), from, to);
-
-        int[] byHour = new int[24];
-        int stamps = 0, rewards = 0;
-        for (ScanLog sl : logs) {
-            int h = sl.getScannedAt().atZone(ZONE).getHour();
-            byHour[h] += sl.getStampsAdded();
-            stamps += sl.getStampsAdded();
-            rewards += sl.getRewardsEarned();
-        }
-
-        Map<String, Object> out = new HashMap<>();
-        out.put("date", date);
-        out.put("byHour", byHour);
-        out.put("stamps", stamps);
-        out.put("rewards", rewards);
-        return out;
     }
 
     @Operation(summary = "Staff-Token erstellen")
