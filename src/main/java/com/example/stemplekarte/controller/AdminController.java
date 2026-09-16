@@ -11,6 +11,7 @@ import com.example.stemplekarte.repository.ShopRepository;
 import com.example.stemplekarte.repository.StaffTokenRepository;
 import com.example.stemplekarte.security.JwtService;
 import com.example.stemplekarte.service.ShopService;
+import com.example.stemplekarte.service.StatsService;
 import com.example.stemplekarte.wallet.GoogleWalletSetup;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.slf4j.Logger;
@@ -42,6 +43,7 @@ public class AdminController {
     private final AppleDeviceRepository appleDeviceRepo;
     private final JwtService jwtService;
     private final ShopService shopService;
+    private final StatsService statsService;
     private final PasswordEncoder passwordEncoder;
 
     @Value("${stempelkarte.admin-secret:admin-geheim-nur-lokal}")
@@ -59,6 +61,7 @@ public class AdminController {
                            AppleDeviceRepository appleDeviceRepo,
                            JwtService jwtService,
                            ShopService shopService,
+                           StatsService statsService,
                            PasswordEncoder passwordEncoder) {
         this.googleWalletSetup = googleWalletSetup;
         this.shopRepo = shopRepo;
@@ -68,6 +71,7 @@ public class AdminController {
         this.appleDeviceRepo = appleDeviceRepo;
         this.jwtService = jwtService;
         this.shopService = shopService;
+        this.statsService = statsService;
         this.passwordEncoder = passwordEncoder;
     }
 
@@ -152,6 +156,17 @@ public class AdminController {
         }).toList();
 
         return ResponseEntity.ok(result);
+    }
+
+    /** Statistik EINES Ladens fuer die aufklappbare Zeile im Admin-Panel -
+     *  dieselben Zahlen, die der Laden selbst unter /api/shop/stats/summary sieht. */
+    @GetMapping("/shops/{shopId}/stats/summary")
+    public ResponseEntity<Map<String, Object>> getShopStats(@PathVariable String shopId) {
+        Shop shop = shopRepo.findById(shopId).orElse(null);
+        if (shop == null) {
+            return ResponseEntity.status(404).body(Map.of("error", "Shop nicht gefunden: " + shopId));
+        }
+        return ResponseEntity.ok(statsService.summary(shop));
     }
 
     @GetMapping("/stats")
