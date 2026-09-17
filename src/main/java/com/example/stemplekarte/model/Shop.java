@@ -94,6 +94,16 @@ public class Shop {
     @Column(name = "longitude")
     private Double longitude;
 
+    // Eigener Text fuer die Sperrbildschirm-Erinnerung. Zwei Faelle, weil die
+    // Karte in beiden Zustaenden in Ladennaehe auftaucht: volle Karte und noch
+    // am Sammeln. Leer/null = Standardtext (siehe ApplePassService).
+    // Platzhalter: {belohnung} = Belohnungstext, {stempel} = fehlende Stempel.
+    @Column(name = "lock_screen_text_full", length = 120)
+    private String lockScreenTextFull;
+
+    @Column(name = "lock_screen_text_progress", length = 120)
+    private String lockScreenTextProgress;
+
     // Sonntag aus der Statistik ausrechnen (Ø/Tag, staerkster/ruhigster Tag) -
     // viele Laeden haben sonntags zu, dann ist Sonntag trivial immer "ruhigster
     // Tag". Pro Laden vom Laden selbst umschaltbar; das Admin-Panel zeigt nur
@@ -237,6 +247,16 @@ public class Shop {
         if (enabled != null) this.lockScreenEnabled = enabled;
         if (latitude != null) this.latitude = latitude;
         if (longitude != null) this.longitude = longitude;
+        this.updatedAt = Instant.now();
+    }
+
+    public String getLockScreenTextFull() { return lockScreenTextFull; }
+    public String getLockScreenTextProgress() { return lockScreenTextProgress; }
+
+    /** Leerer Text = zurueck auf den Standardtext. */
+    public void updateLockScreenTexts(String full, String progress) {
+        this.lockScreenTextFull = (full == null || full.isBlank()) ? null : full.trim();
+        this.lockScreenTextProgress = (progress == null || progress.isBlank()) ? null : progress.trim();
         this.updatedAt = Instant.now();
     }
 

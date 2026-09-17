@@ -146,10 +146,13 @@ public class ShopController {
         map.put("lockScreenActive", shop.isLockScreenActive());
         map.put("latitude", shop.getLatitude());
         map.put("longitude", shop.getLongitude());
+        map.put("lockScreenTextFull", shop.getLockScreenTextFull());
+        map.put("lockScreenTextProgress", shop.getLockScreenTextProgress());
         return map;
     }
 
-    public record LockScreenRequest(Boolean enabled, Double latitude, Double longitude) {}
+    public record LockScreenRequest(Boolean enabled, Double latitude, Double longitude,
+                                    String textFull, String textProgress) {}
 
     @Operation(summary = "Sperrbildschirm-Erinnerung ein-/ausschalten",
             description = "Ist die Karte voll, bietet iOS sie in Ladennaehe auf dem "
@@ -161,11 +164,15 @@ public class ShopController {
         Shop shop = currentShop(auth);
         Shop updated = shopService.updateLockScreen(
                 shop.getId(), req.enabled(), req.latitude(), req.longitude());
+        updated = shopService.updateLockScreenTexts(
+                shop.getId(), req.textFull(), req.textProgress());
         Map<String, Object> out = new HashMap<>();
         out.put("lockScreenEnabled", Boolean.TRUE.equals(updated.getLockScreenEnabled()));
         out.put("lockScreenActive", updated.isLockScreenActive());
         out.put("latitude", updated.getLatitude());
         out.put("longitude", updated.getLongitude());
+        out.put("lockScreenTextFull", updated.getLockScreenTextFull());
+        out.put("lockScreenTextProgress", updated.getLockScreenTextProgress());
         return out;
     }
 

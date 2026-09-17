@@ -278,11 +278,22 @@ public class ApplePassService {
             return List.of();
         }
         int fehlend = threshold - stamps;
-        String hinweis = fehlend <= 0
-                ? rewardText + " wartet auf dich"
-                : fehlend == 1
-                        ? "Noch 1 Stempel bis: " + rewardText
-                        : "Noch " + fehlend + " Stempel bis: " + rewardText;
+        String eigener = fehlend <= 0
+                ? shop.getLockScreenTextFull()
+                : shop.getLockScreenTextProgress();
+
+        String hinweis;
+        if (eigener != null && !eigener.isBlank()) {
+            hinweis = eigener
+                    .replace("{belohnung}", rewardText)
+                    .replace("{stempel}", String.valueOf(Math.max(0, fehlend)));
+        } else {
+            hinweis = fehlend <= 0
+                    ? rewardText + " wartet auf dich"
+                    : fehlend == 1
+                            ? "Noch 1 Stempel bis: " + rewardText
+                            : "Noch " + fehlend + " Stempel bis: " + rewardText;
+        }
 
         return List.of(PKLocation.builder()
                 .latitude(shop.getLatitude())

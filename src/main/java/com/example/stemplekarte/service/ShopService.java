@@ -101,6 +101,20 @@ public class ShopService {
         return shopRepo.save(shop);
     }
 
+    /** Eigener Text fuer die Sperrbildschirm-Erinnerung. Leer = Standardtext. */
+    @Transactional
+    public Shop updateLockScreenTexts(String shopId, String textFull, String textProgress) {
+        if (textFull != null && textFull.length() > 120) {
+            throw new IllegalArgumentException("Text darf hoechstens 120 Zeichen haben");
+        }
+        if (textProgress != null && textProgress.length() > 120) {
+            throw new IllegalArgumentException("Text darf hoechstens 120 Zeichen haben");
+        }
+        Shop shop = getById(shopId);
+        shop.updateLockScreenTexts(textFull, textProgress);
+        return shopRepo.save(shop);
+    }
+
     @Transactional
     public Shop updateExcludeSundayFromStats(String shopId, boolean enabled) {
         Shop shop = getById(shopId);
