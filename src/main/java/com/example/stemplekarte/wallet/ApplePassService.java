@@ -161,8 +161,9 @@ public class ApplePassService {
         String templatePath = templateGenerator.generateTemplate(cc);
         String reward = rewardText(cc.getStamps(), threshold, card.getRewardText());
 
-        // Fortschritts-Verhältnis als String bauen (z.B. "3/10")
-        String stampRatio = cc.getStamps() + "/" + threshold;
+        // Fortschritts-Verhältnis als String bauen (z.B. "3/10"). Gedeckelt,
+        // weil ein nachtraeglich gesenkter Schwellwert sonst "10/5" anzeigt.
+        String stampRatio = Math.min(cc.getStamps(), threshold) + "/" + threshold;
 
         // Countdown fuer das grosse Mittelfeld: wie viele Stempel noch bis zur Belohnung.
         // Zaehlt 10 -> 9 -> ... -> 1 runter, danach "Bereit!".
@@ -177,7 +178,7 @@ public class ApplePassService {
         // Sonst (normaler Stempel ODER seltener Überzieh-Fall 8+4): schlichte,
         // zuverlässige Nachricht mit dem neuen Stand. Die Belohnungs-Info
         // kommt in jedem Fall zusätzlich beim Mitarbeiter im Scanner an.
-        String changeMsg = (cc.getStamps() == threshold)
+        String changeMsg = (cc.getStamps() >= threshold)
                 ? "🎉 " + card.getRewardText() + " verdient! Neue Karte: %@"
                 : "Update! Dein Stempelstand: %@";
 

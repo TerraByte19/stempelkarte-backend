@@ -68,8 +68,16 @@ public class CustomerCard {
         this.updatedAt = Instant.now();
     }
 
-    public void redeemReward() {
-        this.stamps = 0;
+    /**
+     * Loest eine Belohnung ein. Abgezogen wird genau die Schwelle, nicht auf 0
+     * gesetzt: senkt ein Laden die Stempelzahl nachtraeglich (z.B. 10 -> 5),
+     * hat ein Kunde ploetzlich mehr Stempel als noetig. Der Rest bleibt stehen
+     * und zaehlt fuer die naechste Belohnung, statt zu verfallen.
+     *
+     * Im Normalfall (Karte genau voll) ist das Ergebnis unveraendert 0.
+     */
+    public void redeemReward(int threshold) {
+        this.stamps = Math.max(0, this.stamps - Math.max(1, threshold));
         this.totalRewards++;
         this.updatedAt = Instant.now();
     }

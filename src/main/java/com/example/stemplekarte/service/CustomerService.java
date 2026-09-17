@@ -179,7 +179,7 @@ public class CustomerService {
 
         for (int i = 0; i < count; i++) {
             if (cc.getStamps() >= threshold) {
-                cc.redeemReward();
+                cc.redeemReward(threshold);
                 result = new ScanResult.Redeemed(cc, card.getRewardText() + " eingeloest!", rewardsEarnedThisScan);
             } else {
                 cc.addStamp();

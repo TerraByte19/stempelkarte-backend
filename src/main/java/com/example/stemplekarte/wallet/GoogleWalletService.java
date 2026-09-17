@@ -251,7 +251,9 @@ public class GoogleWalletService {
                 .setLoyaltyPoints(new LoyaltyPoints()
                         .setLabel("Stempel")
                         .setBalance(new LoyaltyPointsBalance()
-                                .setString(cc.getStamps() + "/" + cc.getCard().getRewardThreshold())))
+                                // Gedeckelt: gesenkte Schwelle wuerde sonst "10/5" anzeigen.
+                                .setString(Math.min(cc.getStamps(), cc.getCard().getRewardThreshold())
+                                        + "/" + cc.getCard().getRewardThreshold())))
                 .setSecondaryLoyaltyPoints(new LoyaltyPoints()
                         .setLabel("Belohnung")
                         .setBalance(new LoyaltyPointsBalance()

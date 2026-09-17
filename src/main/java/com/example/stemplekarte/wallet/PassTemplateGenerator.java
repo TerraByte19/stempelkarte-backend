@@ -69,8 +69,11 @@ public class PassTemplateGenerator {
     public String generateTemplate(CustomerCard cc) throws IOException {
         Card card = cc.getCard();
         Shop shop = card.getShop();
-        int stamps = cc.getStamps();
         int threshold = card.getRewardThreshold();
+        // Gedeckelt: nach einem nachtraeglich gesenkten Schwellwert kann der
+        // Stand ueber der Schwelle liegen - das Raster hat aber nur threshold
+        // Felder.
+        int stamps = Math.min(cc.getStamps(), threshold);
 
         // Karten-Design hat Vorrang, Fallback auf Shop
         String bgColor = notBlank(card.getColorBackground()) ? card.getColorBackground() : shop.getColorBackground();

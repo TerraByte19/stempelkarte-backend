@@ -89,10 +89,15 @@ public class LandingController {
 
             int stamps = cc.getStamps();
             int threshold = card.getRewardThreshold();
+            // Fuer die Anzeige gedeckelt: hat der Laden die Stempelzahl
+            // nachtraeglich gesenkt, liegt der echte Stand ueber der Schwelle -
+            // "10 von 5" waere verwirrend. Der rohe Stand geht trotzdem ins JS,
+            // damit der ?shown=-Abgleich weiter mit dem Server-Stand vergleicht.
+            int stampsShown = Math.min(stamps, threshold);
 
             StringBuilder stampsHtml = new StringBuilder();
             for (int i = 1; i <= threshold; i++) {
-                if (i <= stamps) {
+                if (i <= stampsShown) {
                     stampsHtml.append("<div class='stamp filled'>☕</div>");
                 } else {
                     stampsHtml.append("<div class='stamp empty'>").append(i).append("</div>");
@@ -236,17 +241,20 @@ public class LandingController {
                             let shownStamps = %d;
 
                             function renderStamps(n) {
+                                // shownStamps bleibt der ROHE Server-Stand (fuer ?shown=),
+                                // angezeigt wird hoechstens die Schwelle.
                                 shownStamps = n;
+                                var shown = Math.min(n, threshold);
                                 var h = '';
                                 for (var i = 1; i <= threshold; i++) {
-                                    h += (i <= n)
+                                    h += (i <= shown)
                                         ? "<div class='stamp filled'>☕</div>"
                                         : "<div class='stamp empty'>" + i + "</div>";
                                 }
                                 var grid = document.querySelector('.stamps-grid');
                                 if (grid) grid.innerHTML = h;
                                 var prog = document.querySelector('.progress');
-                                if (prog) prog.textContent = n + ' von ' + threshold + ' Stempeln';
+                                if (prog) prog.textContent = shown + ' von ' + threshold + ' Stempeln';
                                 var rw = document.querySelector('.reward-text');
                                 if (rw) rw.textContent = (n >= threshold)
                                     ? '🎉 ' + rewardText + ' verfügbar!'
@@ -296,7 +304,7 @@ public class LandingController {
                     logoUrl.isBlank() ? "" : "<img src='" + logoUrl + "' class='shop-logo' alt='Logo'>",
                     shopName, card.getName(),
                     customer.getName(),
-                    stamps, threshold,
+                    stampsShown, threshold,
                     stampsHtml,
                     stamps >= threshold ? "🎉 " + card.getRewardText() + " verfügbar!" :
                             "Noch " + (threshold - stamps) + " Stempel bis: " + card.getRewardText(),
