@@ -8,8 +8,10 @@ import com.example.stemplekarte.service.CardService;
 import com.example.stemplekarte.wallet.CloudinaryService;
 import com.example.stemplekarte.wallet.GoogleWalletService;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -78,9 +80,12 @@ public class StampDesignController {
         return toMap(card);
     }
 
-    public record CardInfoRequest(String rewardText) {}
+    public record CardInfoRequest(String rewardText, Integer rewardThreshold) {}
 
-    // ── Karten-Text (Belohnung) einer bestehenden Karte aendern ───────────
+    // ── Karten-Text (Belohnung) und Stempelzahl einer bestehenden Karte ───
+    // aendern. Die Stempelzahl wirkt sofort auf bestehende Kundenkarten:
+    // hochsetzen heisst, volle Karten sind nicht mehr voll; runtersetzen
+    // heisst, wer schon drueber liegt, loest beim naechsten Scan ein.
     @PutMapping("/cards/{cardId}/info")
     public Map<String, Object> updateCardInfo(@PathVariable String cardId,
                                               @RequestBody CardInfoRequest req,
@@ -90,12 +95,23 @@ public class StampDesignController {
         if (req.rewardText() != null && !req.rewardText().isBlank()) {
             card.setRewardText(req.rewardText().trim());
         }
+        if (req.rewardThreshold() != null) {
+            int t = req.rewardThreshold();
+            if (t < 1 || t > 100) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "Stempelzahl muss zwischen 1 und 100 liegen");
+            }
+            card.setRewardThreshold(t);
+        }
         cardService.save(card);
-        // Belohnungstext steht auf der Google-Wallet-Class -> neu schreiben,
-        // damit gespeicherte Karten den neuen Text bekommen. Apple aktualisiert
-        // beim naechsten Pass-Abruf (latestPass baut aus dem aktuellen Stand).
+        // Belohnungstext und Stempelzahl stehen auf der Google-Wallet-Class ->
+        // neu schreiben, damit gespeicherte Karten den neuen Stand bekommen.
+        // Apple aktualisiert beim naechsten Pass-Abruf (latestPass baut aus
+        // dem aktuellen Stand).
         googleWalletService.refreshClassForCard(card);
-        return Map.of("rewardText", card.getRewardText());
+        return Map.of(
+                "rewardText", card.getRewardText(),
+                "rewardThreshold", card.getRewardThreshold());
     }
 
     // ── Logo für eine Karte hochladen ─────────────────────────────────────
