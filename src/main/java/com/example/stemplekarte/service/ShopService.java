@@ -102,6 +102,13 @@ public class ShopService {
     }
 
     @Transactional
+    public Shop updateExcludeSundayFromStats(String shopId, boolean enabled) {
+        Shop shop = getById(shopId);
+        shop.setExcludeSundayFromStats(enabled);
+        return shopRepo.save(shop);
+    }
+
+    @Transactional
     public StaffToken createStaffToken(String shopId, String label) {
         Shop shop = getById(shopId);
         List<StaffToken> existing = staffTokenRepo.findByShop(shop);

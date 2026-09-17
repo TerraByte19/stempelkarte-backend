@@ -169,6 +169,19 @@ public class ShopController {
         return out;
     }
 
+    public record ExcludeSundayRequest(boolean enabled) {}
+
+    @Operation(summary = "Sonntag aus der Statistik ausschliessen (Ø/Tag, staerkster/ruhigster Tag)",
+            description = "Wirkt auf /stats/summary - auch die Ansicht im Admin-Panel, die "
+                    + "denselben Wert nur anzeigt, ohne eigenen Schalter.")
+    @PutMapping("/stats/exclude-sunday")
+    public Map<String, Object> updateExcludeSunday(@RequestBody ExcludeSundayRequest req,
+                                                    Authentication auth) {
+        Shop shop = currentShop(auth);
+        Shop updated = shopService.updateExcludeSundayFromStats(shop.getId(), req.enabled());
+        return Map.of("excludeSunday", Boolean.TRUE.equals(updated.getExcludeSundayFromStats()));
+    }
+
     @Operation(summary = "Shop-Profil aktualisieren")
     @PutMapping("/me")
     public Map<String, Object> updateProfile(@RequestBody UpdateProfileRequest req,

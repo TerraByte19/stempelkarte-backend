@@ -94,6 +94,13 @@ public class Shop {
     @Column(name = "longitude")
     private Double longitude;
 
+    // Sonntag aus der Statistik ausrechnen (Ø/Tag, staerkster/ruhigster Tag) -
+    // viele Laeden haben sonntags zu, dann ist Sonntag trivial immer "ruhigster
+    // Tag". Pro Laden vom Laden selbst umschaltbar; das Admin-Panel zeigt nur
+    // den Wert, den der Laden gesetzt hat (kein eigener Schalter dort).
+    @Column(name = "exclude_sunday_from_stats")
+    private Boolean excludeSundayFromStats;
+
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
@@ -230,6 +237,15 @@ public class Shop {
         if (enabled != null) this.lockScreenEnabled = enabled;
         if (latitude != null) this.latitude = latitude;
         if (longitude != null) this.longitude = longitude;
+        this.updatedAt = Instant.now();
+    }
+
+    // ── Statistik-Einstellungen ─────────────────────────────────────────
+
+    public Boolean getExcludeSundayFromStats() { return excludeSundayFromStats; }
+
+    public void setExcludeSundayFromStats(boolean enabled) {
+        this.excludeSundayFromStats = enabled;
         this.updatedAt = Instant.now();
     }
 }

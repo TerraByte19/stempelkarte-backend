@@ -200,6 +200,9 @@ public class StatsService {
 
         Map<String, Object> summary = new HashMap<>();
         summary.put("shopName", shop.getName());
+        // Einstellung des Ladens, nicht des Betrachters - das Admin-Panel zeigt
+        // nur diesen Wert an (kein eigener Schalter dort).
+        summary.put("excludeSunday", Boolean.TRUE.equals(shop.getExcludeSundayFromStats()));
         summary.put("totalCards", cardService.getByShop(shop).size());  // nur aktive
         summary.put("totalCustomers", customerCount);                   // Personen
         summary.put("totalStamps", stampsGranted);                      // je vergeben (Lebenszeit)
