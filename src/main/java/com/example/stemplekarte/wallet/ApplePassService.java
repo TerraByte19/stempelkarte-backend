@@ -285,9 +285,14 @@ public class ApplePassService {
 
         String hinweis;
         if (eigener != null && !eigener.isBlank()) {
+            // Deutsche und englische Schreibweise, damit ein Laden den
+            // Platzhalter so nutzen kann, wie er in seiner Oberflaeche steht.
+            String offen = String.valueOf(Math.max(0, fehlend));
             hinweis = eigener
                     .replace("{belohnung}", rewardText)
-                    .replace("{stempel}", String.valueOf(Math.max(0, fehlend)));
+                    .replace("{reward}", rewardText)
+                    .replace("{stempel}", offen)
+                    .replace("{stamps}", offen);
         } else {
             hinweis = fehlend <= 0
                     ? rewardText + " wartet auf dich"
