@@ -71,6 +71,12 @@ public class Shop {
     @Column(name = "max_tokens", nullable = false, columnDefinition = "integer default 3")
     private int maxTokens = 3;
 
+    // Reihenfolge im Admin-Panel, per Drag and Drop gesetzt. Ohne das kam
+    // die Liste in der Reihenfolge der Datenbank - also praktisch zufaellig
+    // und bei jedem Aufruf womoeglich anders.
+    @Column(name = "sort_order", nullable = false, columnDefinition = "integer default 0")
+    private int sortOrder = 0;
+
     // Sprache des Ladens: "de" oder "ar". null/leer = "de" (alle Bestandslaeden).
     // Steuert Kundenkarte, Anmeldeseite, Bestaetigungsseiten und E-Mails.
     // Nullable -> ddl-auto:update braucht keinen DB-Reset.
@@ -176,6 +182,16 @@ public class Shop {
     public void setMaxTokens(int maxTokens) {
         this.maxTokens = maxTokens;
         this.updatedAt = Instant.now();
+    }
+
+    public int getSortOrder() { return sortOrder; }
+
+    /**
+     * Setzt die Position im Admin-Panel. Ruehrt updatedAt bewusst NICHT an:
+     * Umsortieren ist keine Aenderung am Laden selbst.
+     */
+    public void setSortOrder(int sortOrder) {
+        this.sortOrder = sortOrder;
     }
 
     public void setHeroImageUrl(String heroImageUrl) {

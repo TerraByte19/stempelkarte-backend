@@ -22,6 +22,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -139,7 +140,7 @@ public class AdminController {
 
     @GetMapping("/shops")
     public ResponseEntity<List<Map<String, Object>>> getAllShops() {
-        List<Map<String, Object>> result = shopRepo.findAll().stream().map(shop -> {
+        List<Map<String, Object>> result = shopRepo.findAllByOrderBySortOrderAscNameAsc().stream().map(shop -> {
             int cardCount = cardRepo.findByShopAndActiveTrue(shop).size();
             // Personen, nicht customer_card-Zeilen (bei Mehrfachkarten sonst doppelt).
             long customerCount = customerCardRepo.countDistinctCustomersByShop(shop);
@@ -156,6 +157,39 @@ public class AdminController {
         }).toList();
 
         return ResponseEntity.ok(result);
+    }
+
+    public record ShopOrderRequest(List<String> shopIds) {}
+
+    /**
+     * Neue Reihenfolge der Laeden im Admin-Panel (Drag and Drop).
+     *
+     * Erwartet ALLE Laden-IDs in der gewuenschten Reihenfolge. Unbekannte IDs
+     * werden ignoriert; Laeden, die in der Liste fehlen, rutschen ans Ende -
+     * so bleibt die Liste auch dann heil, wenn im anderen Tab gerade ein
+     * Laden angelegt oder geloescht wurde.
+     */
+    @PutMapping("/shops/order")
+    public ResponseEntity<Map<String, Object>> updateShopOrder(@RequestBody ShopOrderRequest req) {
+        if (req == null || req.shopIds() == null || req.shopIds().isEmpty()) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Keine Reihenfolge uebergeben"));
+        }
+
+        Map<String, Shop> vorhanden = new HashMap<>();
+        for (Shop s : shopRepo.findAll()) vorhanden.put(s.getId(), s);
+
+        List<Shop> neu = new ArrayList<>();
+        for (String id : req.shopIds()) {
+            Shop s = vorhanden.remove(id);
+            if (s != null) neu.add(s);
+        }
+        // Was nicht mitgeschickt wurde, haengt hinten dran statt zu verschwinden.
+        neu.addAll(vorhanden.values());
+
+        for (int i = 0; i < neu.size(); i++) neu.get(i).setSortOrder(i);
+        shopRepo.saveAll(neu);
+
+        return ResponseEntity.ok(Map.of("sorted", neu.size()));
     }
 
     /** Statistik EINES Ladens fuer die aufklappbare Zeile im Admin-Panel -
