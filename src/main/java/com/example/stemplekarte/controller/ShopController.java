@@ -305,18 +305,31 @@ public class ShopController {
             @NotBlank @Size(max = 10000) String body,
             @Size(max = 10) java.util.List<String> imageUrls) {}
 
+    /**
+     * Empfaenger des Newsletters: eine Zeile pro PERSON, nicht pro Karte.
+     * Hat jemand zwei Karten desselben Ladens, ist das trotzdem ein Kunde
+     * und eine Mail. Genommen wird die erste Karte mit Einwilligung - ueber
+     * die laeuft der Abmelde-Link.
+     */
+    private List<CustomerCard> newsletterEmpfaenger(Shop shop) {
+        java.util.Map<String, CustomerCard> proKunde = new java.util.LinkedHashMap<>();
+        for (CustomerCard cc : customerCardRepo.findByCard_ShopAndMarketingConsentTrue(shop)) {
+            proKunde.putIfAbsent(cc.getCustomer().getId(), cc);
+        }
+        return List.copyOf(proKunde.values());
+    }
+
     @Operation(summary = "Anzahl Kunden mit Werbe-Einwilligung (Vorschau für Newsletter)")
     @GetMapping("/newsletter/recipients")
     public Map<String, Object> newsletterRecipients(Authentication auth) {
         Shop shop = currentShop(auth);
-        List<CustomerCard> all =
-                customerCardRepo.findByCard_ShopAndMarketingConsentTrue(shop);
-        // Bestätigte (Double-Opt-In) zählen separat — nur die bekommen wirklich Mails
-        long confirmed = all.stream()
+        List<CustomerCard> empfaenger = newsletterEmpfaenger(shop);
+        // Bestätigte (Double-Opt-In) zählen separat, nur die bekommen wirklich Mails
+        long confirmed = empfaenger.stream()
                 .filter(cc -> cc.getCustomer().isEmailConfirmed())
                 .count();
         return Map.of(
-                "total", all.size(),
+                "total", empfaenger.size(),
                 "confirmed", confirmed
         );
     }
@@ -355,8 +368,7 @@ public class ShopController {
                                               NewsletterRequest req,
                                               Authentication auth) {
         Shop shop = currentShop(auth);
-        List<CustomerCard> recipients =
-                customerCardRepo.findByCard_ShopAndMarketingConsentTrue(shop);
+        List<CustomerCard> recipients = newsletterEmpfaenger(shop);
 
         int sent = 0;
         int skipped = 0;

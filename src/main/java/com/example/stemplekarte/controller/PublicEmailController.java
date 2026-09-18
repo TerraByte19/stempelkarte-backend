@@ -1,5 +1,6 @@
 package com.example.stemplekarte.controller;
 
+import com.example.stemplekarte.model.CustomerCard;
 import com.example.stemplekarte.repository.CustomerCardRepository;
 import com.example.stemplekarte.repository.CustomerRepository;
 import com.example.stemplekarte.service.CustomerService;
@@ -98,8 +99,17 @@ public class PublicEmailController {
         return customerCardRepository.findById(customerCardId)
                 .filter(cc -> cc.getAuthToken().equals(authToken))
                 .map(cc -> {
-                    cc.revokeMarketingConsent();
-                    customerCardRepository.save(cc);
+                    // Abmelden gilt fuer den LADEN, nicht fuer eine einzelne Karte.
+                    // Wer zwei Karten desselben Ladens hat, bekaeme sonst weiter
+                    // Post - obwohl auf dieser Seite das Gegenteil steht.
+                    String shopId = cc.getCard().getShop().getId();
+                    customerCardRepository.findByCustomer(cc.getCustomer()).stream()
+                            .filter(k -> k.getCard().getShop().getId().equals(shopId))
+                            .filter(CustomerCard::isMarketingConsent)
+                            .forEach(k -> {
+                                k.revokeMarketingConsent();
+                                customerCardRepository.save(k);
+                            });
                     return page("✅", "Abgemeldet",
                             "Du erhältst keine Angebote mehr von "
                                     + esc(cc.getCard().getShop().getName())
