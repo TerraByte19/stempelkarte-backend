@@ -310,7 +310,7 @@ public class ApplePassService {
 
     private String rewardText(int stamps, int threshold, String rewardText) {
         return stamps >= threshold
-                ? rewardText + " verfuegbar!"
+                ? rewardText + " verfügbar!"
                 : rewardText;
     }
 
