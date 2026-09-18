@@ -10,4 +10,7 @@ public interface SentNewsletterRepository extends JpaRepository<SentNewsletter, 
 
     // Newsletter eines Shops, neueste zuerst, seitenweise (für den Verlauf).
     Page<SentNewsletter> findByShopOrderBySentAtDesc(Shop shop, Pageable pageable);
+
+    // Beim Start: Versände, die ein Neustart mittendrin erwischt hat.
+    java.util.List<SentNewsletter> findByStatus(String status);
 }

@@ -3,6 +3,7 @@ package com.example.stemplekarte.controller;
 import com.example.stemplekarte.model.Card;
 import com.example.stemplekarte.model.Customer;
 import com.example.stemplekarte.model.CustomerCard;
+import com.example.stemplekarte.model.SentNewsletter;
 import com.example.stemplekarte.model.Shop;
 import com.example.stemplekarte.repository.CustomerCardRepository;
 import com.example.stemplekarte.repository.CustomerRepository;
@@ -11,6 +12,7 @@ import com.example.stemplekarte.security.JwtAuthFilter;
 import com.example.stemplekarte.service.CardService;
 import com.example.stemplekarte.service.CustomerService;
 import com.example.stemplekarte.service.EmailService;
+import com.example.stemplekarte.service.NewsletterService;
 import com.example.stemplekarte.service.ShopService;
 import com.example.stemplekarte.service.StatsService;
 import com.example.stemplekarte.wallet.CloudinaryService;
@@ -20,6 +22,7 @@ import org.springframework.security.core.Authentication;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -36,6 +39,9 @@ import static org.mockito.Mockito.when;
  *
  * Dasselbe beim Abmelden: der Link widerrief die Einwilligung nur fuer die
  * eine Karte, obwohl die Seite "keine Angebote mehr von <Laden>" versprach.
+ *
+ * Und der Verlauf zaehlte Versuche statt Zustellungen: eine Mail, die der
+ * Mailserver ablehnte, stand trotzdem als "versendet" drin.
  */
 class NewsletterEmpfaengerTest {
 
@@ -59,11 +65,21 @@ class NewsletterEmpfaengerTest {
         karteA.giveMarketingConsent();
         karteB.giveMarketingConsent();
         when(ccRepo.findByCard_ShopAndMarketingConsentTrue(laden)).thenReturn(List.of(karteA, karteB));
+        // Verlaufs-Eintrag merken, damit der Versand-Job ihn danach
+        // wiederfindet und das Ergebnis eintragen kann.
+        when(verlaufRepo.save(any())).thenAnswer(i -> eintrag = i.getArgument(0));
+        when(verlaufRepo.findById(anyString())).thenAnswer(i -> Optional.ofNullable(eintrag));
     }
 
+    /** Der Verlaufs-Eintrag, den sendNewsletter angelegt hat. */
+    private SentNewsletter eintrag;
+
     private ShopController controller() {
+        // Der Versand laeuft hier synchron: @Async wirkt nur im Spring-Kontext.
+        NewsletterService versand = new NewsletterService(ccRepo, verlaufRepo, mailer);
         return new ShopController(mock(ShopService.class), mock(CardService.class), ccRepo,
-                mock(CloudinaryService.class), mailer, verlaufRepo, mock(StatsService.class));
+                mock(CloudinaryService.class), mailer, verlaufRepo, mock(StatsService.class),
+                versand);
     }
 
     private Authentication auth() {
@@ -82,12 +98,29 @@ class NewsletterEmpfaengerTest {
     @Test
     void zweiKartenEinKunde_bekommtNurEineMail() {
         aufbau();
+        when(mailer.sendNewsletterMail(anyString(), any(), anyString(), anyString(),
+                anyString(), any(), anyString(), anyString())).thenReturn(true);
         var req = new ShopController.NewsletterRequest("Betreff", "Text", List.of());
         Map<String, Object> ergebnis = controller().sendNewsletter(req, auth());
 
-        assertThat(ergebnis.get("sent")).isEqualTo(1);
+        assertThat(ergebnis.get("queued")).isEqualTo(1);
         verify(mailer, times(1)).sendNewsletterMail(
                 anyString(), any(), anyString(), anyString(), anyString(), any(), anyString(), anyString());
+    }
+
+    @Test
+    void abgelehnteMail_zaehltNichtAlsVersendet() {
+        aufbau();
+        when(mailer.sendNewsletterMail(anyString(), any(), anyString(), anyString(),
+                anyString(), any(), anyString(), anyString())).thenReturn(false);
+
+        var req = new ShopController.NewsletterRequest("Betreff", "Text", List.of());
+        controller().sendNewsletter(req, auth());
+
+        assertThat(eintrag.getRecipientCount()).isZero();
+        assertThat(eintrag.getFailedCount()).isEqualTo(1);
+        assertThat(eintrag.getFailedSample()).contains("alex@test.de");
+        assertThat(eintrag.getStatus()).isEqualTo(SentNewsletter.FERTIG);
     }
 
     @Test

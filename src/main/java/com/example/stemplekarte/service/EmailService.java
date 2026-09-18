@@ -123,10 +123,13 @@ public class EmailService {
     // imageUrls ist optional: vom Besitzer hochgeladene Bilder (z.B. Menü,
     // Aktionsfotos), die unter dem Text angezeigt werden — zusätzlich zum
     // Hero-Bild/Logo im Header.
-    @Async
-    public void sendNewsletterMail(String to, Shop shop, String replyTo,
-                                   String subject, String bodyText, List<String> imageUrls,
-                                   String unsubscribeUrl, String deleteUrl) {
+    //
+    // Bewusst NICHT @Async: der Aufrufer (NewsletterService) laeuft schon im
+    // Hintergrund und braucht pro Empfaenger das echte Ergebnis. Gibt true
+    // zurueck, wenn der Mailserver die Mail angenommen hat.
+    public boolean sendNewsletterMail(String to, Shop shop, String replyTo,
+                                      String subject, String bodyText, List<String> imageUrls,
+                                      String unsubscribeUrl, String deleteUrl) {
         String shopName = shop.getName();
 
         StringBuilder imagesHtml = new StringBuilder();
@@ -149,25 +152,31 @@ public class EmailService {
                         + esc(shopName) + " erhalten (abmelden)</a>"
         );
 
-        send(to, shopName, replyTo, subject, html);
+        return send(to, shopName, replyTo, subject, html);
     }
 
     // ── intern ────────────────────────────────────────────────────────────
 
-    private void send(String to, String fromName, String replyTo, String subject, String html) {
+    /**
+     * Gibt true zurueck, wenn der Mailserver die Mail angenommen hat.
+     * false heisst: nicht rausgegangen (deaktiviert, Limit, Fehler) — der
+     * Aufrufer kann das dem Laden ehrlich anzeigen statt stillschweigend
+     * "versendet" zu melden.
+     */
+    private boolean send(String to, String fromName, String replyTo, String subject, String html) {
         if (!enabled) {
             log.info("MAIL deaktiviert (MAIL_ENABLED=false) — würde senden an {}: '{}'", to, subject);
-            return;
+            return false;
         }
         if (from == null || from.isBlank()) {
             log.warn("MAIL_FROM fehlt — Mail an {} nicht gesendet", to);
-            return;
+            return false;
         }
         // Globales Tages-Limit prüfen (Schutz fürs Mail-Kontingent).
         if (!reserveDailySlot()) {
             log.error("TAGES-MAILLIMIT erreicht ({}/{}) — Mail an {} NICHT gesendet: '{}'",
                     dailyLimit, dailyLimit, to, subject);
-            return;
+            return false;
         }
         try {
             MimeMessage msg = mailSender.createMimeMessage();
@@ -179,8 +188,10 @@ public class EmailService {
             h.setText(html, true);
             mailSender.send(msg);
             log.info("Mail gesendet an {}: '{}'", to, subject);
+            return true;
         } catch (MessagingException | UnsupportedEncodingException | MailException e) {
             log.error("Mail-Versand an {} fehlgeschlagen: {}", to, e.getMessage());
+            return false;
         }
     }
 

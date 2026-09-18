@@ -6,6 +6,7 @@ import com.example.stemplekarte.repository.SentNewsletterRepository;
 import com.example.stemplekarte.security.JwtAuthFilter;
 import com.example.stemplekarte.service.CardService;
 import com.example.stemplekarte.service.EmailService;
+import com.example.stemplekarte.service.NewsletterService;
 import com.example.stemplekarte.service.ShopService;
 import com.example.stemplekarte.service.StatsService;
 import com.example.stemplekarte.wallet.CloudinaryService;
@@ -42,6 +43,7 @@ public class ShopController {
     private final EmailService emailService;
     private final SentNewsletterRepository sentNewsletterRepo;
     private final StatsService statsService;
+    private final NewsletterService newsletterService;
 
     @Value("${stempelkarte.base-url:http://localhost:8080}")
     private String baseUrl;
@@ -49,7 +51,7 @@ public class ShopController {
     public ShopController(ShopService shopService, CardService cardService,
                           CustomerCardRepository customerCardRepo, CloudinaryService cloudinaryService,
                           EmailService emailService, SentNewsletterRepository sentNewsletterRepo,
-                          StatsService statsService) {
+                          StatsService statsService, NewsletterService newsletterService) {
         this.shopService = shopService;
         this.cardService = cardService;
         this.customerCardRepo = customerCardRepo;
@@ -57,6 +59,7 @@ public class ShopController {
         this.emailService = emailService;
         this.sentNewsletterRepo = sentNewsletterRepo;
         this.statsService = statsService;
+        this.newsletterService = newsletterService;
     }
 
     public record UpdateProfileRequest(String name, String logoUrl,
@@ -305,25 +308,11 @@ public class ShopController {
             @NotBlank @Size(max = 10000) String body,
             @Size(max = 10) java.util.List<String> imageUrls) {}
 
-    /**
-     * Empfaenger des Newsletters: eine Zeile pro PERSON, nicht pro Karte.
-     * Hat jemand zwei Karten desselben Ladens, ist das trotzdem ein Kunde
-     * und eine Mail. Genommen wird die erste Karte mit Einwilligung - ueber
-     * die laeuft der Abmelde-Link.
-     */
-    private List<CustomerCard> newsletterEmpfaenger(Shop shop) {
-        java.util.Map<String, CustomerCard> proKunde = new java.util.LinkedHashMap<>();
-        for (CustomerCard cc : customerCardRepo.findByCard_ShopAndMarketingConsentTrue(shop)) {
-            proKunde.putIfAbsent(cc.getCustomer().getId(), cc);
-        }
-        return List.copyOf(proKunde.values());
-    }
-
     @Operation(summary = "Anzahl Kunden mit Werbe-Einwilligung (Vorschau für Newsletter)")
     @GetMapping("/newsletter/recipients")
     public Map<String, Object> newsletterRecipients(Authentication auth) {
         Shop shop = currentShop(auth);
-        List<CustomerCard> empfaenger = newsletterEmpfaenger(shop);
+        List<CustomerCard> empfaenger = newsletterService.empfaenger(shop);
         // Bestätigte (Double-Opt-In) zählen separat, nur die bekommen wirklich Mails
         long confirmed = empfaenger.stream()
                 .filter(cc -> cc.getCustomer().isEmailConfirmed())
@@ -348,7 +337,9 @@ public class ShopController {
         String unsubscribeUrl = baseUrl + "/mail/unsubscribe?cc=TEST&t=TEST";
         String deleteUrl = baseUrl + "/mail/delete-request?c=TEST";
 
-        emailService.sendNewsletterMail(
+        // Eine einzige Mail — die kann direkt gesendet werden, und der Laden
+        // erfaehrt sofort, ob sie rausging. Genau dafuer ist der Test da.
+        boolean ok = emailService.sendNewsletterMail(
                 shop.getEmail(),               // nur an den Laden selbst
                 shop,                          // Branding (Logo + Hero-Bild)
                 shop.getEmail(),               // Reply-To
@@ -359,7 +350,7 @@ public class ShopController {
                 deleteUrl
         );
 
-        return Map.of("sentTo", shop.getEmail());
+        return Map.of("sentTo", shop.getEmail(), "ok", ok);
     }
 
     @Operation(summary = "Newsletter an alle Kunden mit Einwilligung versenden")
@@ -368,43 +359,34 @@ public class ShopController {
                                               NewsletterRequest req,
                                               Authentication auth) {
         Shop shop = currentShop(auth);
-        List<CustomerCard> recipients = newsletterEmpfaenger(shop);
 
-        int sent = 0;
-        int skipped = 0;
-        for (CustomerCard cc : recipients) {
-            // Double-Opt-In: nur an bestätigte E-Mails senden (gesetzlich Pflicht)
-            if (!cc.getCustomer().isEmailConfirmed()) { skipped++; continue; }
+        int alle = newsletterService.empfaenger(shop).size();
+        // Double-Opt-In: nur an bestätigte E-Mails senden (gesetzlich Pflicht)
+        List<NewsletterService.Empfaenger> empfaenger = newsletterService.bestaetigteEmpfaenger(shop);
+        int skipped = alle - empfaenger.size();
 
-            String unsubscribeUrl = baseUrl + "/mail/unsubscribe"
-                    + "?cc=" + cc.getId() + "&t=" + cc.getAuthToken();
-            String deleteUrl = baseUrl + "/mail/delete-request"
-                    + "?c=" + cc.getCustomer().getId();
+        // Verlaufs-Eintrag zuerst anlegen (auch bei 0 Empfängern — dann sieht
+        // der Laden trotzdem, dass/was er versendet hat), dann im Hintergrund
+        // senden. Synchron zu senden wuerde bei mehreren hundert Empfaengern
+        // in den Gateway-Timeout laufen.
+        SentNewsletter eintrag = sentNewsletterRepo.save(
+                SentNewsletter.starte(shop, req.subject(), req.body(), req.imageUrls()));
 
-            emailService.sendNewsletterMail(
-                    cc.getCustomer().getEmail(),
-                    shop,                           // für Branding (Logo + Hero-Bild im Header)
-                    shop.getEmail(),               // Reply-To = der Laden
-                    req.subject(),
-                    req.body(),
-                    req.imageUrls(),               // optionale Newsletter-Bilder (Liste)
-                    unsubscribeUrl,
-                    deleteUrl
-            );
-            sent++;
-        }
+        newsletterService.versendeImHintergrund(eintrag.getId(), shop, empfaenger,
+                req.subject(), req.body(), req.imageUrls());
 
-        // Newsletter im Verlauf speichern (auch wenn 0 Empfänger — dann
-        // sieht der Laden trotzdem, dass/was er versendet hat).
-        sentNewsletterRepo.save(SentNewsletter.create(
-                shop, req.subject(), req.body(), req.imageUrls(), sent));
-
-        return Map.of("sent", sent, "skippedUnconfirmed", skipped);
+        // "queued", nicht "sent": zum Zeitpunkt der Antwort ist noch keine
+        // Mail draussen. Das echte Ergebnis steht danach im Verlauf.
+        return Map.of("queued", empfaenger.size(),
+                "skippedUnconfirmed", skipped,
+                "newsletterId", eintrag.getId());
     }
 
-    // Ein Eintrag im Newsletter-Verlauf
+    // Ein Eintrag im Newsletter-Verlauf. recipientCount = tatsaechlich
+    // zugestellte Mails, status = RUNNING solange der Versand laeuft.
     public record NewsletterHistoryItem(String id, String subject, String body,
                                         List<String> imageUrls, int recipientCount,
+                                        int failedCount, String status, String failedSample,
                                         String sentAt) {}
 
     @Operation(summary = "Newsletter-Verlauf (seitenweise, neueste zuerst)")
@@ -421,6 +403,7 @@ public class ShopController {
                 .map(n -> new NewsletterHistoryItem(
                         n.getId(), n.getSubject(), n.getBody(),
                         n.getImageUrls(), n.getRecipientCount(),
+                        n.getFailedCount(), n.getStatus(), n.getFailedSample(),
                         n.getSentAt().toString()))
                 .toList();
 
