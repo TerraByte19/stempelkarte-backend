@@ -82,13 +82,19 @@ public class EmailService {
                 + "&customerId=" + customer.getId() + "&cardId=" + cardId;
         String deleteUrl  = baseUrl + "/mail/delete-request?c=" + customer.getId();
 
-        String html = wrap(
+        String html = seite(
                 shop,
-                "Hallo " + esc(customer.getName()) + ",",
-                "<p>du hast dich für die digitale Stempelkarte von <b>" + esc(shopName) + "</b> angemeldet.</p>"
-                        + "<p>Bestätige deine E-Mail-Adresse, um deine Stempelkarte aufs Handy zu bekommen:</p>"
-                        + button(confirmUrl, "Stempelkarte aufs Handy holen")
-                        + "<p style=\"font-size:13px;color:#888\">Wenn du das nicht warst, ignoriere diese Mail einfach.</p>",
+                "Ein Klick, und deine Stempelkarte ist auf dem Handy.",
+                textBlock("Deine Stempelkarte bei " + shopName,
+                        "Hallo " + esc(customer.getName()) + ",<br><br>"
+                                + "du hast dich für die digitale Stempelkarte von <b>" + esc(shopName)
+                                + "</b> angemeldet. Bestätige kurz deine E-Mail-Adresse, dann liegt die Karte "
+                                + "in deiner Wallet.")
+                        + knopfBlock("Stempelkarte aufs Handy holen", confirmUrl,
+                        shop.getColorBackground() != null ? shop.getColorBackground() : STAMPIT_FARBE)
+                        + textBlock(null,
+                        "<span style=\"font-size:13px;color:#8a8a95\">"
+                                + "Wenn du das nicht warst, ignoriere diese Mail einfach.</span>"),
                 deleteUrl
         );
 
@@ -103,14 +109,18 @@ public class EmailService {
     public void sendDeletionMail(Customer customer) {
         String deleteConfirmUrl = baseUrl + "/mail/delete-confirm?token=" + customer.getDeleteToken();
 
-        String html = wrap(
+        String html = seite(
                 null,
-                "Hallo " + esc(customer.getName()) + ",",
-                "<p>du hast die Löschung deiner Daten angefordert.</p>"
-                        + "<p><b>Achtung:</b> Damit werden dein Konto, alle Stempelkarten und alle "
-                        + "gesammelten Stempel unwiderruflich gelöscht.</p>"
-                        + button(deleteConfirmUrl, "Meine Daten endgültig löschen")
-                        + "<p style=\"font-size:13px;color:#888\">Wenn du das nicht warst, ignoriere diese Mail — dann passiert nichts.</p>",
+                "Löschung deiner Daten bestätigen.",
+                textBlock("Löschung bestätigen",
+                        "Hallo " + esc(customer.getName()) + ",<br><br>"
+                                + "du hast die Löschung deiner Daten angefordert. <b>Achtung:</b> Damit werden "
+                                + "dein Konto, alle Stempelkarten und alle gesammelten Stempel unwiderruflich "
+                                + "gelöscht.")
+                        + knopfBlock("Meine Daten endgültig löschen", deleteConfirmUrl, "#c0392b")
+                        + textBlock(null,
+                        "<span style=\"font-size:13px;color:#8a8a95\">"
+                                + "Wenn du das nicht warst, ignoriere diese Mail - dann passiert nichts.</span>"),
                 null
         );
 
@@ -119,40 +129,92 @@ public class EmailService {
     }
 
     // ── 3. Newsletter / Werbe-Mail eines Ladens ──────────────────────────
+
+    /**
+     * Was der Laden geschrieben hat. Gilt fuer alle Empfaenger gleich.
+     *
+     * ueberschrift, knopfText und knopfUrl sind optional - leer heisst,
+     * der Block faellt weg. Ein Knopf ohne Ziel waere ein toter Klick,
+     * deshalb zaehlt nur, wenn beides da ist.
+     */
+    public record NewsletterInhalt(String subject, String ueberschrift, String text,
+                                   List<String> imageUrls, boolean bilderUeberText,
+                                   String knopfText, String knopfUrl) {}
+
+    /** Was sich pro Empfaenger unterscheidet. */
+    public record NewsletterEmpfaenger(String email, int stempel, int benoetigt,
+                                       String belohnung, String unsubscribeUrl,
+                                       String deleteUrl) {}
+
     // unsubscribeUrl ist Pflicht (UWG): jeder Empfänger kann sich abmelden.
-    // imageUrls ist optional: vom Besitzer hochgeladene Bilder (z.B. Menü,
-    // Aktionsfotos), die unter dem Text angezeigt werden — zusätzlich zum
-    // Hero-Bild/Logo im Header.
     //
     // Bewusst NICHT @Async: der Aufrufer (NewsletterService) laeuft schon im
     // Hintergrund und braucht pro Empfaenger das echte Ergebnis. Gibt true
     // zurueck, wenn der Mailserver die Mail angenommen hat.
-    public boolean sendNewsletterMail(String to, Shop shop, String replyTo,
-                                      String subject, String bodyText, List<String> imageUrls,
-                                      String unsubscribeUrl, String deleteUrl) {
+    public boolean sendNewsletterMail(Shop shop, String replyTo,
+                                      NewsletterInhalt inhalt, NewsletterEmpfaenger e) {
         String shopName = shop.getName();
+        String farbe = (shop.getColorBackground() != null) ? shop.getColorBackground() : STAMPIT_FARBE;
 
-        StringBuilder imagesHtml = new StringBuilder();
-        if (imageUrls != null) {
-            for (String url : imageUrls) {
+        StringBuilder bilder = new StringBuilder();
+        if (inhalt.imageUrls() != null) {
+            for (String url : inhalt.imageUrls()) {
                 if (url == null || url.isBlank()) continue;
-                imagesHtml.append("<img src=\"").append(url).append("\" alt=\"\" ")
-                        .append("style=\"width:100%;height:auto;border-radius:12px;")
-                        .append("margin-top:16px;display:block\">");
+                bilder.append(bildBlock(url));
             }
         }
 
-        String html = wrap(
+        String text = textBlock(inhalt.ueberschrift(),
+                esc(inhalt.text()).replace("\n", "<br>"));
+
+        StringBuilder inneres = new StringBuilder();
+        if (inhalt.bilderUeberText()) inneres.append(bilder).append(text);
+        else inneres.append(text).append(bilder);
+
+        inneres.append(stempelstand(e, farbe));
+
+        // Knopf nur, wenn der Laden Text UND Ziel gesetzt hat.
+        if (inhalt.knopfText() != null && !inhalt.knopfText().isBlank()
+                && inhalt.knopfUrl() != null && !inhalt.knopfUrl().isBlank()) {
+            inneres.append(knopfBlock(inhalt.knopfText(), inhalt.knopfUrl(), farbe));
+        }
+
+        String html = seite(
                 shop,
-                null,
-                "<p style=\"white-space:pre-line\">" + esc(bodyText) + "</p>"
-                        + imagesHtml,
-                deleteUrl,
-                "<a href=\"" + unsubscribeUrl + "\" style=\"color:#888\">Keine Angebote mehr von "
-                        + esc(shopName) + " erhalten (abmelden)</a>"
+                inhalt.ueberschrift() != null && !inhalt.ueberschrift().isBlank()
+                        ? inhalt.ueberschrift() : inhalt.text(),
+                inneres.toString(),
+                e.deleteUrl(),
+                "<a href=\"" + attr(e.unsubscribeUrl()) + "\" style=\"color:#8a8a95\">"
+                        + "Keine Angebote mehr von " + esc(shopName) + " erhalten (abmelden)</a>"
         );
 
-        return send(to, shopName, replyTo, subject, html);
+        return send(e.email(), shopName, replyTo, inhalt.subject(), html);
+    }
+
+    /**
+     * "Dein Stand: 7 von 10 Stempeln". Der Grund, warum diese Mail nicht
+     * wie Werbung wirkt: sie sagt dem Gast etwas ueber ihn selbst.
+     */
+    private String stempelstand(NewsletterEmpfaenger e, String farbe) {
+        if (e.benoetigt() <= 0) return "";
+        int stand = Math.min(e.stempel(), e.benoetigt());
+        int fehlen = e.benoetigt() - stand;
+
+        String zweiteZeile;
+        if (fehlen == 0) {
+            zweiteZeile = (e.belohnung() != null && !e.belohnung().isBlank())
+                    ? esc(e.belohnung()) + " wartet auf dich."
+                    : "Deine Belohnung wartet auf dich.";
+        } else if (e.belohnung() != null && !e.belohnung().isBlank()) {
+            zweiteZeile = "Noch " + fehlen + " bis: " + esc(e.belohnung()) + ".";
+        } else {
+            zweiteZeile = "Noch " + fehlen + " bis zur Belohnung.";
+        }
+
+        return infoBlock("Dein Stand: <b style=\"color:" + attr(farbe) + ";\">"
+                + stand + " von " + e.benoetigt() + " Stempeln</b><br>"
+                + "<span style=\"font-size:14px;color:#70707c;\">" + zweiteZeile + "</span>");
     }
 
     // ── intern ────────────────────────────────────────────────────────────
@@ -230,71 +292,149 @@ public class EmailService {
         return true;
     }
 
+    // ── Mail-Layout ───────────────────────────────────────────────────────
+    //
+    // Mail-Clients sind kein Browser. Gmail und Outlook werfen display:flex,
+    // gap und die meisten modernen Eigenschaften weg - deshalb liegt das
+    // Layout auf verschachtelten Tabellen mit Inline-Styles. Sieht nach 2005
+    // aus, ist aber das Einzige, was ueberall gleich ankommt.
+
+    private static final String SCHRIFT =
+            "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif";
+    private static final String STAMPIT_FARBE = "#3C3489";
+
     /**
-     * Einheitliches Mail-Layout. Footer-Zeilen (Lösch-Link, Abmelde-Link) optional.
-     * Wenn ein Shop übergeben wird, zeigt der Header dessen Hero-Bild (volle
-     * Breite, falls vorhanden) und darunter Logo + Laden-Name.
+     * Rahmen der Mail: Grundgeruest, Markenband des Ladens, Inhalt, Fuss.
+     *
+     * vorschauzeile ist der Text, den die Inbox neben dem Betreff anzeigt.
+     * Ohne den zeigt sie den Anfang des Fliesstextes - oft "Hallo Alex,".
      */
-    private String wrap(Shop shop, String greeting, String content, String deleteUrl, String... extraFooter) {
-        StringBuilder footer = new StringBuilder();
-        for (String line : extraFooter) {
-            footer.append("<div style=\"margin-top:6px\">").append(line).append("</div>");
+    private String seite(Shop shop, String vorschauzeile, String inhalt,
+                         String deleteUrl, String... extraFooter) {
+        StringBuilder fuss = new StringBuilder();
+        fuss.append("Diese Mail wurde über StampIT (digitale Stempelkarten) versendet.");
+        for (String zeile : extraFooter) {
+            fuss.append("<br>").append(zeile);
         }
         if (deleteUrl != null) {
-            footer.append("<div style=\"margin-top:6px\"><a href=\"").append(deleteUrl)
-                    .append("\" style=\"color:#888\">Ich möchte mein Konto und meine Daten löschen</a></div>");
+            fuss.append("<br><a href=\"").append(attr(deleteUrl)).append("\" style=\"color:#8a8a95\">")
+                    .append("Ich möchte mein Konto und meine Daten löschen</a>");
         }
 
-        return "<div style=\"font-family:-apple-system,Segoe UI,sans-serif;max-width:520px;margin:0 auto;"
-                + "padding:24px;color:#1a1a1a\">"
-                + emailHeader(shop)
-                + (greeting != null ? "<p>" + greeting + "</p>" : "")
-                + content
-                + "<hr style=\"border:none;border-top:1px solid #eee;margin:24px 0 12px\">"
-                + "<div style=\"font-size:12px;color:#999\">"
-                + "Diese Mail wurde über StampIT (digitale Stempelkarten) versendet."
-                + footer
-                + "</div></div>";
+        return "<!doctype html><html lang=\"de\"><head><meta charset=\"utf-8\">"
+                + "<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">"
+                // Haelt Gmail und Apple Mail davon ab, die Mail im Dark Mode
+                // selbst umzufaerben - sonst weisse Bilder auf invertiertem Text.
+                + "<meta name=\"color-scheme\" content=\"light only\">"
+                + "<meta name=\"supported-color-schemes\" content=\"light only\">"
+                + "</head><body style=\"margin:0;padding:0;background:#ececed;\">"
+                + vorschau(vorschauzeile)
+                + "<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\" "
+                + "style=\"background:#ececed;\"><tr><td align=\"center\" style=\"padding:20px 10px;\">"
+                + "<table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\" "
+                + "style=\"width:100%;max-width:600px;background:#ffffff;border-radius:16px;"
+                + "overflow:hidden;font-family:" + SCHRIFT + ";\">"
+                + markenband(shop)
+                + inhalt
+                + "<tr><td style=\"padding:28px 22px 26px;\">"
+                + "<div style=\"border-top:1px solid #ececf0;padding-top:16px;font-size:12px;"
+                + "line-height:1.8;color:#8a8a95;\">" + fuss + "</div>"
+                + "</td></tr>"
+                + "</table></td></tr></table></body></html>";
+    }
+
+    /** Unsichtbare Vorschauzeile fuer die Inbox-Liste. */
+    private String vorschau(String text) {
+        if (text == null || text.isBlank()) return "";
+        return "<div style=\"display:none;max-height:0;overflow:hidden;opacity:0\">"
+                + esc(kuerzen(text, 120)) + "</div>";
     }
 
     /**
-     * Branding-Header einer Mail: Hero-Bild (volle Breite) + Logo neben dem
-     * Laden-Namen. Beides optional — falls der Laden kein Logo/Hero-Bild
-     * hinterlegt hat, wird der jeweilige Teil einfach weggelassen.
-     * Ohne Shop (z.B. generische StampIT-Mails) wird gar kein Header gezeigt.
+     * Farbiges Band mit Logo und Laden-Name. Die Farben kommen aus dem
+     * Kartendesign des Ladens, damit Mail und Wallet-Karte zusammenpassen.
+     *
+     * Das Hero-Bild taucht hier bewusst NICHT auf: es ist der Apple-Wallet-
+     * Streifen, hart auf 1125x369 zugeschnitten. In einer Mail waere es ein
+     * angeschnittenes Logo.
      */
-    private String emailHeader(Shop shop) {
-        if (shop == null) return "";
+    private String markenband(Shop shop) {
+        String hintergrund = (shop != null && shop.getColorBackground() != null)
+                ? shop.getColorBackground() : STAMPIT_FARBE;
+        String vordergrund = (shop != null && shop.getColorForeground() != null)
+                ? shop.getColorForeground() : "#FFFFFF";
+        String name = (shop != null) ? shop.getName() : "StampIT";
+        String logoUrl = (shop != null) ? shop.getLogoUrl() : null;
 
-        StringBuilder header = new StringBuilder();
-
-        String heroUrl = shop.getHeroImageUrl();
-        if (heroUrl != null && !heroUrl.isBlank()) {
-            header.append("<img src=\"").append(heroUrl).append("\" alt=\"\" ")
-                    .append("style=\"width:100%;height:auto;border-radius:12px;margin-bottom:16px;display:block\">");
+        StringBuilder b = new StringBuilder();
+        b.append("<tr><td style=\"background:").append(attr(hintergrund)).append(";padding:16px 22px;\">")
+                .append("<table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\"><tr>");
+        if (logoUrl != null && !logoUrl.isBlank()) {
+            b.append("<td width=\"46\" style=\"padding-right:12px;\">")
+                    .append("<img src=\"").append(attr(logoUrl)).append("\" width=\"46\" height=\"46\" alt=\"\" ")
+                    .append("style=\"display:block;width:46px;height:46px;border-radius:12px;background:#ffffff;\">")
+                    .append("</td>");
         }
-
-        String logoUrl = shop.getLogoUrl();
-        boolean hasLogo = logoUrl != null && !logoUrl.isBlank();
-
-        header.append("<div style=\"display:flex;align-items:center;gap:10px;margin-bottom:16px\">");
-        if (hasLogo) {
-            header.append("<img src=\"").append(logoUrl).append("\" alt=\"\" ")
-                    .append("style=\"width:40px;height:40px;border-radius:10px;object-fit:cover;flex-shrink:0\">");
-        }
-        header.append("<span style=\"font-size:16px;font-weight:700\">")
-                .append(esc(shop.getName()))
-                .append("</span>");
-        header.append("</div>");
-
-        return header.toString();
+        b.append("<td style=\"color:").append(attr(vordergrund))
+                .append(";font-size:17px;font-weight:700;letter-spacing:0.2px;\">")
+                .append(esc(name)).append("</td>");
+        b.append("</tr></table></td></tr>");
+        return b.toString();
     }
 
-    private String button(String url, String label) {
-        return "<p style=\"margin:24px 0\"><a href=\"" + url + "\" "
-                + "style=\"background:#3C3489;color:#ffffff;text-decoration:none;"
-                + "padding:12px 24px;border-radius:10px;font-weight:600;display:inline-block\">"
-                + esc(label) + "</a></p>";
+    /** Ueberschrift (optional) und Fliesstext. */
+    private String textBlock(String ueberschrift, String textHtml) {
+        StringBuilder b = new StringBuilder("<tr><td style=\"padding:28px 22px 0;\">");
+        if (ueberschrift != null && !ueberschrift.isBlank()) {
+            b.append("<h1 style=\"margin:0 0 10px;font-size:22px;line-height:1.3;")
+                    .append("color:#15151a;font-weight:700;\">").append(esc(ueberschrift)).append("</h1>");
+        }
+        b.append("<p style=\"margin:0;font-size:16px;line-height:1.65;color:#3b3b44;\">")
+                .append(textHtml).append("</p></td></tr>");
+        return b.toString();
+    }
+
+    /**
+     * Bild in voller Breite. Der duenne Rahmen ist kein Zierrat: Produktfotos
+     * sind meist freigestellt auf Weiss und wuerden sonst randlos in die
+     * weisse Karte auslaufen.
+     */
+    private String bildBlock(String url) {
+        return "<tr><td style=\"padding:22px 22px 0;\">"
+                + "<img src=\"" + attr(url) + "\" alt=\"\" width=\"556\" "
+                + "style=\"display:block;width:100%;height:auto;border-radius:12px;"
+                + "border:1px solid #e6e6ea;\"></td></tr>";
+    }
+
+    /** Grauer Kasten, z.B. fuer den Stempelstand. */
+    private String infoBlock(String innenHtml) {
+        return "<tr><td style=\"padding:24px 22px 0;\">"
+                + "<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\" "
+                + "style=\"background:#f5f5f8;border-radius:12px;\"><tr>"
+                + "<td style=\"padding:15px 18px;font-size:15px;line-height:1.5;color:#3b3b44;\">"
+                + innenHtml + "</td></tr></table></td></tr>";
+    }
+
+    /** Knopf. Tabelle statt Link mit Padding, sonst bleibt Outlook die Flaeche schuldig. */
+    private String knopfBlock(String text, String url, String farbe) {
+        return "<tr><td style=\"padding:22px 22px 0;\">"
+                + "<table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\"><tr>"
+                + "<td style=\"background:" + attr(farbe) + ";border-radius:10px;\">"
+                + "<a href=\"" + attr(url) + "\" style=\"display:inline-block;padding:14px 26px;"
+                + "color:#ffffff;text-decoration:none;font-weight:600;font-size:15px;\">"
+                + esc(text) + "</a></td></tr></table></td></tr>";
+    }
+
+    private String kuerzen(String s, int max) {
+        String t = s.replace("\n", " ").trim();
+        return (t.length() <= max) ? t : t.substring(0, max - 1) + "…";
+    }
+
+    /** Wert fuer ein HTML-Attribut entschaerfen (URLs, Farben aus Nutzereingaben). */
+    private String attr(String s) {
+        if (s == null) return "";
+        return s.replace("&", "&amp;").replace("\"", "&quot;")
+                .replace("<", "&lt;").replace(">", "&gt;");
     }
 
     /** HTML-Sonderzeichen entschärfen (Nutzereingaben in Mails). */

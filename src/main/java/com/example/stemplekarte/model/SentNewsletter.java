@@ -31,6 +31,18 @@ public class SentNewsletter {
     @Column(nullable = false, length = 200)
     private String subject;
 
+    // Ueberschrift und Knopf gehoeren zur Nachricht, nicht zum Layout -
+    // deshalb im Verlauf gespeichert. Die Bildposition nicht: die sagt
+    // nichts darueber aus, WAS verschickt wurde.
+    @Column(name = "headline", length = 120)
+    private String headline;
+
+    @Column(name = "button_text", length = 40)
+    private String buttonText;
+
+    @Column(name = "button_url", length = 500)
+    private String buttonUrl;
+
     @Column(nullable = false, columnDefinition = "text")
     private String body;
 
@@ -65,13 +77,16 @@ public class SentNewsletter {
     protected SentNewsletter() {}
 
     /** Legt den Eintrag an, bevor die erste Mail rausgeht. */
-    public static SentNewsletter starte(Shop shop, String subject, String body,
-                                        List<String> imageUrls) {
+    public static SentNewsletter starte(Shop shop, String subject, String headline, String body,
+                                        List<String> imageUrls, String buttonText, String buttonUrl) {
         SentNewsletter n = new SentNewsletter();
         n.id = "NL-" + UUID.randomUUID().toString().substring(0, 12).toUpperCase();
         n.shop = shop;
         n.subject = subject;
+        n.headline = leerAlsNull(headline);
         n.body = body;
+        n.buttonText = leerAlsNull(buttonText);
+        n.buttonUrl = leerAlsNull(buttonUrl);
         n.imageUrls = (imageUrls != null) ? new ArrayList<>(imageUrls) : new ArrayList<>();
         n.recipientCount = 0;
         n.failedCount = 0;
@@ -101,6 +116,10 @@ public class SentNewsletter {
         this.status = FERTIG;
     }
 
+    private static String leerAlsNull(String s) {
+        return (s == null || s.isBlank()) ? null : s.trim();
+    }
+
     private static String probe(List<String> adressen) {
         if (adressen == null || adressen.isEmpty()) return null;
         String s = String.join(", ", adressen.subList(0, Math.min(5, adressen.size())));
@@ -110,6 +129,9 @@ public class SentNewsletter {
     public String getId() { return id; }
     public Shop getShop() { return shop; }
     public String getSubject() { return subject; }
+    public String getHeadline() { return headline; }
+    public String getButtonText() { return buttonText; }
+    public String getButtonUrl() { return buttonUrl; }
     public String getBody() { return body; }
     public List<String> getImageUrls() { return imageUrls; }
     public int getRecipientCount() { return recipientCount; }

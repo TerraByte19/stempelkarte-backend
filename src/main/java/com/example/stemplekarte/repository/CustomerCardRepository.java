@@ -35,7 +35,9 @@ public interface CustomerCardRepository extends JpaRepository<CustomerCard, Stri
             + "where cc.card.shop = :shop and cc.totalRewards > 0")
     long countDistinctCustomersWithRewardByShop(Shop shop);
 
-    // Newsletter: alle Karten eines Ladens, deren Kunde Werbung zugestimmt hat
-    @EntityGraph(attributePaths = {"customer"})
+    // Newsletter: alle Karten eines Ladens, deren Kunde Werbung zugestimmt hat.
+    // card wird mitgeladen, weil die Mail den Stempelstand nennt und
+    // open-in-view aus ist - sonst knallt der Zugriff spaeter.
+    @EntityGraph(attributePaths = {"customer", "card"})
     List<CustomerCard> findByCard_ShopAndMarketingConsentTrue(Shop shop);
 }

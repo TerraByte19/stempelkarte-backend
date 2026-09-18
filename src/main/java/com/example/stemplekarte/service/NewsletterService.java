@@ -56,7 +56,8 @@ public class NewsletterService {
      * noetigen Werte vorher herauskopiert statt Entities mitzuschleppen.
      */
     public record Empfaenger(String email, String customerId,
-                             String customerCardId, String authToken) {}
+                             String customerCardId, String authToken,
+                             int stempel, int benoetigt, String belohnung) {}
 
     /**
      * Empfaenger des Newsletters: eine Zeile pro PERSON, nicht pro Karte.
@@ -80,7 +81,10 @@ public class NewsletterService {
                         cc.getCustomer().getEmail(),
                         cc.getCustomer().getId(),
                         cc.getId(),
-                        cc.getAuthToken()))
+                        cc.getAuthToken(),
+                        cc.getStamps(),
+                        cc.getCard().getRewardThreshold(),
+                        cc.getCard().getRewardText()))
                 .toList();
     }
 
@@ -92,20 +96,19 @@ public class NewsletterService {
      */
     @Async("newsletterExecutor")
     public void versendeImHintergrund(String newsletterId, Shop shop, List<Empfaenger> empfaenger,
-                                      String subject, String body, List<String> imageUrls) {
+                                      EmailService.NewsletterInhalt inhalt) {
         int gesendet = 0;
         List<String> fehlgeschlagen = new ArrayList<>();
         try {
             for (Empfaenger e : empfaenger) {
                 boolean ok = emailService.sendNewsletterMail(
-                        e.email(),
-                        shop,                 // Branding (Logo + Hero-Bild im Header)
+                        shop,                 // Branding (Logo + Farben im Kopf)
                         shop.getEmail(),      // Reply-To = der Laden
-                        subject,
-                        body,
-                        imageUrls,
-                        baseUrl + "/mail/unsubscribe?cc=" + e.customerCardId() + "&t=" + e.authToken(),
-                        baseUrl + "/mail/delete-request?c=" + e.customerId());
+                        inhalt,
+                        new EmailService.NewsletterEmpfaenger(
+                                e.email(), e.stempel(), e.benoetigt(), e.belohnung(),
+                                baseUrl + "/mail/unsubscribe?cc=" + e.customerCardId() + "&t=" + e.authToken(),
+                                baseUrl + "/mail/delete-request?c=" + e.customerId()));
                 if (ok) gesendet++;
                 else fehlgeschlagen.add(e.email());
             }

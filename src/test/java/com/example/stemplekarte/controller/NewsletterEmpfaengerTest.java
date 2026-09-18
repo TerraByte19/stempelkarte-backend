@@ -95,32 +95,63 @@ class NewsletterEmpfaengerTest {
         assertThat(zahlen.get("confirmed")).isEqualTo(1L);
     }
 
+    private ShopController.NewsletterRequest anfrage() {
+        return new ShopController.NewsletterRequest(
+                "Betreff", "Überschrift", "Text", List.of(), false, null, null);
+    }
+
     @Test
     void zweiKartenEinKunde_bekommtNurEineMail() {
         aufbau();
-        when(mailer.sendNewsletterMail(anyString(), any(), anyString(), anyString(),
-                anyString(), any(), anyString(), anyString())).thenReturn(true);
-        var req = new ShopController.NewsletterRequest("Betreff", "Text", List.of());
-        Map<String, Object> ergebnis = controller().sendNewsletter(req, auth());
+        when(mailer.sendNewsletterMail(any(), anyString(), any(), any())).thenReturn(true);
+        Map<String, Object> ergebnis = controller().sendNewsletter(anfrage(), auth());
 
         assertThat(ergebnis.get("queued")).isEqualTo(1);
-        verify(mailer, times(1)).sendNewsletterMail(
-                anyString(), any(), anyString(), anyString(), anyString(), any(), anyString(), anyString());
+        verify(mailer, times(1)).sendNewsletterMail(any(), anyString(), any(), any());
     }
 
     @Test
     void abgelehnteMail_zaehltNichtAlsVersendet() {
         aufbau();
-        when(mailer.sendNewsletterMail(anyString(), any(), anyString(), anyString(),
-                anyString(), any(), anyString(), anyString())).thenReturn(false);
+        when(mailer.sendNewsletterMail(any(), anyString(), any(), any())).thenReturn(false);
 
-        var req = new ShopController.NewsletterRequest("Betreff", "Text", List.of());
-        controller().sendNewsletter(req, auth());
+        controller().sendNewsletter(anfrage(), auth());
 
         assertThat(eintrag.getRecipientCount()).isZero();
         assertThat(eintrag.getFailedCount()).isEqualTo(1);
         assertThat(eintrag.getFailedSample()).contains("alex@test.de");
         assertThat(eintrag.getStatus()).isEqualTo(SentNewsletter.FERTIG);
+    }
+
+    /**
+     * Das Knopf-Ziel tippt der Laden selbst ein. Ohne Pruefung landet
+     * "javascript:..." als klickbarer Link in fremden Postfaechern.
+     */
+    @Test
+    void knopfZielOhneHttp_wirdAbgelehntUndNichtsGesendet() {
+        aufbau();
+        var req = new ShopController.NewsletterRequest(
+                "Betreff", null, "Text", List.of(), false, "Hier klicken", "javascript:alert(1)");
+
+        org.assertj.core.api.Assertions
+                .assertThatThrownBy(() -> controller().sendNewsletter(req, auth()))
+                .isInstanceOf(org.springframework.web.server.ResponseStatusException.class);
+
+        org.mockito.Mockito.verify(mailer, org.mockito.Mockito.never())
+                .sendNewsletterMail(any(), anyString(), any(), any());
+    }
+
+    /** Der Stempelstand in der Mail kommt aus der Karte des Empfaengers. */
+    @Test
+    void mailKenntDieKarteDesKunden() {
+        aufbau();
+        when(mailer.sendNewsletterMail(any(), anyString(), any(), any())).thenReturn(true);
+        controller().sendNewsletter(anfrage(), auth());
+
+        var fang = org.mockito.ArgumentCaptor.forClass(EmailService.NewsletterEmpfaenger.class);
+        verify(mailer).sendNewsletterMail(any(), anyString(), any(), fang.capture());
+        assertThat(fang.getValue().benoetigt()).isEqualTo(10);
+        assertThat(fang.getValue().belohnung()).isEqualTo("Gratis Kaffee");
     }
 
     @Test

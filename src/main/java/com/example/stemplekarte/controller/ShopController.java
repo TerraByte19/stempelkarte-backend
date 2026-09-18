@@ -305,8 +305,30 @@ public class ShopController {
     // Längen-Limits schützen Server/DB vor übergroßen Eingaben.
     public record NewsletterRequest(
             @NotBlank @Size(max = 200) String subject,
+            @Size(max = 120) String headline,
             @NotBlank @Size(max = 10000) String body,
-            @Size(max = 10) java.util.List<String> imageUrls) {}
+            @Size(max = 10) java.util.List<String> imageUrls,
+            boolean imagesAbove,
+            @Size(max = 40) String buttonText,
+            @Size(max = 500) String buttonUrl) {}
+
+    /**
+     * Baut aus der Anfrage den Mail-Inhalt und prueft dabei das Knopf-Ziel.
+     *
+     * Der Laden tippt die Adresse selbst ein. Ohne Pruefung landet
+     * "javascript:..." als klickbarer Link in fremden Postfaechern.
+     */
+    private EmailService.NewsletterInhalt inhaltAus(NewsletterRequest req, String betreff) {
+        String url = (req.buttonUrl() != null) ? req.buttonUrl().trim() : null;
+        if (url != null && !url.isBlank()
+                && !url.startsWith("https://") && !url.startsWith("http://")) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Das Ziel des Knopfes muss mit https:// beginnen.");
+        }
+        return new EmailService.NewsletterInhalt(
+                betreff, req.headline(), req.body(), req.imageUrls(),
+                req.imagesAbove(), req.buttonText(), url);
+    }
 
     @Operation(summary = "Anzahl Kunden mit Werbe-Einwilligung (Vorschau für Newsletter)")
     @GetMapping("/newsletter/recipients")
@@ -339,15 +361,14 @@ public class ShopController {
 
         // Eine einzige Mail — die kann direkt gesendet werden, und der Laden
         // erfaehrt sofort, ob sie rausging. Genau dafuer ist der Test da.
+        // Der Stempelstand zeigt Beispielwerte: der Laden selbst hat keine
+        // Karte bei sich, echte Kunden sehen hier ihren eigenen Stand.
         boolean ok = emailService.sendNewsletterMail(
-                shop.getEmail(),               // nur an den Laden selbst
-                shop,                          // Branding (Logo + Hero-Bild)
+                shop,                          // Branding (Logo + Farben)
                 shop.getEmail(),               // Reply-To
-                "[TEST] " + req.subject(),     // Betreff als Test markiert
-                req.body(),
-                req.imageUrls(),
-                unsubscribeUrl,
-                deleteUrl
+                inhaltAus(req, "[TEST] " + req.subject()),
+                new EmailService.NewsletterEmpfaenger(
+                        shop.getEmail(), 7, 10, null, unsubscribeUrl, deleteUrl)
         );
 
         return Map.of("sentTo", shop.getEmail(), "ok", ok);
@@ -369,11 +390,13 @@ public class ShopController {
         // der Laden trotzdem, dass/was er versendet hat), dann im Hintergrund
         // senden. Synchron zu senden wuerde bei mehreren hundert Empfaengern
         // in den Gateway-Timeout laufen.
-        SentNewsletter eintrag = sentNewsletterRepo.save(
-                SentNewsletter.starte(shop, req.subject(), req.body(), req.imageUrls()));
+        EmailService.NewsletterInhalt inhalt = inhaltAus(req, req.subject());
 
-        newsletterService.versendeImHintergrund(eintrag.getId(), shop, empfaenger,
-                req.subject(), req.body(), req.imageUrls());
+        SentNewsletter eintrag = sentNewsletterRepo.save(
+                SentNewsletter.starte(shop, req.subject(), req.headline(), req.body(),
+                        req.imageUrls(), req.buttonText(), inhalt.knopfUrl()));
+
+        newsletterService.versendeImHintergrund(eintrag.getId(), shop, empfaenger, inhalt);
 
         // "queued", nicht "sent": zum Zeitpunkt der Antwort ist noch keine
         // Mail draussen. Das echte Ergebnis steht danach im Verlauf.
@@ -384,8 +407,9 @@ public class ShopController {
 
     // Ein Eintrag im Newsletter-Verlauf. recipientCount = tatsaechlich
     // zugestellte Mails, status = RUNNING solange der Versand laeuft.
-    public record NewsletterHistoryItem(String id, String subject, String body,
-                                        List<String> imageUrls, int recipientCount,
+    public record NewsletterHistoryItem(String id, String subject, String headline, String body,
+                                        List<String> imageUrls, String buttonText, String buttonUrl,
+                                        int recipientCount,
                                         int failedCount, String status, String failedSample,
                                         String sentAt) {}
 
@@ -401,8 +425,9 @@ public class ShopController {
 
         List<NewsletterHistoryItem> items = result.getContent().stream()
                 .map(n -> new NewsletterHistoryItem(
-                        n.getId(), n.getSubject(), n.getBody(),
-                        n.getImageUrls(), n.getRecipientCount(),
+                        n.getId(), n.getSubject(), n.getHeadline(), n.getBody(),
+                        n.getImageUrls(), n.getButtonText(), n.getButtonUrl(),
+                        n.getRecipientCount(),
                         n.getFailedCount(), n.getStatus(), n.getFailedSample(),
                         n.getSentAt().toString()))
                 .toList();
