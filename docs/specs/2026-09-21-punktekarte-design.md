@@ -118,10 +118,17 @@ Frage „was ist an dem Dienstag eigentlich passiert".
 | `amount_cents` | Nur bei `EARN` und betragsbasierter `CORRECTION`, sonst null. |
 | `points_per_euro_x100` | **Abschrift** des Kurses, der galt. |
 | `reward_id`, `reward_name`, `reward_cost_points_x100` | Nur bei `REDEEM`. Name und Preis als **Abschrift**. |
-| `staff_token_id` | Wer gebucht hat. Nullable (Buchung durch den Besitzer). |
+| `staff_label` | Wer gebucht hat, als Klartext-Bezeichnung („Kasse 1"). Nullable (Buchung durch den Besitzer). |
 | `reversal_of_id`, `reversed_at` | Zeigt auf die zurückgenommene Buchung, bzw. markiert die zurückgenommene. |
 
 Indizes auf `(customer_card_id, created_at)` und `(shop_id, created_at)`.
+
+**Bewusst nicht das Staff-Token.** `StaffToken.token` ist zugleich
+Primärschlüssel **und** die Zugangsberechtigung, die im `X-Staff-Token`-Header
+steht. Der Scanner zeigt Buchungen an — läge das Token in der Buchung, wäre
+die Berechtigung eines Geräts über die Buchungsliste im Frontend ablesbar.
+Gespeichert wird deshalb nur `StaffToken.getLabel()`, die Klartext-Bezeichnung
+des Geräts.
 
 Die beiden Abschriften sind der Punkt: ändert der Laden morgen den Kurs oder
 benennt „Kuchen" in „Gebäck" um, erzählt die Historie trotzdem, was damals
@@ -270,9 +277,11 @@ meldet sich, wenn durch die Buchung **eine neue Prämie erreichbar geworden
 ist**. Nicht bei jeder Buchung, sonst wird die Sperrbildschirm-Meldung zum
 Rauschen.
 
-Sperrbildschirm-Texte des Ladens: `{stamps}` bleibt gültig und steht bei
-Punktekarten für die fehlende Zahl, neu kommt `{reward}` für den
-Prämiennamen. Keine Migration, bestehende Texte funktionieren weiter.
+Sperrbildschirm-Texte des Ladens brauchen **keinen neuen Platzhalter**:
+`sperrbildschirmOrte` ersetzt bereits `{stempel}`, `{stamps}`, `{belohnung}`
+und `{reward}`. Bei Punktekarten wird `{stempel}`/`{stamps}` mit den fehlenden
+Punkten gefüllt und `{belohnung}`/`{reward}` mit dem Namen der nächsten
+Prämie. Bestehende Texte funktionieren unverändert weiter.
 
 ### Google
 
