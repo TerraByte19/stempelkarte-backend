@@ -79,6 +79,21 @@ public class Card {
     @Column(name = "empty_stamp_style", length = 16)
     private String emptyStampStyle;
 
+    // ── Kartentyp und Punkte-Einstellungen ────────────────────────────────
+    // type kommt per ddl-auto dazu und ist bei allen bestehenden Zeilen
+    // zunaechst NULL. Der Getter faengt das ab, damit vorhandene Karten
+    // sicher Stempelkarten bleiben.
+    @Enumerated(EnumType.STRING)
+    @Column(name = "type", length = 16, columnDefinition = "varchar(16) default 'STAMP'")
+    private CardType type;
+
+    @Column(name = "points_per_euro_x100")
+    private Integer pointsPerEuroX100;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "points_rounding", length = 16)
+    private PointsRounding pointsRounding;
+
     protected Card() {}
 
     public static Card create(Shop shop, String name, String description,
@@ -106,6 +121,30 @@ public class Card {
         c.emptyStampStyle = "number";
         c.stampIconUrl = null;
         return c;
+    }
+
+    /**
+     * Punktekarte. reward_threshold und reward_text sind NOT NULL und
+     * bleiben es - eine bestehende Spalte nachtraeglich nullable zu machen
+     * schafft ddl-auto nicht zuverlaessig. Deshalb stehen sie hier auf
+     * unauffaelligen Werten und werden nirgends angezeigt.
+     *
+     * Die Stempel-Design-Felder bleiben auf ihren Defaults stehen, damit
+     * kein Zweig auf null laeuft - gezeichnet wird bei Punkten nichts davon.
+     */
+    public static Card createPoints(Shop shop, String name, String description,
+                                    int pointsPerEuroX100, PointsRounding rounding) {
+        Card c = create(shop, name, description, 1, "");
+        c.type = CardType.POINTS;
+        c.pointsPerEuroX100 = pointsPerEuroX100;
+        c.pointsRounding = rounding;
+        return c;
+    }
+
+    /** Was nicht mitgeschickt wird, bleibt stehen - wie updateDesign. */
+    public void updatePointsSettings(Integer pointsPerEuroX100, PointsRounding rounding) {
+        if (pointsPerEuroX100 != null) this.pointsPerEuroX100 = pointsPerEuroX100;
+        if (rounding != null) this.pointsRounding = rounding;
     }
 
     public void setActive(boolean active) { this.active = active; }
@@ -156,4 +195,12 @@ public class Card {
     public String getStampIconUrl() { return stampIconUrl; }
     public String getStampColor() { return stampColor != null ? stampColor : "#6F4E37"; }
     public String getEmptyStampStyle() { return emptyStampStyle != null ? emptyStampStyle : "number"; }
+
+    /** Nie null: bestehende Zeilen tragen NULL und sind Stempelkarten. */
+    public CardType getType() { return type != null ? type : CardType.STAMP; }
+    public boolean isPoints() { return getType() == CardType.POINTS; }
+    public Integer getPointsPerEuroX100() { return pointsPerEuroX100; }
+    public PointsRounding getPointsRounding() {
+        return pointsRounding != null ? pointsRounding : PointsRounding.GENAU;
+    }
 }

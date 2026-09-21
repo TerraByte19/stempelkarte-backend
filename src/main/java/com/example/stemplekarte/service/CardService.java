@@ -1,6 +1,7 @@
 package com.example.stemplekarte.service;
 
 import com.example.stemplekarte.model.Card;
+import com.example.stemplekarte.model.PointsRounding;
 import com.example.stemplekarte.model.Shop;
 import com.example.stemplekarte.repository.CardRepository;
 import org.springframework.stereotype.Service;
@@ -25,6 +26,17 @@ public class CardService {
             throw new IllegalArgumentException("Stempel-Anzahl muss zwischen 1 und 100 liegen");
         }
         return cardRepo.save(Card.create(shop, name, description, rewardThreshold, rewardText));
+    }
+
+    @Transactional
+    public Card createPoints(Shop shop, String name, String description,
+                             int pointsPerEuroX100, PointsRounding rounding) {
+        if (pointsPerEuroX100 < 1 || pointsPerEuroX100 > PointsMath.MAX_POINTS_PER_EURO_X100) {
+            throw new IllegalArgumentException(
+                    "Kurs muss zwischen 1 und " + PointsMath.MAX_POINTS_PER_EURO_X100 + " liegen");
+        }
+        return cardRepo.save(Card.createPoints(shop, name, description,
+                pointsPerEuroX100, rounding));
     }
 
     @Transactional
