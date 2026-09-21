@@ -6,8 +6,6 @@ import com.example.stemplekarte.repository.CardRepository;
 import com.example.stemplekarte.repository.CustomerCardRepository;
 import com.example.stemplekarte.repository.CustomerRepository;
 import com.example.stemplekarte.repository.ScanLogRepository;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -28,7 +26,6 @@ public class CustomerService {
     private final AppleDeviceRepository appleDeviceRepo;
     private final EmailService emailService;
     private final ScanLogRepository scanLogRepo;
-    private final ObjectMapper mapper = new ObjectMapper();
 
     public CustomerService(CustomerRepository customerRepo, CardRepository cardRepo,
                            CustomerCardRepository customerCardRepo,
@@ -147,18 +144,9 @@ public class CustomerService {
 
     @Transactional
     public ScanResult processScan(String qrPayload, Shop shop, int count) {
-        String customerId;
-        String cardId;
-        try {
-            JsonNode node = mapper.readTree(qrPayload);
-            customerId = node.path("cid").asText();
-            cardId = node.path("cardId").asText();
-            if (customerId.isBlank() || cardId.isBlank()) {
-                throw new IllegalArgumentException("QR enthaelt keine Kunden- oder Karten-ID");
-            }
-        } catch (Exception e) {
-            throw new IllegalArgumentException("Ungueltiger QR-Code: " + e.getMessage());
-        }
+        QrPayload qr = QrPayload.parse(qrPayload);
+        String customerId = qr.customerId();
+        String cardId = qr.cardId();
 
         Card card = cardRepo.findById(cardId)
                 .orElseThrow(() -> new NoSuchElementException("Karte nicht gefunden"));
@@ -215,18 +203,9 @@ public class CustomerService {
      */
     @Transactional
     public CustomerCard resetCard(String qrPayload, Shop shop) {
-        String customerId;
-        String cardId;
-        try {
-            JsonNode node = mapper.readTree(qrPayload);
-            customerId = node.path("cid").asText();
-            cardId = node.path("cardId").asText();
-            if (customerId.isBlank() || cardId.isBlank()) {
-                throw new IllegalArgumentException("QR enthaelt keine Kunden- oder Karten-ID");
-            }
-        } catch (Exception e) {
-            throw new IllegalArgumentException("Ungueltiger QR-Code: " + e.getMessage());
-        }
+        QrPayload qr = QrPayload.parse(qrPayload);
+        String customerId = qr.customerId();
+        String cardId = qr.cardId();
 
         Card card = cardRepo.findById(cardId)
                 .orElseThrow(() -> new NoSuchElementException("Karte nicht gefunden"));
