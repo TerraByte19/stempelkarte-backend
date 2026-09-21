@@ -71,6 +71,38 @@ public class CardEventHub {
         log.debug("SSE-Push stamps={} an {} Verbindung(en) fuer {}", stamps, list.size(), customerCardId);
     }
 
+    /**
+     * Neuen Punktestand an alle offenen Kartenseiten dieser Karte pushen.
+     *
+     * Eigenes Ereignis statt publishStamps mitzubenutzen: die Kundenseite
+     * zeichnet fuer Punkte etwas anderes als ein Stempelraster, und ein
+     * gemeinsames Ereignis mit halb gefuellten Feldern waere auf beiden
+     * Seiten eine Fallunterscheidung.
+     *
+     * zielName darf null sein - dann hat die Karte keinen Katalog.
+     */
+    public void publishPoints(String customerCardId, long pointsX100,
+                              String zielName, long fehlendX100) {
+        List<SseEmitter> list = emitters.get(customerCardId);
+        if (list == null || list.isEmpty()) return;
+
+        String json = String.format(
+                "{\"pointsX100\":%d,\"zielName\":%s,\"fehlendX100\":%d}",
+                pointsX100,
+                zielName == null ? "null" : "\"" + zielName.replace("\"", "\\\"") + "\"",
+                fehlendX100);
+
+        for (SseEmitter emitter : list) {
+            try {
+                emitter.send(SseEmitter.event().name("points").data(json));
+            } catch (Exception e) {
+                remove(customerCardId, emitter);
+            }
+        }
+        log.debug("SSE-Push points={} an {} Verbindung(en) fuer {}",
+                pointsX100, list.size(), customerCardId);
+    }
+
     private void remove(String customerCardId, SseEmitter emitter) {
         List<SseEmitter> list = emitters.get(customerCardId);
         if (list != null) {

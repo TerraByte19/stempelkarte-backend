@@ -3,10 +3,8 @@ package com.example.stemplekarte.controller;
 import com.example.stemplekarte.model.ScanResult;
 import com.example.stemplekarte.model.Shop;
 import com.example.stemplekarte.security.StaffTokenFilter;
-import com.example.stemplekarte.service.CardEventHub;
 import com.example.stemplekarte.service.CustomerService;
-import com.example.stemplekarte.wallet.ApnsPushService;
-import com.example.stemplekarte.wallet.GoogleWalletService;
+import com.example.stemplekarte.wallet.WalletNotifier;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -28,18 +26,11 @@ public class ScanController {
     private static final Logger log = LoggerFactory.getLogger(ScanController.class);
 
     private final CustomerService service;
-    private final ApnsPushService apnsPushService;
-    private final GoogleWalletService googleWalletService;
-    private final CardEventHub cardEventHub;
+    private final WalletNotifier notifier;
 
-    public ScanController(CustomerService service,
-                          ApnsPushService apnsPushService,
-                          GoogleWalletService googleWalletService,
-                          CardEventHub cardEventHub) {
+    public ScanController(CustomerService service, WalletNotifier notifier) {
         this.service = service;
-        this.apnsPushService = apnsPushService;
-        this.googleWalletService = googleWalletService;
-        this.cardEventHub = cardEventHub;
+        this.notifier = notifier;
     }
 
     public record ScanRequest(
@@ -89,27 +80,10 @@ public class ScanController {
                 cc.getId(), cc.getCustomer().getId(), cc.getCard().getId(),
                 shop.getId(), cc.getStamps(), count);
 
-        // ── Live an die offene Kunden-Kartenseite (SSE) - sofort, ohne Polling ──
-        try {
-            cardEventHub.publishStamps(cc.getId(), cc.getStamps(),
-                    cc.getTotalRewards(), cc.getCard().getRewardThreshold());
-        } catch (Exception e) {
-            log.warn("SSE-Push nach Scan fehlgeschlagen (nicht kritisch): {}", e.getMessage());
-        }
-
-        // ── Apple Wallet: stiller Push → iPhone holt neue Karte ──────────
-        try {
-            apnsPushService.notifyUpdate(cc.getId());
-        } catch (Exception e) {
-            log.warn("APNs Push fehlgeschlagen (nicht kritisch): {}", e.getMessage());
-        }
-
-        // ── Google Wallet: Loyalty Object direkt per API updaten ──────────
-        try {
-            googleWalletService.notifyUpdate(cc.getId());
-        } catch (Exception e) {
-            log.warn("Google Wallet Update fehlgeschlagen (nicht kritisch): {}", e.getMessage());
-        }
+        // SSE an die offene Kartenseite, stiller APNs-Push, Google-Update.
+        // Alle drei abgesichert: ein toter Weg darf den Scan nicht abbrechen,
+        // der Stempel ist hier laengst gesetzt.
+        notifier.nachStempelAenderung(cc);
 
         boolean rewardEarned = result.rewardsEarnedThisScan() > 0;
 
@@ -118,11 +92,7 @@ public class ScanController {
         // changeMessage am "reward-milestone"-Feld im Pass (siehe
         // ApplePassService) — Google braucht dafür einen expliziten Aufruf.
         if (rewardEarned) {
-            try {
-                googleWalletService.notifyCardFull(cc.getId(), cc.getCard().getRewardText());
-            } catch (Exception e) {
-                log.warn("Google Wallet 'Karte voll'-Benachrichtigung fehlgeschlagen (nicht kritisch): {}", e.getMessage());
-            }
+            notifier.googleKarteVoll(cc.getId(), cc.getCard().getRewardText());
         }
 
         String action = switch (result) {
@@ -157,25 +127,7 @@ public class ScanController {
         Shop shop = ((StaffTokenFilter.StaffPrincipal) auth.getPrincipal()).staff().getShop();
         var cc = service.resetCard(req.qrPayload(), shop);
 
-        // Live an die offene Kunden-Kartenseite (SSE)
-        try {
-            cardEventHub.publishStamps(cc.getId(), cc.getStamps(),
-                    cc.getTotalRewards(), cc.getCard().getRewardThreshold());
-        } catch (Exception e) {
-            log.warn("SSE-Push nach Reset fehlgeschlagen (nicht kritisch): {}", e.getMessage());
-        }
-
-        // Wallet-Karten auf dem Handy sofort aktualisieren (still)
-        try {
-            apnsPushService.notifyUpdate(cc.getId());
-        } catch (Exception e) {
-            log.warn("APNs Push nach Reset fehlgeschlagen (nicht kritisch): {}", e.getMessage());
-        }
-        try {
-            googleWalletService.notifyUpdate(cc.getId());
-        } catch (Exception e) {
-            log.warn("Google Wallet Update nach Reset fehlgeschlagen (nicht kritisch): {}", e.getMessage());
-        }
+        notifier.nachStempelAenderung(cc);
 
         return new ScanResponse(
                 "reset", "Karte zurückgesetzt",
