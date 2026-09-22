@@ -61,7 +61,8 @@ class ScanControllerTest {
 
         return new ScanController(service, new WalletNotifier(
                 mock(CardEventHub.class), mock(ApnsPushService.class),
-                mock(GoogleWalletService.class)));
+                mock(GoogleWalletService.class)),
+                mock(com.example.stemplekarte.service.PointsService.class));
     }
 
     private Authentication authFuer(Shop shop) {

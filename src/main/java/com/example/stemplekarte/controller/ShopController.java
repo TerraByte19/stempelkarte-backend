@@ -7,6 +7,8 @@ import com.example.stemplekarte.security.JwtAuthFilter;
 import com.example.stemplekarte.service.CardService;
 import com.example.stemplekarte.service.EmailService;
 import com.example.stemplekarte.service.NewsletterService;
+import com.example.stemplekarte.service.PointsMath;
+import com.example.stemplekarte.service.RewardService;
 import com.example.stemplekarte.service.ShopService;
 import com.example.stemplekarte.service.StatsService;
 import com.example.stemplekarte.wallet.CloudinaryService;
@@ -44,6 +46,7 @@ public class ShopController {
     private final SentNewsletterRepository sentNewsletterRepo;
     private final StatsService statsService;
     private final NewsletterService newsletterService;
+    private final RewardService rewardService;
 
     @Value("${stempelkarte.base-url:http://localhost:8080}")
     private String baseUrl;
@@ -51,7 +54,8 @@ public class ShopController {
     public ShopController(ShopService shopService, CardService cardService,
                           CustomerCardRepository customerCardRepo, CloudinaryService cloudinaryService,
                           EmailService emailService, SentNewsletterRepository sentNewsletterRepo,
-                          StatsService statsService, NewsletterService newsletterService) {
+                          StatsService statsService, NewsletterService newsletterService,
+                          RewardService rewardService) {
         this.shopService = shopService;
         this.cardService = cardService;
         this.customerCardRepo = customerCardRepo;
@@ -60,6 +64,7 @@ public class ShopController {
         this.sentNewsletterRepo = sentNewsletterRepo;
         this.statsService = statsService;
         this.newsletterService = newsletterService;
+        this.rewardService = rewardService;
     }
 
     public record UpdateProfileRequest(String name, String logoUrl,
@@ -90,7 +95,8 @@ public class ShopController {
             String walletStyle, String stampIconType, String stampPreset,
             String stampColor, String emptyStampStyle, String stampIconUrl,
             String colorBackground, String colorForeground, String colorLabel,
-            String logoUrl, String heroImageUrl
+            String logoUrl, String heroImageUrl,
+            String type, Integer pointsPerEuroX100, String pointsRounding
     ) {
         static CardResponse from(Card c) {
             return new CardResponse(
@@ -101,8 +107,30 @@ public class ShopController {
                     c.getStampIconUrl() != null ? c.getStampIconUrl() : "",
                     c.getColorBackground(), c.getColorForeground(), c.getColorLabel(),
                     c.getLogoUrl() != null ? c.getLogoUrl() : "",
-                    c.getHeroImageUrl() != null ? c.getHeroImageUrl() : ""
+                    c.getHeroImageUrl() != null ? c.getHeroImageUrl() : "",
+                    c.getType().name(),
+                    c.getPointsPerEuroX100(),
+                    c.isPoints() ? c.getPointsRounding().name() : null
             );
+        }
+    }
+
+    public record CreatePointsCardRequest(
+            @NotBlank String name,
+            @NotBlank String description,
+            int pointsPerEuroX100,
+            String pointsRounding,
+            String colorBackground, String colorForeground, String colorLabel,
+            String logoUrl, String heroImageUrl
+    ) {}
+
+    public record RewardRequest(@NotBlank String name, long costPointsX100) {}
+
+    public record RewardResponse(String id, String name, long costPointsX100,
+                                 String costText, int sortOrder) {
+        static RewardResponse from(Reward r) {
+            return new RewardResponse(r.getId(), r.getName(), r.getCostPointsX100(),
+                    PointsMath.formatiere(r.getCostPointsX100()), r.getSortOrder());
         }
     }
 
@@ -227,11 +255,62 @@ public class ShopController {
         return CardResponse.from(card);
     }
 
+    @Operation(summary = "Neue Punktekarte erstellen")
+    @PostMapping("/cards/points")
+    public CardResponse createPointsCard(@Valid @RequestBody CreatePointsCardRequest req,
+                                         Authentication auth) {
+        Shop shop = currentShop(auth);
+        // Fehlt die Rundung, gilt GENAU - das ist der Normalfall und die
+        // Regel, die am wenigsten ueberrascht: nichts verfaellt.
+        PointsRounding rundung;
+        try {
+            rundung = req.pointsRounding() == null
+                    ? PointsRounding.GENAU
+                    : PointsRounding.valueOf(req.pointsRounding());
+        } catch (IllegalArgumentException e) {
+            throw new IllegalArgumentException(
+                    "Unbekannte Rundungsregel: " + req.pointsRounding());
+        }
+        Card card = cardService.createPoints(shop, req.name(), req.description(),
+                req.pointsPerEuroX100(), rundung);
+        card.updateColors(req.colorBackground(), req.colorForeground(), req.colorLabel());
+        if (req.logoUrl() != null) card.setLogoUrl(req.logoUrl());
+        if (req.heroImageUrl() != null) card.setHeroImageUrl(req.heroImageUrl());
+        cardService.save(card);
+        return CardResponse.from(card);
+    }
+
     @Operation(summary = "Alle eigenen Karten auflisten")
     @GetMapping("/cards")
     public List<CardResponse> listCards(Authentication auth) {
         Shop shop = currentShop(auth);
         return cardService.getByShop(shop).stream().map(CardResponse::from).toList();
+    }
+
+    @Operation(summary = "Praemien einer Karte auflisten")
+    @GetMapping("/cards/{cardId}/rewards")
+    public List<RewardResponse> listRewards(@PathVariable String cardId, Authentication auth) {
+        Card card = cardService.getByIdAndShop(cardId, currentShop(auth));
+        return rewardService.list(card).stream().map(RewardResponse::from).toList();
+    }
+
+    @Operation(summary = "Praemie hinzufuegen")
+    @PostMapping("/cards/{cardId}/rewards")
+    public RewardResponse addReward(@PathVariable String cardId,
+                                    @Valid @RequestBody RewardRequest req,
+                                    Authentication auth) {
+        Card card = cardService.getByIdAndShop(cardId, currentShop(auth));
+        return RewardResponse.from(rewardService.add(card, req.name(), req.costPointsX100()));
+    }
+
+    @Operation(summary = "Praemie entfernen")
+    @DeleteMapping("/cards/{cardId}/rewards/{rewardId}")
+    public ResponseEntity<Map<String, String>> deleteReward(@PathVariable String cardId,
+                                                            @PathVariable String rewardId,
+                                                            Authentication auth) {
+        Card card = cardService.getByIdAndShop(cardId, currentShop(auth));
+        rewardService.deactivate(rewardId, card);
+        return ResponseEntity.ok(Map.of("message", "Praemie entfernt"));
     }
 
     @Operation(summary = "Karte deaktivieren")

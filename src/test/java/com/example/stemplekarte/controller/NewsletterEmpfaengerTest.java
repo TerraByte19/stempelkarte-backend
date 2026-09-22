@@ -79,7 +79,7 @@ class NewsletterEmpfaengerTest {
         NewsletterService versand = new NewsletterService(ccRepo, verlaufRepo, mailer);
         return new ShopController(mock(ShopService.class), mock(CardService.class), ccRepo,
                 mock(CloudinaryService.class), mailer, verlaufRepo, mock(StatsService.class),
-                versand);
+                versand, mock(com.example.stemplekarte.service.RewardService.class));
     }
 
     private Authentication auth() {

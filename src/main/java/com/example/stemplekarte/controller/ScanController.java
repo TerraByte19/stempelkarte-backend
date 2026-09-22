@@ -4,6 +4,7 @@ import com.example.stemplekarte.model.ScanResult;
 import com.example.stemplekarte.model.Shop;
 import com.example.stemplekarte.security.StaffTokenFilter;
 import com.example.stemplekarte.service.CustomerService;
+import com.example.stemplekarte.service.PointsService;
 import com.example.stemplekarte.wallet.WalletNotifier;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -27,10 +28,28 @@ public class ScanController {
 
     private final CustomerService service;
     private final WalletNotifier notifier;
+    private final PointsService pointsService;
 
-    public ScanController(CustomerService service, WalletNotifier notifier) {
+    public ScanController(CustomerService service, WalletNotifier notifier,
+                          PointsService pointsService) {
         this.service = service;
         this.notifier = notifier;
+        this.pointsService = pointsService;
+    }
+
+    public record StateRequest(@NotBlank String qrPayload) {}
+
+    @Operation(summary = "QR aufloesen: welcher Kartentyp, welcher Stand",
+            description = "Steuert, welche Oberflaeche der Scanner zeigt. "
+                    + "Erfordert X-Staff-Token. POST, weil der QR-Inhalt nichts "
+                    + "in einer URL und damit in Server-Logs zu suchen hat.")
+    @PostMapping("/state")
+    public PointsService.PointsState state(@Valid @RequestBody StateRequest req,
+                                           Authentication auth) {
+        if (auth == null || !(auth.getPrincipal() instanceof StaffTokenFilter.StaffPrincipal p)) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Kein gueltiger Staff-Token");
+        }
+        return pointsService.state(req.qrPayload(), p.staff().getShop());
     }
 
     public record ScanRequest(
