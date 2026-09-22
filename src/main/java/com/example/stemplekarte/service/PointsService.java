@@ -197,7 +197,19 @@ public class PointsService {
         PointsBooking booking = bookingRepo.save(
                 PointsBooking.redeem(cc, shop.getId(), reward, staffLabel));
 
-        scanLogSchreiben(shop, card, cc, 1);
+        // rewardsEarned bleibt 0, obwohl hier eine Praemie herausgeht.
+        //
+        // Zwei Gruende. Erstens zaehlt dieses Feld im ScanLog die
+        // STEMPEL-Belohnungen; eine Punkte-Einloesung dort mitzuzaehlen
+        // mischt zwei Einheiten in derselben Kachel. Zweitens kennt der
+        // ScanLog keine Ruecknahme: eine zurueckgenommene Einloesung stuende
+        // sonst weiter in "Belohnungen diese Woche", waehrend die Kachel
+        // daneben (aus totalRewards) schon wieder 0 zeigt.
+        //
+        // Gezaehlt werden Punkte-Einloesungen in PointsBooking - dort ist die
+        // Ruecknahme sauber abgebildet, und daraus kommt auch die Rangliste
+        // der beliebtesten Praemien.
+        scanLogSchreiben(shop, card, cc, 0);
 
         log.info("[PUNKTE] REDEEM karte={} praemie={} kosten={} stand={}",
                 cc.getId(), reward.getName(), reward.getCostPointsX100(), cc.getPointsX100());
