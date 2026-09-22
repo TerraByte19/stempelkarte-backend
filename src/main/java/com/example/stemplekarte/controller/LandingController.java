@@ -212,8 +212,8 @@ public class LandingController {
                         // Stempelseite. Ein location.reload() holte auf iOS Safari
                         // zeitweise die alte Seite aus dem Cache, und der Stand blieb
                         // stehen. Deshalb wird hier nur der DOM ausgetauscht.
-                        const custId = '%s';
-                        const cId = '%s';
+                        const custId = %s;
+                        const cId = %s;
 
                         function zeichne(d) {
                             var stand = document.getElementById('stand');
@@ -225,20 +225,46 @@ public class LandingController {
                                     : 'Noch keine Pr\u00e4mie hinterlegt';
                             }
                             if (Array.isArray(d.katalog)) {
-                                var h = '';
-                                for (var i = 0; i < d.katalog.length; i++) {
-                                    var r = d.katalog[i];
-                                    var pct = r.costPointsX100 > 0
-                                        ? Math.min(100, Math.round(d.pointsX100 * 100 / r.costPointsX100))
-                                        : 100;
-                                    h += "<div class='reward" + (r.bezahlbar ? " ready" : "") + "'>"
-                                       + "<div class='reward-head'><span class='reward-name'>" + r.name
-                                       + "</span><span class='reward-cost'>" + r.costText + " Punkte</span></div>"
-                                       + "<div class='bar'><div class='bar-fill' style='width:" + pct + "%%'></div></div>"
-                                       + "</div>";
-                                }
+                                // Aufbau ueber die DOM-Schnittstelle, NICHT ueber
+                                // innerHTML: Praemiennamen kommen vom Laden, und
+                                // mit innerHTML waere jeder Name ausfuehrbares
+                                // HTML auf der Kartenseite jedes seiner Kunden.
                                 var k = document.getElementById('katalog');
-                                if (k && h) k.innerHTML = h;
+                                if (k) {
+                                    var frag = document.createDocumentFragment();
+                                    for (var i = 0; i < d.katalog.length; i++) {
+                                        var r = d.katalog[i];
+                                        var pct = r.costPointsX100 > 0
+                                            ? Math.min(100, Math.round(d.pointsX100 * 100 / r.costPointsX100))
+                                            : 100;
+
+                                        var box = document.createElement('div');
+                                        box.className = 'reward' + (r.bezahlbar ? ' ready' : '');
+
+                                        var head = document.createElement('div');
+                                        head.className = 'reward-head';
+                                        var name = document.createElement('span');
+                                        name.className = 'reward-name';
+                                        name.textContent = r.name;
+                                        var cost = document.createElement('span');
+                                        cost.className = 'reward-cost';
+                                        cost.textContent = r.costText + ' Punkte';
+                                        head.appendChild(name);
+                                        head.appendChild(cost);
+
+                                        var bar = document.createElement('div');
+                                        bar.className = 'bar';
+                                        var fill = document.createElement('div');
+                                        fill.className = 'bar-fill';
+                                        fill.style.width = pct + '%%';
+                                        bar.appendChild(fill);
+
+                                        box.appendChild(head);
+                                        box.appendChild(bar);
+                                        frag.appendChild(box);
+                                    }
+                                    k.replaceChildren(frag);
+                                }
                             }
                         }
 
@@ -274,18 +300,25 @@ public class LandingController {
                 </body>
                 </html>
                 """.formatted(
-                shopName, bgColor,
-                logoUrl.isBlank() ? "" : "<img src='" + logoUrl + "' class='shop-logo' alt='Logo'>",
-                shopName, card.getName(),
-                customer.getName(),
+                escapeHtml(shopName), escapeHtml(bgColor),
+                // Logo-URL steht in einem Attribut mit einfachen
+                // Anfuehrungszeichen - ein Apostroph darin bricht daraus aus.
+                // escapeHtml ersetzt ihn durch &#39;.
+                logoUrl.isBlank() ? ""
+                        : "<img src='" + escapeHtml(logoUrl) + "' class='shop-logo' alt='Logo'>",
+                escapeHtml(shopName), escapeHtml(card.getName()),
+                escapeHtml(customer.getName()),
                 PointsMath.formatiere(stand),
                 zielZeile,
                 katalogHtml,
-                applePassUrl,
-                googleSaveUrl.isBlank() ? "" :
-                        "<a href='" + googleSaveUrl + "' class='btn-google' id='google-btn'>" +
+                escapeHtml(applePassUrl),
+                googleSaveUrl.isBlank() ? ""
+                        : "<a href='" + escapeHtml(googleSaveUrl) + "' class='btn-google' id='google-btn'>" +
                                 "\uD83E\uDD16 Zu Google Wallet hinzuf\u00fcgen</a>",
-                customerId, cardId
+                // Die beiden IDs stehen in JS-Zeichenketten. toJsString
+                // liefert sie inklusive Anfuehrungszeichen - im Vorlagentext
+                // stehen an dieser Stelle deshalb KEINE.
+                toJsString(customerId), toJsString(cardId)
         );
 
         log.info("Landing-Punktekarte geladen: customerCard={} card={} punkte={}",
@@ -302,9 +335,13 @@ public class LandingController {
     private String zielZeileText(Reward ziel, long stand) {
         if (ziel == null) return "Noch keine Pr\u00e4mie hinterlegt";
         long fehlend = Math.max(0, ziel.getCostPointsX100() - stand);
+        // Der Name kommt vom Laden und landet roh im HTML. Im Katalog
+        // darunter wird er escaped - hier fehlte es, und genau diese
+        // Asymmetrie ist die Luecke.
+        String name = escapeHtml(ziel.getName());
         return fehlend == 0
-                ? ziel.getName() + " ist bereit!"
-                : "N\u00e4chste Pr\u00e4mie: " + ziel.getName()
+                ? name + " ist bereit!"
+                : "N\u00e4chste Pr\u00e4mie: " + name
                         + " - noch " + PointsMath.formatiere(fehlend);
     }
 
@@ -335,7 +372,7 @@ public class LandingController {
     }
 
     /** Praemiennamen kommen vom Laden und landen roh im HTML. */
-    private String escapeHtml(String s) {
+    static String escapeHtml(String s) {
         if (s == null) return "";
         return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
                 .replace("\"", "&quot;").replace("'", "&#39;");
