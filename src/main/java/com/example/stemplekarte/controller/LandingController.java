@@ -221,7 +221,7 @@ public class LandingController {
                             var ziel = document.getElementById('ziel');
                             if (ziel) {
                                 ziel.textContent = d.zielName
-                                    ? ('N\u00e4chste Pr\u00e4mie: ' + d.zielName + ' \u2013 noch ' + d.fehlendText)
+                                    ? ('N\u00e4chste Pr\u00e4mie: ' + d.zielName + ' - noch ' + d.fehlendText)
                                     : 'Noch keine Pr\u00e4mie hinterlegt';
                             }
                             if (Array.isArray(d.katalog)) {
@@ -305,7 +305,7 @@ public class LandingController {
         return fehlend == 0
                 ? ziel.getName() + " ist bereit!"
                 : "N\u00e4chste Pr\u00e4mie: " + ziel.getName()
-                        + " \u2013 noch " + PointsMath.formatiere(fehlend);
+                        + " - noch " + PointsMath.formatiere(fehlend);
     }
 
     /** Katalog mit Fortschrittsbalken. Der Balken zeigt, wie weit der Stand
