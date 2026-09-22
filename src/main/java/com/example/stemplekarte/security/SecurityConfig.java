@@ -86,6 +86,13 @@ public class SecurityConfig {
                         .requestMatchers("/api/shop/card-heroes/**").permitAll()
                         .requestMatchers("/api/customer", "/api/customer/**").permitAll()
                         .requestMatchers("/api/scan", "/api/scan/**").permitAll()
+                        // Die Punkte-Endpunkte gehoeren zum selben Geraet wie
+                        // der Scan: es gilt der X-Staff-Token, und geprueft
+                        // wird er im PointsController selbst - genau wie bei
+                        // /api/scan. Fehlt diese Zeile, faellt jede Anfrage
+                        // durch bis anyRequest().denyAll() und kommt als 403
+                        // zurueck, obwohl der Token stimmt.
+                        .requestMatchers("/api/points", "/api/points/**").permitAll()
                         .requestMatchers("/api/shop/logos/**").permitAll()
                         .requestMatchers("/api/shop/heroes/**").permitAll()
                         .requestMatchers("/api/shop/stamp-icons/**").permitAll()
