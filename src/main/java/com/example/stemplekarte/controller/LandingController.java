@@ -2,6 +2,9 @@ package com.example.stemplekarte.controller;
 
 import com.example.stemplekarte.model.Card;
 import com.example.stemplekarte.model.Customer;
+import com.example.stemplekarte.model.Reward;
+import com.example.stemplekarte.service.PointsMath;
+import com.example.stemplekarte.service.RewardService;
 import com.example.stemplekarte.model.CustomerCard;
 import com.example.stemplekarte.service.CardService;
 import com.example.stemplekarte.service.CustomerService;
@@ -13,6 +16,7 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
 import java.util.Map;
 
 @RestController
@@ -34,15 +38,18 @@ public class LandingController {
     private final CustomerService customerService;
     private final CardService cardService;
     private final GoogleWalletService googleWalletService;
+    private final RewardService rewardService;
 
     @Value("${stempelkarte.base-url:http://localhost:8080}")
     private String baseUrl;
 
     public LandingController(CustomerService customerService, CardService cardService,
-                             GoogleWalletService googleWalletService) {
+                             GoogleWalletService googleWalletService,
+                             RewardService rewardService) {
         this.customerService = customerService;
         this.cardService = cardService;
         this.googleWalletService = googleWalletService;
+        this.rewardService = rewardService;
     }
 
     // ── Karten-Anmeldung mit Werbe-Einwilligung (von /karte-neu/ aufgerufen) ──
@@ -64,6 +71,276 @@ public class LandingController {
     }
 
     // Bestehende Kunden-Landing-Page (mit Stempeln)
+    /**
+     * Kundenseite einer Punktekarte.
+     *
+     * Zeigt Stand, naechstes Ziel und darunter den ganzen Katalog mit
+     * Fortschrittsbalken - dieselbe Aufteilung wie auf der Wallet-Karte,
+     * damit der Kunde nicht zwei Darstellungen derselben Sache lernen muss.
+     *
+     * Deutsch, wie die Stempelseite: das Backend hat noch keine
+     * Uebersetzungstabelle (siehe docs/specs/2026-08-30-arabisch-rtl-...).
+     *
+     * Das CSS ist bewusst eine eigene Kopie und nicht mit der Stempelseite
+     * geteilt. Geteilt haette geheissen, die Stempelseite anzufassen, und die
+     * liegt gerade auf echten Handys. Wenn beide Seiten sich eingespielt
+     * haben, lohnt das Zusammenlegen - vorher nicht.
+     */
+    private ResponseEntity<String> punkteSeite(CustomerCard cc, Card card, Customer customer,
+                                               String customerId, String cardId) {
+        String shopName = card.getShop().getName();
+        String bgColor = card.getShop().getColorBackground();
+        String logoUrl = card.getShop().getLogoUrl() != null ? card.getShop().getLogoUrl() : "";
+
+        String googleSaveUrl = "";
+        try {
+            googleSaveUrl = googleWalletService.generateSaveUrl(cc);
+        } catch (Exception e) {
+            // Google Wallet nicht konfiguriert
+        }
+
+        String applePassUrl = baseUrl + "/api/customer/" + customerId
+                + "/card/" + cardId + "/apple-pass";
+
+        long stand = cc.getPointsX100();
+        List<Reward> katalog = rewardService.list(card);
+        Reward ziel = RewardService.naechstesZiel(katalog, stand);
+
+        String zielZeile = zielZeileText(ziel, stand);
+        String katalogHtml = katalogHtml(katalog, stand);
+
+        String html = """
+                <!DOCTYPE html>
+                <html lang="de">
+                <head>
+                    <meta charset="UTF-8">
+                    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                    <title>%s \u2014 Punktekarte</title>
+                    <style>
+                        * { margin: 0; padding: 0; box-sizing: border-box; }
+                        body {
+                            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+                            background: #f5f5f7;
+                            min-height: 100vh;
+                            display: flex;
+                            align-items: center;
+                            justify-content: center;
+                            padding: 20px;
+                        }
+                        .card {
+                            background: %s;
+                            border-radius: 20px;
+                            padding: 28px;
+                            width: 100%%;
+                            max-width: 380px;
+                            color: white;
+                            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+                        }
+                        .shop-header { display: flex; align-items: center; gap: 12px; margin-bottom: 24px; }
+                        .shop-logo {
+                            width: 50px; height: 50px; border-radius: 12px;
+                            object-fit: cover; background: rgba(255,255,255,0.2);
+                        }
+                        .shop-name { font-size: 20px; font-weight: 600; }
+                        .card-name { font-size: 13px; opacity: 0.75; margin-top: 2px; }
+                        .customer-name { font-size: 14px; opacity: 0.8; margin-bottom: 20px; }
+                        .stand-label {
+                            font-size: 13px; opacity: 0.75; text-transform: uppercase;
+                            letter-spacing: 0.5px;
+                        }
+                        .stand { font-size: 44px; font-weight: 800; line-height: 1.1; margin: 2px 0 4px; }
+                        .ziel { font-size: 14px; opacity: 0.9; margin-bottom: 22px; }
+                        .katalog-titel {
+                            font-size: 12px; opacity: 0.7; text-transform: uppercase;
+                            letter-spacing: 0.5px; margin-bottom: 10px;
+                        }
+                        .reward {
+                            background: rgba(255,255,255,0.12);
+                            border-radius: 12px; padding: 12px; margin-bottom: 8px;
+                        }
+                        .reward.ready { background: rgba(255,255,255,0.28); }
+                        .reward-head {
+                            display: flex; justify-content: space-between;
+                            align-items: baseline; gap: 8px; margin-bottom: 8px;
+                        }
+                        .reward-name { font-size: 15px; font-weight: 600; }
+                        .reward-cost { font-size: 13px; opacity: 0.85; }
+                        .bar { height: 6px; border-radius: 3px; background: rgba(255,255,255,0.25); overflow: hidden; }
+                        .bar-fill { height: 100%%; background: rgba(255,255,255,0.95); border-radius: 3px; }
+                        .leer {
+                            font-size: 14px; opacity: 0.85; padding: 12px;
+                            background: rgba(255,255,255,0.15); border-radius: 10px;
+                        }
+                        .wallet-buttons { display: flex; flex-direction: column; gap: 12px; margin-top: 24px; }
+                        .btn-apple {
+                            display: block; background: black; color: white; text-decoration: none;
+                            padding: 14px; border-radius: 12px; text-align: center;
+                            font-size: 15px; font-weight: 500;
+                        }
+                        .btn-google {
+                            display: block; background: white; color: #333; text-decoration: none;
+                            padding: 14px; border-radius: 12px; text-align: center;
+                            font-size: 15px; font-weight: 500;
+                        }
+                        .hidden { display: none; }
+                    </style>
+                </head>
+                <body>
+                    <div class="card">
+                        <div class="shop-header">
+                            %s
+                            <div>
+                                <div class="shop-name">%s</div>
+                                <div class="card-name">%s</div>
+                            </div>
+                        </div>
+                        <div class="customer-name">\uD83D\uDC64 %s</div>
+                        <div class="stand-label">Punktestand</div>
+                        <div class="stand" id="stand">%s</div>
+                        <div class="ziel" id="ziel">%s</div>
+                        <div class="katalog-titel">Pr\u00e4mien</div>
+                        <div id="katalog">%s</div>
+                        <div class="wallet-buttons">
+                            <a href="%s" class="btn-apple" id="apple-btn">
+                                \uD83C\uDF4E Zu Apple Wallet hinzuf\u00fcgen
+                            </a>
+                            %s
+                        </div>
+                    </div>
+                    <script>
+                        // Live-Aktualisierung OHNE Seiten-Reload - genau wie auf der
+                        // Stempelseite. Ein location.reload() holte auf iOS Safari
+                        // zeitweise die alte Seite aus dem Cache, und der Stand blieb
+                        // stehen. Deshalb wird hier nur der DOM ausgetauscht.
+                        const custId = '%s';
+                        const cId = '%s';
+
+                        function zeichne(d) {
+                            var stand = document.getElementById('stand');
+                            if (stand && d.pointsText) stand.textContent = d.pointsText;
+                            var ziel = document.getElementById('ziel');
+                            if (ziel) {
+                                ziel.textContent = d.zielName
+                                    ? ('N\u00e4chste Pr\u00e4mie: ' + d.zielName + ' \u2013 noch ' + d.fehlendText)
+                                    : 'Noch keine Pr\u00e4mie hinterlegt';
+                            }
+                            if (Array.isArray(d.katalog)) {
+                                var h = '';
+                                for (var i = 0; i < d.katalog.length; i++) {
+                                    var r = d.katalog[i];
+                                    var pct = r.costPointsX100 > 0
+                                        ? Math.min(100, Math.round(d.pointsX100 * 100 / r.costPointsX100))
+                                        : 100;
+                                    h += "<div class='reward" + (r.bezahlbar ? " ready" : "") + "'>"
+                                       + "<div class='reward-head'><span class='reward-name'>" + r.name
+                                       + "</span><span class='reward-cost'>" + r.costText + " Punkte</span></div>"
+                                       + "<div class='bar'><div class='bar-fill' style='width:" + pct + "%%'></div></div>"
+                                       + "</div>";
+                                }
+                                var k = document.getElementById('katalog');
+                                if (k && h) k.innerHTML = h;
+                            }
+                        }
+
+                        async function check() {
+                            try {
+                                const url = '/api/customer/' + custId + '/card/' + cId + '/points';
+                                const res = await fetch(url, { cache: 'no-store' });
+                                if (!res.ok) return;
+                                zeichne(await res.json());
+                            } catch (e) {}
+                        }
+
+                        // Live-Push per SSE. Faellt der Stream aus, laeuft das Polling weiter.
+                        try {
+                            var es = new EventSource('/api/customer/' + custId + '/card/' + cId + '/stream');
+                            es.addEventListener('points', function (ev) {
+                                try { check(); } catch (e) {}
+                            });
+                        } catch (e) {}
+
+                        setInterval(check, 3000);
+                        document.addEventListener('visibilitychange', function () { if (!document.hidden) check(); });
+                        window.addEventListener('pageshow', check);
+                        window.addEventListener('online', check);
+
+                        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+                        const isAndroid = /Android/.test(navigator.userAgent);
+                        const appleBtn = document.getElementById('apple-btn');
+                        const googleBtn = document.getElementById('google-btn');
+                        if (!isIOS && appleBtn) appleBtn.classList.add('hidden');
+                        if (!isAndroid && googleBtn) googleBtn.classList.add('hidden');
+                    </script>
+                </body>
+                </html>
+                """.formatted(
+                shopName, bgColor,
+                logoUrl.isBlank() ? "" : "<img src='" + logoUrl + "' class='shop-logo' alt='Logo'>",
+                shopName, card.getName(),
+                customer.getName(),
+                PointsMath.formatiere(stand),
+                zielZeile,
+                katalogHtml,
+                applePassUrl,
+                googleSaveUrl.isBlank() ? "" :
+                        "<a href='" + googleSaveUrl + "' class='btn-google' id='google-btn'>" +
+                                "\uD83E\uDD16 Zu Google Wallet hinzuf\u00fcgen</a>",
+                customerId, cardId
+        );
+
+        log.info("Landing-Punktekarte geladen: customerCard={} card={} punkte={}",
+                cc.getId(), cardId, stand);
+
+        return ResponseEntity.ok()
+                .header("Cache-Control", "no-store, no-cache, must-revalidate")
+                .header("Pragma", "no-cache")
+                .body(html);
+    }
+
+    /** Die Zeile unter dem Punktestand. Ohne Praemie steht dort kein
+     *  erfundenes Ziel, sondern der ehrliche Hinweis. */
+    private String zielZeileText(Reward ziel, long stand) {
+        if (ziel == null) return "Noch keine Pr\u00e4mie hinterlegt";
+        long fehlend = Math.max(0, ziel.getCostPointsX100() - stand);
+        return fehlend == 0
+                ? ziel.getName() + " ist bereit!"
+                : "N\u00e4chste Pr\u00e4mie: " + ziel.getName()
+                        + " \u2013 noch " + PointsMath.formatiere(fehlend);
+    }
+
+    /** Katalog mit Fortschrittsbalken. Der Balken zeigt, wie weit der Stand
+     *  auf die jeweilige Praemie zugelaufen ist. */
+    private String katalogHtml(List<Reward> katalog, long stand) {
+        if (katalog.isEmpty()) {
+            return "<div class='leer'>Dieser Laden hat noch keine Pr\u00e4mien "
+                    + "hinterlegt. Deine Punkte sammeln sich trotzdem.</div>";
+        }
+        StringBuilder sb = new StringBuilder();
+        for (Reward r : katalog) {
+            boolean bezahlbar = r.getCostPointsX100() <= stand;
+            long prozent = r.getCostPointsX100() > 0
+                    ? Math.min(100, stand * 100 / r.getCostPointsX100())
+                    : 100;
+            sb.append("<div class='reward")
+              .append(bezahlbar ? " ready" : "")
+              .append("'><div class='reward-head'><span class='reward-name'>")
+              .append(escapeHtml(r.getName()))
+              .append("</span><span class='reward-cost'>")
+              .append(PointsMath.formatiere(r.getCostPointsX100()))
+              .append(" Punkte</span></div><div class='bar'><div class='bar-fill' style='width:")
+              .append(prozent)
+              .append("%'></div></div></div>");
+        }
+        return sb.toString();
+    }
+
+    /** Praemiennamen kommen vom Laden und landen roh im HTML. */
+    private String escapeHtml(String s) {
+        if (s == null) return "";
+        return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+                .replace("\"", "&quot;").replace("'", "&#39;");
+    }
+
     @GetMapping(value = "/karte/{customerId}/{cardId}", produces = MediaType.TEXT_HTML_VALUE)
     public ResponseEntity<String> landingPage(@PathVariable String customerId,
                                               @PathVariable String cardId) {
@@ -71,6 +348,12 @@ public class LandingController {
             CustomerCard cc = customerService.getOrCreateCustomerCard(customerId, cardId);
             Card card = cc.getCard();
             Customer customer = cc.getCustomer();
+
+            // Punktekarten haben eine eigene Seite. Der Stempel-Weg darunter
+            // bleibt unangetastet - er laeuft in echten Laeden.
+            if (card.isPoints()) {
+                return punkteSeite(cc, card, customer, customerId, cardId);
+            }
 
             String shopName = card.getShop().getName();
             String bgColor = card.getShop().getColorBackground();

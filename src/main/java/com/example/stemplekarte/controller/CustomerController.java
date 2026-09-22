@@ -1,10 +1,14 @@
 package com.example.stemplekarte.controller;
 
+import com.example.stemplekarte.model.Card;
 import com.example.stemplekarte.model.Customer;
 import com.example.stemplekarte.model.CustomerCard;
+import com.example.stemplekarte.model.Reward;
 import com.example.stemplekarte.service.CardEventHub;
 import com.example.stemplekarte.service.CardService;
 import com.example.stemplekarte.service.CustomerService;
+import com.example.stemplekarte.service.PointsMath;
+import com.example.stemplekarte.service.RewardService;
 import com.example.stemplekarte.wallet.ApplePassService;
 import com.example.stemplekarte.wallet.GoogleWalletService;
 import com.google.zxing.BarcodeFormat;
@@ -45,17 +49,20 @@ public class CustomerController {
     private final GoogleWalletService googleWalletService;
     private final ApplePassService applePassService;
     private final CardEventHub cardEventHub;
+    private final RewardService rewardService;
 
     public CustomerController(CustomerService customerService,
                               CardService cardService,
                               GoogleWalletService googleWalletService,
                               ApplePassService applePassService,
-                              CardEventHub cardEventHub) {
+                              CardEventHub cardEventHub,
+                              RewardService rewardService) {
         this.customerService = customerService;
         this.cardService = cardService;
         this.googleWalletService = googleWalletService;
         this.applePassService = applePassService;
         this.cardEventHub = cardEventHub;
+        this.rewardService = rewardService;
     }
 
     public record CreateCustomerRequest(@NotBlank String name, @Email @NotBlank String email) {}
@@ -116,6 +123,50 @@ public class CustomerController {
                     cc.getId(), cardId, dto.stamps(), ua);
         }
         return dto;
+    }
+
+    /**
+     * Was die Kundenseite einer Punktekarte im Polling braucht: Stand, Ziel
+     * und der Katalog mit Preisen.
+     *
+     * Bewusst eine eigene Route und nicht das Stempel-DTO erweitert: die
+     * Stempelseite fragt ihre Route mehrmals pro Minute ab, und dort haengt
+     * der Abgleich "Stempel kommt beim Kunden nicht an" dran. Die will
+     * niemand mit Punktefeldern aufblaehen.
+     */
+    public record RewardView(String id, String name, long costPointsX100,
+                             String costText, boolean bezahlbar, long fehlendX100) {}
+
+    public record PointsCardResponse(long pointsX100, String pointsText,
+                                     String zielName, long fehlendX100, String fehlendText,
+                                     List<RewardView> katalog) {}
+
+    @Operation(summary = "Punktestand und Praemien-Katalog einer Kundenkarte")
+    @GetMapping("/{customerId}/card/{cardId}/points")
+    public PointsCardResponse getPoints(@PathVariable String customerId,
+                                        @PathVariable String cardId,
+                                        HttpServletResponse response) {
+        // no-store aus demselben Grund wie bei der Stempel-Route: der
+        // Live-Abgleich der Karte haengt daran.
+        response.setHeader(HttpHeaders.CACHE_CONTROL, "no-store");
+
+        CustomerCard cc = customerService.getOrCreateCustomerCard(customerId, cardId);
+        Card card = cc.getCard();
+        long stand = cc.getPointsX100();
+
+        List<Reward> katalog = rewardService.list(card);
+        Reward ziel = RewardService.naechstesZiel(katalog, stand);
+        long fehlend = ziel == null ? 0 : Math.max(0, ziel.getCostPointsX100() - stand);
+
+        return new PointsCardResponse(
+                stand, PointsMath.formatiere(stand),
+                ziel != null ? ziel.getName() : null,
+                fehlend, PointsMath.formatiere(fehlend),
+                katalog.stream().map(r -> {
+                    long f = Math.max(0, r.getCostPointsX100() - stand);
+                    return new RewardView(r.getId(), r.getName(), r.getCostPointsX100(),
+                            PointsMath.formatiere(r.getCostPointsX100()), f == 0, f);
+                }).toList());
     }
 
     @Operation(summary = "Live-Stream des Stempelstands (SSE) fuer die offene Kartenseite",
