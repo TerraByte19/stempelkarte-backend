@@ -3,7 +3,10 @@ package com.example.stemplekarte.wallet;
 import com.example.stemplekarte.config.AppProperties;
 import com.example.stemplekarte.model.Card;
 import com.example.stemplekarte.model.CustomerCard;
+import com.example.stemplekarte.model.Reward;
 import com.example.stemplekarte.model.Shop;
+import com.example.stemplekarte.service.PointsMath;
+import com.example.stemplekarte.service.RewardService;
 import de.brendamour.jpasskit.PKBarcode;
 import de.brendamour.jpasskit.PKField;
 import de.brendamour.jpasskit.PKLocation;
@@ -40,6 +43,7 @@ public class ApplePassService {
 
     private final AppProperties props;
     private final PassTemplateGenerator templateGenerator;
+    private final RewardService rewardService;
     private final PKSigningInformation signingInfo;
 
     // Fertig signierte .pkpass-Bytes zwischenspeichern. iOS holt denselben Pass
@@ -56,9 +60,11 @@ public class ApplePassService {
     private static final int PASS_CACHE_MAX = 1000;
     private final Map<String, PassCacheEntry> passCache = new ConcurrentHashMap<>();
 
-    public ApplePassService(AppProperties props, PassTemplateGenerator templateGenerator) {
+    public ApplePassService(AppProperties props, PassTemplateGenerator templateGenerator,
+                            RewardService rewardService) {
         this.props = props;
         this.templateGenerator = templateGenerator;
+        this.rewardService = rewardService;
         this.signingInfo = loadSigningInfo();
     }
 
@@ -142,7 +148,6 @@ public class ApplePassService {
     private byte[] buildPass(CustomerCard cc) throws Exception {
         Card card = cc.getCard();
         Shop shop = card.getShop();
-        int threshold = card.getRewardThreshold();
 
         String walletStyle = (card.getWalletStyle() != null && !card.getWalletStyle().isBlank())
                 ? card.getWalletStyle() : shop.getWalletStyle();
@@ -159,28 +164,6 @@ public class ApplePassService {
                 .formatted(cc.getCustomer().getId(), card.getId());
 
         String templatePath = templateGenerator.generateTemplate(cc);
-        String reward = rewardText(cc.getStamps(), threshold, card.getRewardText());
-
-        // Fortschritts-Verhältnis als String bauen (z.B. "3/10"). Gedeckelt,
-        // weil ein nachtraeglich gesenkter Schwellwert sonst "10/5" anzeigt.
-        String stampRatio = Math.min(cc.getStamps(), threshold) + "/" + threshold;
-
-        // Countdown fuer das grosse Mittelfeld: wie viele Stempel noch bis zur Belohnung.
-        // Zaehlt 10 -> 9 -> ... -> 1 runter, danach "Bereit!".
-        int remaining = Math.max(0, threshold - cc.getStamps());
-        String countdownLabel = remaining > 0 ? "Stempel bis ↓" : "BELOHNUNG";
-        String countdownValue = remaining > 0 ? String.valueOf(remaining) : "Bereit! 🎉";
-
-        // Push-Nachricht fürs Handy beim Stempelstand-Update.
-        // %@ ersetzt Apple durch den neuen Stempelstand (stampRatio).
-        // Häufigster Fall: Kunde macht die Karte genau voll (Stand == Schwelle)
-        // → schöne kombinierte Nachricht mit Belohnung + Stand.
-        // Sonst (normaler Stempel ODER seltener Überzieh-Fall 8+4): schlichte,
-        // zuverlässige Nachricht mit dem neuen Stand. Die Belohnungs-Info
-        // kommt in jedem Fall zusätzlich beim Mitarbeiter im Scanner an.
-        String changeMsg = (cc.getStamps() >= threshold)
-                ? "🎉 " + card.getRewardText() + " verdient! Neue Karte: %@"
-                : "Update! Dein Stempelstand: %@";
 
         // KEIN altText mehr → unter dem QR-Code wird die CUST-ID NICHT mehr angezeigt
         PKBarcode barcode = PKBarcode.builder()
@@ -189,32 +172,7 @@ public class ApplePassService {
                 .messageEncoding(StandardCharsets.UTF_8)
                 .build();
 
-        var genericPass = PKGenericPass.builder()
-                .passType(PKPassType.PKStoreCard);
-
-        if (grid) {
-            genericPass
-                    .headerFieldBuilder(PKField.builder()
-                            .key("stamps").label("STEMPEL")
-                            .value(stampRatio)
-                            .changeMessage(changeMsg))
-                    .secondaryFieldBuilder(PKField.builder()
-                            .key("reward").label("BELOHNUNG").value(reward))
-                    .auxiliaryFieldBuilder(PKField.builder()
-                            .key("name").label("KUNDE").value(cc.getCustomer().getName()));
-        } else {
-            genericPass
-                    .headerFieldBuilder(PKField.builder()
-                            .key("stamps-header").label("STEMPEL")
-                            .value(stampRatio)
-                            .changeMessage(changeMsg))
-                    .primaryFieldBuilder(PKField.builder()
-                            .key("stamps-big").label(countdownLabel).value(countdownValue))
-                    .secondaryFieldBuilder(PKField.builder()
-                            .key("reward").label("BELOHNUNG").value(reward))
-                    .auxiliaryFieldBuilder(PKField.builder()
-                            .key("name").label("KUNDE").value(cc.getCustomer().getName()));
-        }
+        PKGenericPass genericPass = baueFelder(card, cc, grid);
 
         var passBuilder = PKPass.builder()
                 .formatVersion(1)
@@ -234,14 +192,13 @@ public class ApplePassService {
                 .webServiceURL(new URL(props.baseUrl() + "/wallet/"))
                 .authenticationToken(cc.getAuthToken())
                 .barcodes(List.of(barcode))
-                .pass(genericPass.build());
+                .pass(genericPass);
 
         // Ortsfelder NUR anhaengen, wenn es wirklich einen Ort gibt. Jedes Feld,
         // das ohne Not im Pass steht, ist ein Risiko - siehe groupingIdentifier:
         // ein einziges unpassendes Feld liess iOS den aktualisierten Pass
         // verwerfen. Laeden ohne diese Funktion bekommen denselben Pass wie vorher.
-        List<PKLocation> orte = sperrbildschirmOrte(shop, cc.getStamps(), threshold,
-                card.getRewardText());
+        List<PKLocation> orte = sperrbildschirmOrte(shop, card, cc);
         if (!orte.isEmpty()) {
             passBuilder.maxDistance(LOCK_SCREEN_RADIUS_M).locations(orte);
         }
@@ -273,13 +230,192 @@ public class ApplePassService {
      * Fall, wenn der Laden die Funktion aus hat oder keine Koordinaten
      * hinterlegt sind.
      */
-    private List<PKLocation> sperrbildschirmOrte(Shop shop, int stamps, int threshold,
-                                                 String rewardText) {
+    /**
+     * Baut die sichtbaren Felder des Passes.
+     *
+     * Bewusst getrennt von buildPass: das signiert am Ende und braucht
+     * Zertifikate, die im Test nicht liegen. Die Felder sind reine
+     * Datenstruktur und dadurch pruefbar - und genau sie sind der Teil, bei
+     * dem ein Fehler teuer wird. Ein unpassendes Feld hat iOS schon einmal
+     * den aktualisierten Pass verwerfen lassen (damals groupingIdentifier):
+     * Karte installiert, aktualisiert aber nie, und gemerkt wird es erst,
+     * wenn ein Kunde sich beschwert.
+     *
+     * Paketsichtbar, damit der Test drankommt, ohne die Klasse nach aussen
+     * zu oeffnen.
+     */
+    PKGenericPass baueFelder(Card card, CustomerCard cc, boolean grid) {
+        // Der Stempel-Weg darunter wird nicht angefasst. Das ist die harte
+        // Regel dieses Umbaus: die Pässe, die gerade in echten Laeden liegen,
+        // bleiben Feld fuer Feld wie sie sind.
+        if (card.isPoints()) {
+            return baueFelderPunkte(card, cc);
+        }
+
+        int threshold = card.getRewardThreshold();
+        String reward = rewardText(cc.getStamps(), threshold, card.getRewardText());
+
+        // Fortschritts-Verhältnis als String bauen (z.B. "3/10"). Gedeckelt,
+        // weil ein nachtraeglich gesenkter Schwellwert sonst "10/5" anzeigt.
+        String stampRatio = Math.min(cc.getStamps(), threshold) + "/" + threshold;
+
+        // Countdown fuer das grosse Mittelfeld: wie viele Stempel noch bis zur Belohnung.
+        // Zaehlt 10 -> 9 -> ... -> 1 runter, danach "Bereit!".
+        int remaining = Math.max(0, threshold - cc.getStamps());
+        String countdownLabel = remaining > 0 ? "Stempel bis \u2193" : "BELOHNUNG";
+        String countdownValue = remaining > 0 ? String.valueOf(remaining) : "Bereit! \uD83C\uDF89";
+
+        // Push-Nachricht fürs Handy beim Stempelstand-Update.
+        // %@ ersetzt Apple durch den neuen Stempelstand (stampRatio).
+        String changeMsg = (cc.getStamps() >= threshold)
+                ? "\uD83C\uDF89 " + card.getRewardText() + " verdient! Neue Karte: %@"
+                : "Update! Dein Stempelstand: %@";
+
+        var genericPass = PKGenericPass.builder()
+                .passType(PKPassType.PKStoreCard);
+
+        if (grid) {
+            genericPass
+                    .headerFieldBuilder(PKField.builder()
+                            .key("stamps").label("STEMPEL")
+                            .value(stampRatio)
+                            .changeMessage(changeMsg))
+                    .secondaryFieldBuilder(PKField.builder()
+                            .key("reward").label("BELOHNUNG").value(reward))
+                    .auxiliaryFieldBuilder(PKField.builder()
+                            .key("name").label("KUNDE").value(cc.getCustomer().getName()));
+        } else {
+            genericPass
+                    .headerFieldBuilder(PKField.builder()
+                            .key("stamps-header").label("STEMPEL")
+                            .value(stampRatio)
+                            .changeMessage(changeMsg))
+                    .primaryFieldBuilder(PKField.builder()
+                            .key("stamps-big").label(countdownLabel).value(countdownValue))
+                    .secondaryFieldBuilder(PKField.builder()
+                            .key("reward").label("BELOHNUNG").value(reward))
+                    .auxiliaryFieldBuilder(PKField.builder()
+                            .key("name").label("KUNDE").value(cc.getCustomer().getName()));
+        }
+
+        return genericPass.build();
+    }
+
+    /**
+     * Felder einer Punktekarte.
+     *
+     * Vorne Stand und Ziel, hinten der ganze Katalog: der Kunde soll auf
+     * einen Blick sehen, was zu holen ist, und trotzdem ein konkretes
+     * naechstes Ziel haben. Ohne das Ziel verschwindet der Zugreiz, der die
+     * Stempelkarte traegt ("noch zwei, dann ist der Kuchen drin").
+     *
+     * Das changeMessage uebernimmt die Rolle von "Karte voll": es meldet
+     * sich, wenn ueberhaupt etwas einloesbar ist - nicht bei jeder Buchung,
+     * sonst wird die Sperrbildschirm-Meldung zum Rauschen.
+     */
+    private PKGenericPass baueFelderPunkte(Card card, CustomerCard cc) {
+        long stand = cc.getPointsX100();
+        List<Reward> katalog = rewardService.list(card);
+        Reward ziel = RewardService.naechstesZiel(katalog, stand);
+
+        String standText = PointsMath.formatiere(stand);
+        boolean etwasErreichbar = katalog.stream()
+                .anyMatch(r -> r.getCostPointsX100() <= stand);
+
+        // %@ ersetzt Apple durch den neuen Wert des Feldes.
+        String changeMsg = etwasErreichbar
+                ? "\uD83C\uDF89 Du kannst einloesen! Punktestand: %@"
+                : "Update! Dein Punktestand: %@";
+
+        var genericPass = PKGenericPass.builder()
+                .passType(PKPassType.PKStoreCard)
+                .headerFieldBuilder(PKField.builder()
+                        .key("points-header").label("PUNKTE")
+                        .value(standText)
+                        .changeMessage(changeMsg));
+
+        if (ziel != null) {
+            long fehlend = Math.max(0, ziel.getCostPointsX100() - stand);
+            genericPass
+                    .primaryFieldBuilder(PKField.builder()
+                            .key("points-goal")
+                            .label(fehlend > 0 ? "Punkte bis \u2193" : "BEREIT")
+                            .value(fehlend > 0
+                                    ? PointsMath.formatiere(fehlend)
+                                    : "Bereit! \uD83C\uDF89"))
+                    .secondaryFieldBuilder(PKField.builder()
+                            .key("reward").label("N\u00c4CHSTE PR\u00c4MIE")
+                            .value(ziel.getName()));
+        } else {
+            // Leerer Katalog: nur der Stand, kein erfundenes Ziel. Ein Laden
+            // ohne Praemien hat schlicht noch keines.
+            genericPass.primaryFieldBuilder(PKField.builder()
+                    .key("points-big").label("PUNKTE").value(standText));
+        }
+
+        genericPass.auxiliaryFieldBuilder(PKField.builder()
+                .key("name").label("KUNDE").value(cc.getCustomer().getName()));
+
+        // ── Rueckseite: der ganze Katalog ─────────────────────────────────
+        // Das sind die ERSTEN Rueckseitenfelder ueberhaupt in diesem Pass.
+        // Sie liegen bewusst nur in diesem Zweig.
+        for (Reward r : katalog) {
+            boolean bezahlbar = r.getCostPointsX100() <= stand;
+            genericPass.backFieldBuilder(PKField.builder()
+                    .key("reward-" + r.getId())
+                    .label(bezahlbar ? "\u2713 " + r.getName() : r.getName())
+                    .value(PointsMath.formatiere(r.getCostPointsX100()) + " Punkte"));
+        }
+
+        genericPass.backFieldBuilder(PKField.builder()
+                .key("rate").label("So sammelst du")
+                .value(kursText(card)));
+
+        return genericPass.build();
+    }
+
+    /** Der Kurs im Klartext, damit der Kunde seine Punkte selbst nachrechnen
+     *  kann. Unter einem Punkt pro Euro liest sich der Kehrwert besser. */
+    private String kursText(Card card) {
+        int kurs = card.getPointsPerEuroX100();
+        if (kurs >= 100) {
+            return PointsMath.formatiere(kurs) + " Punkte pro Euro";
+        }
+        long euroProPunktX100 = Math.round(10000.0 / kurs);
+        return "1 Punkt pro " + PointsMath.formatiere(euroProPunktX100) + " Euro";
+    }
+
+    List<PKLocation> sperrbildschirmOrte(Shop shop, Card card, CustomerCard cc) {
         if (!shop.isLockScreenActive()) {
             return List.of();
         }
-        int fehlend = threshold - stamps;
-        String eigener = fehlend <= 0
+
+        String belohnung;
+        String offen;
+        String einheit;
+        boolean erreicht;
+
+        if (card.isPoints()) {
+            List<Reward> katalog = rewardService.list(card);
+            Reward ziel = RewardService.naechstesZiel(katalog, cc.getPointsX100());
+            // Ohne Praemie gibt es nichts Sinnvolles zu melden. Lieber keine
+            // Ortsbindung als "Noch 0 Punkte bis: null".
+            if (ziel == null) return List.of();
+            long fehlend = Math.max(0, ziel.getCostPointsX100() - cc.getPointsX100());
+            belohnung = ziel.getName();
+            offen = PointsMath.formatiere(fehlend);
+            einheit = "Punkte";
+            erreicht = fehlend == 0;
+        } else {
+            int fehlend = card.getRewardThreshold() - cc.getStamps();
+            belohnung = card.getRewardText();
+            offen = String.valueOf(Math.max(0, fehlend));
+            // Einzahl beibehalten: "Noch 1 Stempel bis:" stand so schon da.
+            einheit = fehlend == 1 ? "Stempel" : "Stempel";
+            erreicht = fehlend <= 0;
+        }
+
+        String eigener = erreicht
                 ? shop.getLockScreenTextFull()
                 : shop.getLockScreenTextProgress();
 
@@ -287,18 +423,19 @@ public class ApplePassService {
         if (eigener != null && !eigener.isBlank()) {
             // Deutsche und englische Schreibweise, damit ein Laden den
             // Platzhalter so nutzen kann, wie er in seiner Oberflaeche steht.
-            String offen = String.valueOf(Math.max(0, fehlend));
+            // Bei Punktekarten traegt {stempel}/{stamps} die fehlenden Punkte
+            // und {belohnung}/{reward} den Namen der naechsten Praemie - ein
+            // Text, den ein Laden fuer seine Stempelkarte geschrieben hat,
+            // laeuft damit unveraendert auch auf einer Punktekarte.
             hinweis = eigener
-                    .replace("{belohnung}", rewardText)
-                    .replace("{reward}", rewardText)
+                    .replace("{belohnung}", belohnung)
+                    .replace("{reward}", belohnung)
                     .replace("{stempel}", offen)
                     .replace("{stamps}", offen);
         } else {
-            hinweis = fehlend <= 0
-                    ? rewardText + " wartet auf dich"
-                    : fehlend == 1
-                            ? "Noch 1 Stempel bis: " + rewardText
-                            : "Noch " + fehlend + " Stempel bis: " + rewardText;
+            hinweis = erreicht
+                    ? belohnung + " wartet auf dich"
+                    : "Noch " + offen + " " + einheit + " bis: " + belohnung;
         }
 
         return List.of(PKLocation.builder()
