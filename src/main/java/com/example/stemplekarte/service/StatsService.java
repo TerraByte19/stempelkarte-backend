@@ -6,6 +6,9 @@ import com.example.stemplekarte.model.ScanLog;
 import com.example.stemplekarte.model.Shop;
 import com.example.stemplekarte.repository.CardRepository;
 import com.example.stemplekarte.repository.CustomerCardRepository;
+import com.example.stemplekarte.model.BookingKind;
+import com.example.stemplekarte.model.PointsBooking;
+import com.example.stemplekarte.repository.PointsBookingRepository;
 import com.example.stemplekarte.repository.ScanLogRepository;
 import org.springframework.stereotype.Service;
 
@@ -40,9 +43,12 @@ public class StatsService {
     private final CardRepository cardRepo;
     private final CustomerCardRepository customerCardRepo;
     private final ScanLogRepository scanLogRepo;
+    private final PointsBookingRepository pointsBookingRepo;
 
     public StatsService(CardService cardService, CardRepository cardRepo,
-                        CustomerCardRepository customerCardRepo, ScanLogRepository scanLogRepo) {
+                        CustomerCardRepository customerCardRepo, ScanLogRepository scanLogRepo,
+                        PointsBookingRepository pointsBookingRepo) {
+        this.pointsBookingRepo = pointsBookingRepo;
         this.cardService = cardService;
         this.cardRepo = cardRepo;
         this.customerCardRepo = customerCardRepo;
@@ -63,6 +69,10 @@ public class StatsService {
         long openStamps = 0;
         long einloesungen = 0;
         long cardRows = 0;              // customer_card-Zeilen (fuer Fuellgrad-Schnitt)
+        // Was die Kunden auf Punktekarten noch einloesen duerfen. Die
+        // betriebswirtschaftlich wichtigste Zahl und bisher unsichtbar:
+        // sie sagt dem Laden, welche Verpflichtung er angesammelt hat.
+        long punkteAusstehendGesamt = 0;
 
         int customersNearReward = 0;   // Karten >= 80% und noch nicht am Ziel
         int customersWithConsent = 0;  // customer_card-Zeilen mit Marketing-Einwilligung
@@ -88,19 +98,11 @@ public class StatsService {
 
         for (Card card : alleKarten) {
             List<CustomerCard> ccs = customerCardRepo.findByCard(card);
-            int threshold = Math.max(1, card.getRewardThreshold());
-            int stamps = ccs.stream().mapToInt(CustomerCard::getStamps).sum();
             int rewards = ccs.stream().mapToInt(CustomerCard::getTotalRewards).sum();
 
-            openStamps    += stamps;
-            einloesungen  += rewards;
-            stampsGranted += (long) stamps + (long) rewards * threshold;
-            cardRows      += ccs.size();
-
+            // Neukunden und Einwilligungen gelten fuer BEIDE Kartentypen.
             for (CustomerCard cc : ccs) {
-                if (cc.getStamps() >= threshold * 0.8 && cc.getStamps() < threshold) customersNearReward++;
                 if (cc.isMarketingConsent()) customersWithConsent++;
-                fillSum += Math.min(1.0, (double) cc.getStamps() / threshold);
 
                 Instant created = cc.getCreatedAt();
                 if (created != null) {
@@ -113,10 +115,34 @@ public class StatsService {
                 }
             }
 
+            einloesungen += rewards;
+
+            if (card.isPoints()) {
+                // Stempel-Kennzahlen gelten hier nicht. Frueher lief jede Karte
+                // durch dieselbe Schleife, und weil eine Punktekarte
+                // reward_threshold = 1 traegt, erhoehte dort jede eingeloeste
+                // Praemie die "vergebenen Stempel" um eins.
+                punkteAusstehendGesamt += punkteKarte(card, ccs, perCard);
+                continue;
+            }
+
+            int threshold = Math.max(1, card.getRewardThreshold());
+            int stamps = ccs.stream().mapToInt(CustomerCard::getStamps).sum();
+
+            openStamps    += stamps;
+            stampsGranted += (long) stamps + (long) rewards * threshold;
+            cardRows      += ccs.size();
+
+            for (CustomerCard cc : ccs) {
+                if (cc.getStamps() >= threshold * 0.8 && cc.getStamps() < threshold) customersNearReward++;
+                fillSum += Math.min(1.0, (double) cc.getStamps() / threshold);
+            }
+
             if (card.isActive()) {
                 Map<String, Object> cardMap = new HashMap<>();
                 cardMap.put("cardId", card.getId());
                 cardMap.put("cardName", card.getName());
+                cardMap.put("type", "STAMP");
                 cardMap.put("customerCount", ccs.size());
                 cardMap.put("totalStamps", stamps);
                 cardMap.put("totalRewards", rewards);
@@ -198,6 +224,28 @@ public class StatsService {
             newCustomersInHistory += e.getValue();
         }
 
+        // 30-Tage-Fenster wie beim ScanLog-Sample, damit beide Auswertungen
+        // denselben Zeitraum meinen.
+        List<PointsBooking> buchungen = pointsBookingRepo
+                .findByShopIdAndCreatedAtAfterOrderByCreatedAtAsc(shop.getId(), sampleWindowAgo);
+
+        long punkteUmsatzCents = buchungen.stream()
+                .filter(b -> b.getKind() == BookingKind.EARN && b.getAmountCents() != null)
+                .mapToLong(PointsBooking::getAmountCents).sum();
+
+        long punkteVergeben = buchungen.stream()
+                .filter(b -> b.getKind() == BookingKind.EARN)
+                .mapToLong(PointsBooking::getDeltaPointsX100).sum();
+
+        // Nur nicht zurueckgenommene Einloesungen: eine Praemie, die
+        // rueckgaengig gemacht wurde, hat der Kunde nie bekommen und gehoert
+        // nicht in die Rangliste.
+        Map<String, Long> topRewards = buchungen.stream()
+                .filter(b -> b.getKind() == BookingKind.REDEEM && !b.istZurueckgenommen())
+                .filter(b -> b.getRewardName() != null)
+                .collect(java.util.stream.Collectors.groupingBy(
+                        PointsBooking::getRewardName, java.util.stream.Collectors.counting()));
+
         Map<String, Object> summary = new HashMap<>();
         summary.put("shopName", shop.getName());
         // Einstellung des Ladens, nicht des Betrachters - das Admin-Panel zeigt
@@ -223,6 +271,10 @@ public class StatsService {
         summary.put("newCustomersThisWeek", newThisWeek);
         summary.put("newCustomersLastWeek", newLastWeek);
         summary.put("newCustomersInHistory", newCustomersInHistory); // Summe ueber die 2-Wochen-Kachel
+        summary.put("pointsRevenueCents", punkteUmsatzCents);
+        summary.put("pointsGrantedX100", punkteVergeben);
+        summary.put("pointsOutstandingX100", punkteAusstehendGesamt);
+        summary.put("topRewards", topRewards);
         summary.put("perCard", perCard);
         summary.put("history", history);                 // 2 Wochen, luecklos
         summary.put("newCustomerHistory", newCustomerHistory); // 2 Wochen, luecklos
@@ -234,6 +286,41 @@ public class StatsService {
         summary.put("byWeekday", byWeekdayOut);
         summary.put("byHour", byHour);
         return summary;
+    }
+
+    /**
+     * Kennzahlen einer Punktekarte. Bewusst getrennt von den Stempel-Summen:
+     * Stempel und Punkte sind verschiedene Einheiten und gehoeren nicht in
+     * dieselbe Saeule.
+     *
+     * Gibt den ausstehenden Bestand zurueck, damit die Schleife ihn
+     * aufsummieren kann - auch von deaktivierten Karten: eingeloest werden
+     * duerfen die Punkte trotzdem noch, die Verpflichtung verschwindet nicht
+     * mit dem Ausblenden der Karte.
+     */
+    private long punkteKarte(Card card, List<CustomerCard> ccs,
+                             List<Map<String, Object>> perCard) {
+        long ausstehend = ausstehendePunkte(
+                ccs.stream().map(CustomerCard::getPointsX100).toList());
+        int einloesungen = ccs.stream().mapToInt(CustomerCard::getTotalRewards).sum();
+
+        if (card.isActive()) {
+            Map<String, Object> m = new HashMap<>();
+            m.put("cardId", card.getId());
+            m.put("cardName", card.getName());
+            m.put("type", "POINTS");
+            m.put("customerCount", ccs.size());
+            m.put("pointsOutstandingX100", ausstehend);
+            m.put("totalRewards", einloesungen);
+            perCard.add(m);
+        }
+        return ausstehend;
+    }
+
+    /** Was die Kunden noch einloesen duerfen. Bewusst statisch und ohne
+     *  Datenbank, damit die Regel in einem Einheitentest steht. */
+    static long ausstehendePunkte(List<Long> staende) {
+        return staende.stream().mapToLong(Long::longValue).sum();
     }
 
     // Tages-Detail: Stunden-Verteilung der Stempel fuer EINEN Tag. Wird
