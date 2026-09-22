@@ -4,7 +4,10 @@ import com.example.stemplekarte.config.AppProperties;
 import com.example.stemplekarte.model.Card;
 import com.example.stemplekarte.model.CustomerCard;
 import com.example.stemplekarte.model.Shop;
+import com.example.stemplekarte.model.Reward;
 import com.example.stemplekarte.repository.CustomerCardRepository;
+import com.example.stemplekarte.service.PointsMath;
+import com.example.stemplekarte.service.RewardService;
 import com.google.api.client.googleapis.javanet.GoogleNetHttpTransport;
 import com.google.api.client.json.gson.GsonFactory;
 import com.google.api.services.walletobjects.Walletobjects;
@@ -23,6 +26,7 @@ import java.io.FileInputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.security.PrivateKey;
+import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
@@ -37,10 +41,13 @@ public class GoogleWalletService {
 
     private final AppProperties props;
     private final CustomerCardRepository customerCardRepo;
+    private final RewardService rewardService;
     private final ServiceAccountCredentials credentials;
     private final Walletobjects walletClient;
 
-    public GoogleWalletService(AppProperties props, CustomerCardRepository customerCardRepo) {
+    public GoogleWalletService(AppProperties props, CustomerCardRepository customerCardRepo,
+                               RewardService rewardService) {
+        this.rewardService = rewardService;
         this.props = props;
         this.customerCardRepo = customerCardRepo;
         this.credentials = loadCredentials();
@@ -242,22 +249,77 @@ public class GoogleWalletService {
         String qrValue = "{\"cid\":\"" + cc.getCustomer().getId() +
                 "\",\"cardId\":\"" + cc.getCard().getId() + "\"}";
 
+        Card card = cc.getCard();
+
+        LoyaltyPoints haupt;
+        LoyaltyPoints neben;
+        // Immer gesetzt, auch leer: so wird ein alter Baustein bei einer
+        // bestehenden Karte sauber mit nichts ueberschrieben.
+        List<TextModuleData> module = new ArrayList<>();
+
+        if (card.isPoints()) {
+            long stand = cc.getPointsX100();
+            List<Reward> katalog = rewardService.list(card);
+            Reward ziel = RewardService.naechstesZiel(katalog, stand);
+
+            haupt = new LoyaltyPoints()
+                    .setLabel("Punkte")
+                    .setBalance(new LoyaltyPointsBalance()
+                            .setString(PointsMath.formatiere(stand)));
+
+            if (ziel != null) {
+                long fehlend = Math.max(0, ziel.getCostPointsX100() - stand);
+                neben = new LoyaltyPoints()
+                        .setLabel("N\u00e4chste Pr\u00e4mie")
+                        .setBalance(new LoyaltyPointsBalance()
+                                .setString(fehlend > 0
+                                        ? ziel.getName() + ", noch " + PointsMath.formatiere(fehlend)
+                                        : ziel.getName() + " bereit!"));
+            } else {
+                neben = new LoyaltyPoints()
+                        .setLabel("Pr\u00e4mien")
+                        .setBalance(new LoyaltyPointsBalance().setString("noch keine"));
+            }
+
+            // Der Katalog als Textbaustein - das Gegenstueck zur
+            // Pass-Rueckseite bei Apple.
+            if (!katalog.isEmpty()) {
+                StringBuilder sb = new StringBuilder();
+                for (Reward r : katalog) {
+                    boolean bezahlbar = r.getCostPointsX100() <= stand;
+                    sb.append(bezahlbar ? "\u2713 " : "\u00b7 ")
+                      .append(r.getName()).append(" - ")
+                      .append(PointsMath.formatiere(r.getCostPointsX100()))
+                      .append(" Punkte\n");
+                }
+                module.add(new TextModuleData()
+                        .setId("katalog")
+                        .setHeader("Pr\u00e4mien")
+                        .setBody(sb.toString().trim()));
+            }
+        } else {
+            // Unveraendert der bisherige Stempel-Weg.
+            haupt = new LoyaltyPoints()
+                    .setLabel("Stempel")
+                    .setBalance(new LoyaltyPointsBalance()
+                            // Gedeckelt: gesenkte Schwelle wuerde sonst "10/5" anzeigen.
+                            .setString(Math.min(cc.getStamps(), card.getRewardThreshold())
+                                    + "/" + card.getRewardThreshold()));
+            neben = new LoyaltyPoints()
+                    .setLabel("Belohnung")
+                    .setBalance(new LoyaltyPointsBalance()
+                            .setString(card.getRewardText()));
+        }
+
         LoyaltyObject loyaltyObject = new LoyaltyObject()
                 .setId(objectId)
                 .setClassId(classId)
                 .setState("ACTIVE")
                 .setAccountName(cc.getCustomer().getName())
                 .setAccountId(cc.getId())
-                .setLoyaltyPoints(new LoyaltyPoints()
-                        .setLabel("Stempel")
-                        .setBalance(new LoyaltyPointsBalance()
-                                // Gedeckelt: gesenkte Schwelle wuerde sonst "10/5" anzeigen.
-                                .setString(Math.min(cc.getStamps(), cc.getCard().getRewardThreshold())
-                                        + "/" + cc.getCard().getRewardThreshold())))
-                .setSecondaryLoyaltyPoints(new LoyaltyPoints()
-                        .setLabel("Belohnung")
-                        .setBalance(new LoyaltyPointsBalance()
-                                .setString(cc.getCard().getRewardText())))
+                .setLoyaltyPoints(haupt)
+                .setSecondaryLoyaltyPoints(neben)
+                .setTextModulesData(module)
                 // setAlternateText("") überschreibt den alten CUST-Text bei bestehenden Karten mit leer
                 .setBarcode(new Barcode()
                         .setType("QR_CODE")
