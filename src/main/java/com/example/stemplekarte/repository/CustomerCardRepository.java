@@ -17,6 +17,12 @@ public interface CustomerCardRepository extends JpaRepository<CustomerCard, Stri
     Optional<CustomerCard> findById(String id);
 
     Optional<CustomerCard> findByCustomerAndCard(Customer customer, Card card);
+
+    // Kundenkarte ueber die beiden IDs aus dem QR-Code. Karte und Kunde werden
+    // mitgeladen, weil der Aufrufer beide braucht und open-in-view aus ist.
+    @EntityGraph(attributePaths = {"card", "card.shop", "customer"})
+    Optional<CustomerCard> findByCustomer_IdAndCard_Id(String customerId, String cardId);
+
     List<CustomerCard> findByCustomer(Customer customer);
     List<CustomerCard> findByCard(Card card);
     Optional<CustomerCard> findByAuthTokenAndCard(String authToken, Card card);

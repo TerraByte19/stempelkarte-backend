@@ -11,6 +11,7 @@ import com.example.stemplekarte.service.CardEventHub;
 import com.example.stemplekarte.service.CustomerService;
 import com.example.stemplekarte.wallet.ApnsPushService;
 import com.example.stemplekarte.wallet.GoogleWalletService;
+import com.example.stemplekarte.wallet.WalletNotifier;
 import org.hibernate.LazyInitializationException;
 import org.junit.jupiter.api.Test;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -58,8 +59,10 @@ class ScanControllerTest {
         when(service.processScan(anyString(), any(Shop.class), anyInt()))
                 .thenReturn(new ScanResult.Stamped(cc, "Stempel hinzugefuegt", 0));
 
-        return new ScanController(service, mock(ApnsPushService.class),
-                mock(GoogleWalletService.class), mock(CardEventHub.class));
+        return new ScanController(service, new WalletNotifier(
+                mock(CardEventHub.class), mock(ApnsPushService.class),
+                mock(GoogleWalletService.class)),
+                mock(com.example.stemplekarte.service.PointsService.class));
     }
 
     private Authentication authFuer(Shop shop) {

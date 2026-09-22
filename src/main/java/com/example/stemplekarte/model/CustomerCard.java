@@ -27,6 +27,14 @@ public class CustomerCard {
     @Column(name = "total_rewards", nullable = false)
     private int totalRewards;
 
+    // Punktestand in Hundertstel-Punkten (520 = 5,20 Punkte). Gilt nur fuer
+    // Karten vom Typ POINTS; Stempelkarten lassen die Spalte auf 0 stehen.
+    // Default in der Spaltendefinition, damit ddl-auto=update bei
+    // bestehenden Zeilen nicht fehlschlaegt.
+    @Column(name = "points_x100", nullable = false,
+            columnDefinition = "bigint not null default 0")
+    private long pointsX100;
+
     @Column(name = "auth_token", nullable = false, length = 128)
     private String authToken;
 
@@ -90,6 +98,42 @@ public class CustomerCard {
     public void resetAll() {
         this.stamps = 0;
         this.totalRewards = 0;
+        this.pointsX100 = 0;
+        this.updatedAt = Instant.now();
+    }
+
+    /**
+     * Bucht Punkte auf oder ab und gibt zurueck, wie viel TATSAECHLICH
+     * gebucht wurde.
+     *
+     * Der Bestand geht nie unter null - gleiches Muster wie redeemReward bei
+     * den Stempeln. Bei einer Korrektur ueber mehr als den Bestand faellt
+     * der Rueckgabewert deshalb kleiner aus als der Wunsch, und genau dieser
+     * Rueckgabewert landet in der Buchungszeile: sie soll festhalten, was
+     * passiert ist, nicht was gemeint war.
+     */
+    public long addPoints(long deltaX100) {
+        long vorher = this.pointsX100;
+        this.pointsX100 = Math.max(0, vorher + deltaX100);
+        this.updatedAt = Instant.now();
+        return this.pointsX100 - vorher;
+    }
+
+    public boolean kannBezahlen(long kostenX100) {
+        return this.pointsX100 >= kostenX100;
+    }
+
+    /** Belohnung zaehlen, ohne am Stempelstand zu ruehren. Punktekarten
+     *  ziehen den Preis ueber addPoints ab, nicht ueber eine Schwelle. */
+    public void zaehleBelohnung() {
+        this.totalRewards++;
+        this.updatedAt = Instant.now();
+    }
+
+    /** Ruecknahme einer Einloesung. Geht nie unter null - sonst stuende auf
+     *  einer Karte eine negative Zahl eingeloester Praemien. */
+    public void nimmBelohnungZurueck() {
+        this.totalRewards = Math.max(0, this.totalRewards - 1);
         this.updatedAt = Instant.now();
     }
 
@@ -109,6 +153,7 @@ public class CustomerCard {
     public Card getCard() { return card; }
     public int getStamps() { return stamps; }
     public int getTotalRewards() { return totalRewards; }
+    public long getPointsX100() { return pointsX100; }
     public String getAuthToken() { return authToken; }
     public Instant getCreatedAt() { return createdAt; }
     public Instant getUpdatedAt() { return updatedAt; }
