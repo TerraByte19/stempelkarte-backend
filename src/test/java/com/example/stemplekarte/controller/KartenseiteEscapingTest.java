@@ -60,4 +60,41 @@ class KartenseiteEscapingTest {
     void nullGibtLeerenText() {
         assertThat(LandingController.escapeHtml(null)).isEmpty();
     }
+
+    // ── Farben im CSS ───────────────────────────────────────────────────
+    //
+    // Die Ladenfarbe landet in einer CSS-Regel: background: %s;
+    // escapeHtml reicht dort NICHT - es ersetzt spitze Klammern und
+    // Anfuehrungszeichen, aber ein Semikolon beendet die Deklaration und
+    // eine geschweifte Klammer die ganze Regel. Genau dieser Griff zum
+    // falschen Werkzeug war der Fehler: escapeHtml sah nach Absicherung
+    // aus und war keine.
+
+    @Test
+    void hexFarbenGehenDurch() {
+        assertThat(LandingController.safeCssColor("#3C3489")).isEqualTo("#3C3489");
+        assertThat(LandingController.safeCssColor("#fff")).isEqualTo("#fff");
+        assertThat(LandingController.safeCssColor("#3C3489AA")).isEqualTo("#3C3489AA");
+    }
+
+    @Test
+    void ausbruchAusDerCssRegelWirdAbgewiesen() {
+        // Der Laden setzt seine Farbe selbst und sie wird nirgends geprueft.
+        // 32 Zeichen reichen, um die Kartenseite seiner Kunden umzugestalten.
+        assertThat(LandingController.safeCssColor("red;}body{opacity:0")).isEqualTo("#3C3489");
+        assertThat(LandingController.safeCssColor("#fff;}*{display:none")).isEqualTo("#3C3489");
+        assertThat(LandingController.safeCssColor("url(https://boese.example)"))
+                .isEqualTo("#3C3489");
+    }
+
+    @Test
+    void farbnamenUndLeerwerteFallenAufDenStandardZurueck() {
+        // Bewusst streng: nur Hex. "red" waere harmlos, aber jede Ausnahme
+        // macht die Pruefung angreifbarer, und die Oberflaeche liefert
+        // ohnehin nur Hex.
+        assertThat(LandingController.safeCssColor("red")).isEqualTo("#3C3489");
+        assertThat(LandingController.safeCssColor("")).isEqualTo("#3C3489");
+        assertThat(LandingController.safeCssColor(null)).isEqualTo("#3C3489");
+        assertThat(LandingController.safeCssColor("#xyz")).isEqualTo("#3C3489");
+    }
 }

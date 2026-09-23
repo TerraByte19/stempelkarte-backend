@@ -300,7 +300,7 @@ public class LandingController {
                 </body>
                 </html>
                 """.formatted(
-                escapeHtml(shopName), escapeHtml(bgColor),
+                escapeHtml(shopName), safeCssColor(bgColor),
                 // Logo-URL steht in einem Attribut mit einfachen
                 // Anfuehrungszeichen - ein Apostroph darin bricht daraus aus.
                 // escapeHtml ersetzt ihn durch &#39;.
@@ -372,6 +372,22 @@ public class LandingController {
     }
 
     /** Praemiennamen kommen vom Laden und landen roh im HTML. */
+    /**
+     * Eine Farbe, die gefahrlos in eine CSS-Regel darf.
+     *
+     * escapeHtml reicht hier NICHT: es ersetzt spitze Klammern und
+     * Anfuehrungszeichen, aber im CSS-Kontext braucht es Semikolon und
+     * geschweifte Klammern. Die Ladenfarbe wird nirgends validiert -
+     * ein Laden koennte sie auf "red;}body{opacity:0" setzen und damit
+     * die Kartenseite seiner Kunden umgestalten.
+     *
+     * Deshalb keine Filterung, sondern eine Pruefung: entweder es ist
+     * eine Hex-Farbe, oder es gilt der Standardwert.
+     */
+    static String safeCssColor(String c) {
+        return (c != null && c.matches("#[0-9A-Fa-f]{3,8}")) ? c : "#3C3489";
+    }
+
     static String escapeHtml(String s) {
         if (s == null) return "";
         return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
@@ -620,14 +636,15 @@ public class LandingController {
                     </body>
                     </html>
                     """.formatted(
-                    shopName, bgColor,
-                    logoUrl.isBlank() ? "" : "<img src='" + logoUrl + "' class='shop-logo' alt='Logo'>",
-                    shopName, card.getName(),
-                    customer.getName(),
+                    escapeHtml(shopName), safeCssColor(bgColor),
+                    logoUrl.isBlank() ? ""
+                            : "<img src='" + escapeHtml(logoUrl) + "' class='shop-logo' alt='Logo'>",
+                    escapeHtml(shopName), escapeHtml(card.getName()),
+                    escapeHtml(customer.getName()),
                     stampsShown, threshold,
                     stampsHtml,
-                    stamps >= threshold ? "🎉 " + card.getRewardText() + " verfügbar!" :
-                            "Noch " + (threshold - stamps) + " Stempel bis: " + card.getRewardText(),
+                    stamps >= threshold ? "🎉 " + escapeHtml(card.getRewardText()) + " verfügbar!" :
+                            "Noch " + (threshold - stamps) + " Stempel bis: " + escapeHtml(card.getRewardText()),
                     applePassUrl,
                     googleSaveUrl.isBlank() ? "" :
                             "<a href='" + googleSaveUrl + "' class='btn-google' id='google-btn'>" +
