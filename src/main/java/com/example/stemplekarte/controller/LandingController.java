@@ -570,8 +570,8 @@ public class LandingController {
                             // im DOM ersetzt. So haengt nichts mehr am HTML-Cache des Handys
                             // (frueher: location.reload() konnte die alte Seite aus dem Cache
                             // holen -> Zaehler blieb stehen / Reload-Schleife).
-                            const custId = '%s';
-                            const cId = '%s';
+                            const custId = %s;
+                            const cId = %s;
                             const threshold = %d;
                             const rewardText = %s;
                             let shownStamps = %d;
@@ -645,12 +645,13 @@ public class LandingController {
                     stampsHtml,
                     stamps >= threshold ? "🎉 " + escapeHtml(card.getRewardText()) + " verfügbar!" :
                             "Noch " + (threshold - stamps) + " Stempel bis: " + escapeHtml(card.getRewardText()),
-                    applePassUrl,
-                    googleSaveUrl.isBlank() ? "" :
-                            "<a href='" + googleSaveUrl + "' class='btn-google' id='google-btn'>" +
+                    escapeHtml(applePassUrl),
+                    googleSaveUrl.isBlank() ? ""
+                            : "<a href='" + escapeHtml(googleSaveUrl) + "' class='btn-google' id='google-btn'>" +
                                     "🤖 Zu Google Wallet hinzufügen</a>",
                     // Parameter fuer das JS: custId, cId, threshold, rewardText (als JS-String), stamps
-                    customerId, cardId, threshold, toJsString(card.getRewardText()), stamps
+                    toJsString(customerId), toJsString(cardId), threshold,
+                    toJsString(card.getRewardText()), stamps
             );
 
             log.info("Landing-Karte geladen: customerCard={} card={} stamps={} threshold={}",
@@ -673,7 +674,7 @@ public class LandingController {
                     <h2>Karte nicht gefunden</h2>
                     <p>%s</p>
                     </body></html>
-                    """.formatted(e.getMessage()));
+                    """.formatted(escapeHtml(e.getMessage())));
         }
     }
 
@@ -834,7 +835,7 @@ public class LandingController {
                                         headers: { 'Content-Type': 'application/json' },
                                         body: JSON.stringify({
                                             name, email,
-                                            cardId: '%s',
+                                            cardId: %s,
                                             marketingConsent: consent
                                         })
                                     })
@@ -854,11 +855,14 @@ public class LandingController {
                     </body>
                     </html>
                     """.formatted(
-                    shopName, bgColor, bgColor,
-                    logoUrl.isBlank() ? "" : "<img src='" + logoUrl + "' class='logo' alt='Logo'>",
-                    shopName, card.getName(),
-                    shopName,
-                    cardId
+                    escapeHtml(shopName), safeCssColor(bgColor), safeCssColor(bgColor),
+                    logoUrl.isBlank() ? ""
+                            : "<img src='" + escapeHtml(logoUrl) + "' class='logo' alt='Logo'>",
+                    escapeHtml(shopName), escapeHtml(card.getName()),
+                    escapeHtml(shopName),
+                    // cardId steht in einer JS-Zeichenkette - toJsString
+                    // liefert die Anfuehrungszeichen mit.
+                    toJsString(cardId)
             );
 
             return ResponseEntity.ok(html);
