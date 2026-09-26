@@ -42,7 +42,8 @@ public class StampDesignController {
     public record DesignRequest(
             String walletStyle, String stampIconType, String stampPreset,
             String stampColor, String emptyStampStyle,
-            String colorBackground, String colorForeground, String colorLabel
+            String colorBackground, String colorForeground, String colorLabel,
+            String stripImageUrl
     ) {}
 
     // originalBase64 (optional): unbeschnittenes Bild fuers spaetere
@@ -74,6 +75,10 @@ public class StampDesignController {
         card.updateDesign(req.walletStyle(), req.stampIconType(), req.stampPreset(),
                 req.stampColor(), req.emptyStampStyle());
         card.updateColors(req.colorBackground(), req.colorForeground(), req.colorLabel());
+        // Leerer String entfernt das Bild, null laesst es unberuehrt.
+        if (req.stripImageUrl() != null) {
+            card.setStripImageUrl(req.stripImageUrl().isBlank() ? null : req.stripImageUrl());
+        }
         cardService.save(card);
         // Google Wallet Class neu schreiben → Farb-/Design-Änderung kommt bei gespeicherten Karten an
         googleWalletService.refreshClassForCard(card);
@@ -158,6 +163,28 @@ public class StampDesignController {
         return out;
     }
 
+    // ── Streifenbild für eine Karte hochladen ─────────────────────────────
+    @PostMapping("/cards/{cardId}/strip")
+    public Map<String, String> uploadCardStrip(@PathVariable String cardId,
+                                               @RequestBody ImageUploadRequest req,
+                                               Authentication auth) {
+        Shop shop = currentShop(auth);
+        Card card = cardService.getByIdAndShop(cardId, shop);
+        String url = cloudinary.upload(req.base64(), "strip-" + card.getId(),
+                CloudinaryService.ImageType.STRIP);
+        card.setStripImageUrl(url);
+        Map<String, String> out = new HashMap<>();
+        out.put("stripImageUrl", url);
+        if (hasOriginal(req)) {
+            String orig = uploadOriginal(req, "strip-orig-" + card.getId());
+            card.setStripOriginalUrl(orig);
+            out.put("stripOriginalUrl", orig);
+        }
+        cardService.save(card);
+        // Nur der Apple-Streifen, Google zeigt weiter das Banner.
+        return out;
+    }
+
     // ── Stempel-Icon für eine Karte hochladen ─────────────────────────────
     @PostMapping("/cards/{cardId}/stamp-icon")
     public Map<String, String> uploadCardStampIcon(@PathVariable String cardId,
@@ -238,6 +265,8 @@ public class StampDesignController {
         map.put("logoOriginalUrl", card.getLogoOriginalUrl() != null ? card.getLogoOriginalUrl() : "");
         map.put("heroOriginalUrl", card.getHeroOriginalUrl() != null ? card.getHeroOriginalUrl() : "");
         map.put("stampIconOriginalUrl", card.getStampIconOriginalUrl() != null ? card.getStampIconOriginalUrl() : "");
+        map.put("stripImageUrl", card.getStripImageUrl() != null ? card.getStripImageUrl() : "");
+        map.put("stripOriginalUrl", card.getStripOriginalUrl() != null ? card.getStripOriginalUrl() : "");
         return map;
     }
 }

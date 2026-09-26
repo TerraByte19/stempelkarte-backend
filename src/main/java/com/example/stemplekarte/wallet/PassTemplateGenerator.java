@@ -57,6 +57,20 @@ public class PassTemplateGenerator {
         }
     }
 
+    /** Streifen-Stile: jeder zeichnet strip.png, "number" zeichnet keinen. */
+    private static final java.util.Set<String> STREIFEN_STILE =
+            java.util.Set.of("grid", "balken", "ring", "fuellstand", "foto");
+
+    private final com.example.stemplekarte.service.RewardService rewardService;
+
+    public PassTemplateGenerator(com.example.stemplekarte.service.RewardService rewardService) {
+        this.rewardService = rewardService;
+    }
+
+    static boolean istStreifenStil(String walletStyle) {
+        return walletStyle != null && STREIFEN_STILE.contains(walletStyle.toLowerCase());
+    }
+
     // Apple erwartet icon.png / @2x / @3x - dieselbe Reihenfolge in beiden Feldern.
     // 38 Punkte laut aktuellen Design-Richtlinien (frueher 29), also 38/76/114 Pixel.
     private static final int[] ICON_GROESSEN = {38, 76, 114};
@@ -103,9 +117,14 @@ public class PassTemplateGenerator {
         generateIconImages(logoUrl, bgColor, templatePath);
 
         deleteStripImages(templatePath);
-        if ("grid".equalsIgnoreCase(walletStyle)) {
-            generateStripImages(stamps, threshold, walletStyle, stampColor,
-                    stampIconType, stampPreset, stampIconUrl, emptyStampStyle, templatePath);
+        if (istStreifenStil(walletStyle)) {
+            if ("grid".equalsIgnoreCase(walletStyle)) {
+                generateStripImages(stamps, threshold, walletStyle, stampColor,
+                        stampIconType, stampPreset, stampIconUrl, emptyStampStyle, templatePath);
+            } else {
+                generateFortschrittStreifen(walletStyle, fortschritt(card, cc),
+                        stampColor, card.getStripImageUrl(), templatePath);
+            }
         }
 
         return passDir;
@@ -436,6 +455,170 @@ public class PassTemplateGenerator {
             aktuell = kleiner;
         }
         return aktuell;
+    }
+
+    // -- Fortschritts-Streifen ------------------------------------------------
+
+    /**
+     * Wie voll die Karte ist, als Anteil zwischen 0 und 1.
+     *
+     * <p>Stempelkarte: Stempel durch Schwelle. Punktekarte: Punktestand durch
+     * die naechste Praemie aus dem Katalog - dieselbe Zeile, die auch auf der
+     * Karte steht, damit Balken und Text nicht auseinanderlaufen.
+     */
+    double fortschritt(Card card, CustomerCard cc) {
+        if (card.getType() == com.example.stemplekarte.model.CardType.POINTS) {
+            var ziel = com.example.stemplekarte.service.RewardService
+                    .naechstesZiel(rewardService.list(card), cc.getPointsX100());
+            if (ziel == null) return 0.0;
+            return anteil(cc.getPointsX100(), ziel.getCostPointsX100());
+        }
+        return anteil(cc.getStamps(), card.getRewardThreshold());
+    }
+
+    /** Gedeckelt auf 0..1; ein Ziel von 0 oder weniger gilt als voll. */
+    static double anteil(long stand, long ziel) {
+        if (ziel <= 0) return 1.0;
+        if (stand <= 0) return 0.0;
+        return Math.min(1.0, (double) stand / ziel);
+    }
+
+    private void generateFortschrittStreifen(String stil, double anteil, String akzentFarbe,
+                                             String stripImageUrl, Path templatePath) throws IOException {
+        BufferedImage foto = null;
+        if ("foto".equalsIgnoreCase(stil)) {
+            if (notBlank(stripImageUrl)) {
+                try {
+                    foto = ladeBild("streifen-foto", stripImageUrl);
+                } catch (Exception e) {
+                    log.warn("[WALLET] BILD-FALLBACK zweck=streifen-foto -> Balken statt Foto", e);
+                }
+            }
+            // Ohne Bild bleibt der Streifen nicht leer: der Balken zeigt
+            // denselben Stand und die Felder sitzen weiter richtig.
+            if (foto == null) stil = "balken";
+        }
+
+        Color akzent = hexToColor(notBlank(akzentFarbe) ? akzentFarbe : "#FAC875");
+        int[][] masse = {{375, 144}, {750, 288}, {1125, 432}};
+        String[] namen = {"strip.png", "strip@2x.png", "strip@3x.png"};
+        for (int i = 0; i < masse.length; i++) {
+            int w = masse[i][0], h = masse[i][1];
+            BufferedImage img = switch (stil.toLowerCase()) {
+                case "ring" -> renderRing(anteil, akzent, w, h);
+                case "fuellstand" -> renderFuellstand(anteil, akzent, w, h);
+                case "foto" -> renderFoto(foto, w, h);
+                default -> renderBalken(anteil, akzent, w, h);
+            };
+            ImageIO.write(img, "PNG", templatePath.resolve(namen[i]).toFile());
+        }
+    }
+
+    private static Graphics2D leinwand(BufferedImage img) {
+        Graphics2D g = img.createGraphics();
+        g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+        g.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
+        g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+        return g;
+    }
+
+    /** Waagerechter Balken, links gefuellt. Hintergrund bleibt durchsichtig. */
+    static BufferedImage renderBalken(double anteil, Color akzent, int w, int h) {
+        BufferedImage img = new BufferedImage(w, h, BufferedImage.TYPE_INT_ARGB);
+        Graphics2D g = leinwand(img);
+        int randX = Math.round(w * 0.06f);
+        int hoehe = Math.max(4, Math.round(h * 0.16f));
+        // Unteres Drittel: darueber zeigt iOS das primaere Feld an.
+        int y = Math.round(h * 0.68f);
+        int breite = w - 2 * randX;
+        int bogen = hoehe;
+
+        g.setColor(new Color(255, 255, 255, 64));
+        g.fillRoundRect(randX, y, breite, hoehe, bogen, bogen);
+        int gefuellt = (int) Math.round(breite * Math.max(0, Math.min(1, anteil)));
+        if (gefuellt > 0) {
+            g.setColor(akzent);
+            g.fillRoundRect(randX, y, Math.max(hoehe, gefuellt), hoehe, bogen, bogen);
+        }
+        g.dispose();
+        return img;
+    }
+
+    /** Ring rechts, Text hat links Platz. */
+    static BufferedImage renderRing(double anteil, Color akzent, int w, int h) {
+        BufferedImage img = new BufferedImage(w, h, BufferedImage.TYPE_INT_ARGB);
+        Graphics2D g = leinwand(img);
+        int durchmesser = Math.round(h * 0.62f);
+        int x = w - durchmesser - Math.round(w * 0.07f);
+        int y = (h - durchmesser) / 2;
+        int dicke = Math.max(3, Math.round(durchmesser * 0.16f));
+
+        g.setStroke(new java.awt.BasicStroke(dicke, java.awt.BasicStroke.CAP_ROUND,
+                java.awt.BasicStroke.JOIN_ROUND));
+        g.setColor(new Color(255, 255, 255, 64));
+        g.drawOval(x, y, durchmesser, durchmesser);
+
+        int winkel = (int) Math.round(360 * Math.max(0, Math.min(1, anteil)));
+        if (winkel > 0) {
+            g.setColor(akzent);
+            // Start oben, im Uhrzeigersinn - so liest man einen Fortschritt.
+            g.drawArc(x, y, durchmesser, durchmesser, 90, -winkel);
+        }
+        g.dispose();
+        return img;
+    }
+
+    /** Welle, die mit dem Stand steigt. */
+    static BufferedImage renderFuellstand(double anteil, Color akzent, int w, int h) {
+        BufferedImage img = new BufferedImage(w, h, BufferedImage.TYPE_INT_ARGB);
+        Graphics2D g = leinwand(img);
+        double a = Math.max(0, Math.min(1, anteil));
+        // Auch bei 0 bleibt ein Streifen am Boden stehen, sonst sieht die
+        // Karte am Anfang aus, als waere das Bild nicht geladen.
+        double hoeheAnteil = 0.08 + a * 0.84;
+        double pegel = h * (1 - hoeheAnteil);
+        double wellenHoehe = h * 0.07;
+
+        java.awt.geom.Path2D p = new java.awt.geom.Path2D.Double();
+        p.moveTo(0, pegel);
+        for (int x = 0; x <= w; x += Math.max(1, w / 60)) {
+            double y = pegel + Math.sin((double) x / w * Math.PI * 3) * wellenHoehe;
+            p.lineTo(x, y);
+        }
+        p.lineTo(w, h);
+        p.lineTo(0, h);
+        p.closePath();
+
+        g.setColor(new Color(akzent.getRed(), akzent.getGreen(), akzent.getBlue(), 90));
+        g.translate(0, h * 0.05);
+        g.fill(p);
+        g.translate(0, -h * 0.05);
+        g.setColor(akzent);
+        g.fill(p);
+        g.dispose();
+        return img;
+    }
+
+    /**
+     * Foto als Streifen, mittig zugeschnitten und links abgedunkelt.
+     *
+     * <p>Ueber dem Streifen liegen die Felder des Passes. Ohne die dunkle
+     * Seite verschwindet weisse Schrift auf hellen Stellen des Fotos.
+     */
+    static BufferedImage renderFoto(BufferedImage foto, int w, int h) {
+        BufferedImage img = new BufferedImage(w, h, BufferedImage.TYPE_INT_ARGB);
+        Graphics2D g = leinwand(img);
+
+        double faktor = Math.max((double) w / foto.getWidth(), (double) h / foto.getHeight());
+        int bw = Math.max(1, (int) Math.round(foto.getWidth() * faktor));
+        int bh = Math.max(1, (int) Math.round(foto.getHeight() * faktor));
+        g.drawImage(foto, (w - bw) / 2, (h - bh) / 2, bw, bh, null);
+
+        g.setPaint(new java.awt.GradientPaint(0, 0, new Color(0, 0, 0, 170),
+                w * 0.7f, 0, new Color(0, 0, 0, 0)));
+        g.fillRect(0, 0, w, h);
+        g.dispose();
+        return img;
     }
 
     private void createTextLogo(String text, String bgColor, int width, int height,

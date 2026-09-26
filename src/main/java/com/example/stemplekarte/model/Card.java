@@ -57,6 +57,15 @@ public class Card {
     @Column(name = "hero_original_url")
     private String heroOriginalUrl;
 
+    // Eigenes Bild fuer den Apple-Streifen. Bewusst getrennt vom Banner:
+    // der Streifen ist 2,6:1 und traegt Text, das Banner ist breiter und
+    // steht frei auf der Landingpage.
+    @Column(name = "strip_image_url")
+    private String stripImageUrl;
+
+    @Column(name = "strip_original_url")
+    private String stripOriginalUrl;
+
     // ── Stempel-Design (pro Karte) ────────────────────────────────────────
     @Column(name = "wallet_style", length = 16)
     private String walletStyle;
@@ -171,6 +180,8 @@ public class Card {
     public void setStampIconUrl(String stampIconUrl) { this.stampIconUrl = stampIconUrl; }
     public void setLogoOriginalUrl(String v) { this.logoOriginalUrl = v; }
     public void setHeroOriginalUrl(String v) { this.heroOriginalUrl = v; }
+    public void setStripImageUrl(String v) { this.stripImageUrl = v; }
+    public void setStripOriginalUrl(String v) { this.stripOriginalUrl = v; }
     public void setStampIconOriginalUrl(String v) { this.stampIconOriginalUrl = v; }
 
     public String getId() { return id; }
@@ -188,6 +199,8 @@ public class Card {
     public String getHeroImageUrl() { return heroImageUrl; }
     public String getLogoOriginalUrl() { return logoOriginalUrl; }
     public String getHeroOriginalUrl() { return heroOriginalUrl; }
+    public String getStripImageUrl() { return stripImageUrl; }
+    public String getStripOriginalUrl() { return stripOriginalUrl; }
     public String getStampIconOriginalUrl() { return stampIconOriginalUrl; }
     public String getWalletStyle() { return walletStyle != null ? walletStyle : "number"; }
     public String getStampIconType() { return stampIconType != null ? stampIconType : "preset"; }

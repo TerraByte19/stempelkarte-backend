@@ -28,7 +28,7 @@ public class CloudinaryService {
     // ORIGINAL = unbeschnittenes Ausgangsbild (nur auf max. Kantenlaenge
     // begrenzt), damit der Inhaber Logo/Stempel spaeter erneut zuschneiden
     // kann, ohne die Datei neu hochzuladen.
-    public enum ImageType { LOGO, HERO, STAMP, NEWSLETTER, ORIGINAL }
+    public enum ImageType { LOGO, HERO, STAMP, STRIP, NEWSLETTER, ORIGINAL }
 
     // Maximale Bildgröße (dekodierte Bytes). Schützt vor riesigen Uploads,
     // die Cloudinary-Kosten + Server-Speicher belasten würden. 5 MB ist für
@@ -85,6 +85,10 @@ public class CloudinaryService {
                 // begrenzen. crop("limit") behält das Seitenverhältnis und
                 // verkleinert nur, wenn das Bild breiter als 1000px ist —
                 // so wird nichts abgeschnitten.
+                // Streifen im Apple-Pass: 375x144 Punkte, also 1125x432 Pixel.
+                case STRIP -> new Transformation<>()
+                        .width(1125).height(432).crop("fill").gravity("center")
+                        .quality("auto").fetchFormat("png");
                 case NEWSLETTER -> new Transformation<>()
                         .width(1000).crop("limit")
                         .quality("auto").fetchFormat("jpg");
@@ -99,6 +103,7 @@ public class CloudinaryService {
                 case LOGO  -> "stampit/logos";
                 case HERO  -> "stampit/heroes";
                 case STAMP -> "stampit/stamps";
+                case STRIP -> "stampit/strips";
                 case NEWSLETTER -> "stampit/newsletters";
                 case ORIGINAL -> "stampit/originals";
             };
