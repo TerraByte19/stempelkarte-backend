@@ -54,7 +54,7 @@ class PassIconTest {
 
     @Test
     void iconHatImmerDieAngeforderteGroesse() {
-        for (int size : new int[]{29, 58, 87}) {
+        for (int size : new int[]{38, 76, 114}) {
             BufferedImage icon = PassTemplateGenerator.iconMitLogo(logo(480, 150), Color.BLUE, size);
             assertThat(icon.getWidth()).isEqualTo(size);
             assertThat(icon.getHeight()).isEqualTo(size);
@@ -97,14 +97,30 @@ class PassIconTest {
     }
 
     @Test
-    void quadratischesLogoBekommtRandUndKlebtNichtInDerEcke() {
+    void quadratischesLogoBekommtRandUndKlebtNichtAmRand() {
         BufferedImage icon = PassTemplateGenerator.iconMitLogo(logo(200, 200), Color.BLUE, 87);
         int[] rechteck = rotesRechteck(icon);
 
         assertThat(rechteck[0]).isEqualTo(rechteck[1]);
         assertThat(rechteck[0]).isLessThan(87);
-        // Ecke bleibt frei - dort sind die runden Kanten des Icons.
+        // Rand ringsum bleibt Kartenfarbe.
         assertThat(istRot(icon, 1, 1)).isFalse();
+    }
+
+    /**
+     * iOS rundet die Ecken des Icons selbst. Runden wir zusaetzlich, liegt eine
+     * zweite Rundung auf der ersten: an den Ecken schimmert durch, was hinter
+     * dem Icon liegt - in der Mitteilung ein grauer Zipfel.
+     */
+    @Test
+    void eckenSindNichtDurchsichtig() {
+        BufferedImage icon = PassTemplateGenerator.iconMitLogo(logo(480, 150), Color.BLUE, 114);
+
+        for (int[] ecke : new int[][]{{0, 0}, {113, 0}, {0, 113}, {113, 113}}) {
+            Color c = new Color(icon.getRGB(ecke[0], ecke[1]), true);
+            assertThat(c.getAlpha()).as("Ecke %d/%d", ecke[0], ecke[1]).isEqualTo(255);
+            assertThat(c.getBlue()).isGreaterThan(200);
+        }
     }
 
     @Test

@@ -58,7 +58,8 @@ public class PassTemplateGenerator {
     }
 
     // Apple erwartet icon.png / @2x / @3x - dieselbe Reihenfolge in beiden Feldern.
-    private static final int[] ICON_GROESSEN = {29, 58, 87};
+    // 38 Punkte laut aktuellen Design-Richtlinien (frueher 29), also 38/76/114 Pixel.
+    private static final int[] ICON_GROESSEN = {38, 76, 114};
     private static final String[] ICON_DATEIEN = {"icon.png", "icon@2x.png", "icon@3x.png"};
 
     @Value("${stempelkarte.upload-path:./uploads}")
@@ -147,14 +148,17 @@ public class PassTemplateGenerator {
                                      String stampIconUrl, String emptyStampStyle,
                                      Path templatePath) throws IOException {
         BufferedImage customIcon = loadCustomIcon(stampIconType, stampIconUrl);
+        // 375x144 Punkte laut Apple, also 375/750/1125 Pixel breit. Vorher stand
+        // hier 320x110 - die Masse alter Geraete. Auf heutigen iPhones wurde das
+        // Bild hochskaliert und wirkte weich.
         ImageIO.write(renderStrip(stamps, threshold, stampColor, stampIconType,
-                        stampPreset, stampIconUrl, emptyStampStyle, 320, 110, customIcon),
+                        stampPreset, stampIconUrl, emptyStampStyle, 375, 144, customIcon),
                 "PNG", templatePath.resolve("strip.png").toFile());
         ImageIO.write(renderStrip(stamps, threshold, stampColor, stampIconType,
-                        stampPreset, stampIconUrl, emptyStampStyle, 640, 220, customIcon),
+                        stampPreset, stampIconUrl, emptyStampStyle, 750, 288, customIcon),
                 "PNG", templatePath.resolve("strip@2x.png").toFile());
         ImageIO.write(renderStrip(stamps, threshold, stampColor, stampIconType,
-                        stampPreset, stampIconUrl, emptyStampStyle, 960, 330, customIcon),
+                        stampPreset, stampIconUrl, emptyStampStyle, 1125, 432, customIcon),
                 "PNG", templatePath.resolve("strip@3x.png").toFile());
     }
 
@@ -323,6 +327,9 @@ public class PassTemplateGenerator {
                         templatePath.resolve("logo.png").toFile());
                 ImageIO.write(resizeImage(logo, 320, 100), "PNG",
                         templatePath.resolve("logo@2x.png").toFile());
+                // @3x fehlte bisher ganz; ohne die Datei skaliert iOS die @2x hoch.
+                ImageIO.write(resizeImage(logo, 480, 150), "PNG",
+                        templatePath.resolve("logo@3x.png").toFile());
                 return;
             } catch (Exception e) {
                 log.warn("[WALLET] BILD-FALLBACK zweck=laden-logo -> Text-Logo statt Bild", e);
@@ -332,6 +339,8 @@ public class PassTemplateGenerator {
                 templatePath.resolve("logo.png").toString());
         createTextLogo(shopName, bgColor, 320, 100,
                 templatePath.resolve("logo@2x.png").toString());
+        createTextLogo(shopName, bgColor, 480, 150,
+                templatePath.resolve("logo@3x.png").toString());
     }
 
     // --- ICON FÜR DIE PUSH-BENACHRICHTIGUNG ---
@@ -392,9 +401,11 @@ public class PassTemplateGenerator {
         g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
         g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
         g.setColor(bg);
-        g.fillRoundRect(0, 0, size, size, size / 4, size / 4);
+        // Volle Flaeche: iOS rundet die Ecken selbst. Runden wir zusaetzlich,
+        // liegt eine zweite Rundung auf der ersten.
+        g.fillRect(0, 0, size, size);
 
-        // Rand, damit das Logo nicht an den abgerundeten Ecken klebt
+        // Rand, damit das Logo nicht an den gerundeten Ecken des Systems klebt
         int innen = Math.max(1, (int) Math.round(size * 0.78));
         double faktor = Math.min((double) innen / logo.getWidth(), (double) innen / logo.getHeight());
         int w = Math.max(1, (int) Math.round(logo.getWidth() * faktor));
@@ -450,7 +461,7 @@ public class PassTemplateGenerator {
         Graphics2D g = img.createGraphics();
         g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
         g.setColor(hexToColor(bgColor));
-        g.fillRoundRect(0, 0, size, size, size / 4, size / 4);
+        g.fillRect(0, 0, size, size);
         g.dispose();
         ImageIO.write(img, "PNG", Paths.get(outputPath).toFile());
     }
