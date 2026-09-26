@@ -57,6 +57,10 @@ public class PassTemplateGenerator {
         }
     }
 
+    // Apple erwartet icon.png / @2x / @3x - dieselbe Reihenfolge in beiden Feldern.
+    private static final int[] ICON_GROESSEN = {29, 58, 87};
+    private static final String[] ICON_DATEIEN = {"icon.png", "icon@2x.png", "icon@3x.png"};
+
     @Value("${stempelkarte.upload-path:./uploads}")
     private String uploadPath;
 
@@ -95,7 +99,7 @@ public class PassTemplateGenerator {
                 generatePassJson(shop.getName(), card.getName(), bgColor, fgColor, labelColor));
 
         generateLogoImages(logoUrl, shop.getName(), bgColor, templatePath);
-        generateIconImages(bgColor, templatePath);
+        generateIconImages(logoUrl, bgColor, templatePath);
 
         deleteStripImages(templatePath);
         if ("grid".equalsIgnoreCase(walletStyle)) {
@@ -330,20 +334,37 @@ public class PassTemplateGenerator {
                 templatePath.resolve("logo@2x.png").toString());
     }
 
-    // --- ICON FÜR DIE PUSH-BENACHRICHTIGUNG (StampIT-Logo) ---
-    // Liest platform-icon.png aus dem Classpath (src/main/resources/static/),
-    // damit es jeden Render-Deploy überlebt. Erzeugt alle drei Apple-Größen.
-    private void generateIconImages(String bgColor, Path templatePath) throws IOException {
+    // --- ICON FÜR DIE PUSH-BENACHRICHTIGUNG ---
+    // Reihenfolge: Laden-Logo auf der Kartenfarbe, sonst platform-icon.png aus
+    // dem Classpath (src/main/resources/static/, überlebt jeden Render-Deploy),
+    // sonst ein einfarbiges Viereck. Das Icon erscheint auch in der Wallet-Liste
+    // und auf dem Sperrbildschirm, nicht nur in der Benachrichtigung.
+    private void generateIconImages(String logoUrl, String bgColor, Path templatePath) throws IOException {
+        if (notBlank(logoUrl)) {
+            try {
+                BufferedImage logo = ladeBild("laden-icon", logoUrl);
+                if (logo != null) {
+                    Color bg = hexToColor(bgColor);
+                    for (int i = 0; i < ICON_GROESSEN.length; i++) {
+                        ImageIO.write(iconMitLogo(logo, bg, ICON_GROESSEN[i]), "PNG",
+                                templatePath.resolve(ICON_DATEIEN[i]).toFile());
+                    }
+                    return;
+                }
+            } catch (Exception e) {
+                log.warn("[WALLET] BILD-FALLBACK zweck=laden-icon -> Plattform-Icon statt Laden-Logo", e);
+            }
+        }
+
         try (InputStream in = getClass().getResourceAsStream("/static/platform-icon.png")) {
             if (in != null) {
                 BufferedImage baseIcon = ImageIO.read(in);
                 if (baseIcon != null) {
-                    ImageIO.write(resizeImage(baseIcon, 29, 29), "PNG",
-                            templatePath.resolve("icon.png").toFile());
-                    ImageIO.write(resizeImage(baseIcon, 58, 58), "PNG",
-                            templatePath.resolve("icon@2x.png").toFile());
-                    ImageIO.write(resizeImage(baseIcon, 87, 87), "PNG",
-                            templatePath.resolve("icon@3x.png").toFile());
+                    for (int i = 0; i < ICON_GROESSEN.length; i++) {
+                        int s = ICON_GROESSEN[i];
+                        ImageIO.write(resizeImage(baseIcon, s, s), "PNG",
+                                templatePath.resolve(ICON_DATEIEN[i]).toFile());
+                    }
                     return;
                 }
             }
@@ -352,9 +373,58 @@ public class PassTemplateGenerator {
         }
 
         // Fallback: einfarbiges Viereck, falls platform-icon.png nicht im Classpath liegt
-        createColorIcon(bgColor, 29, templatePath.resolve("icon.png").toString());
-        createColorIcon(bgColor, 58, templatePath.resolve("icon@2x.png").toString());
-        createColorIcon(bgColor, 87, templatePath.resolve("icon@3x.png").toString());
+        for (int i = 0; i < ICON_GROESSEN.length; i++) {
+            createColorIcon(bgColor, ICON_GROESSEN[i],
+                    templatePath.resolve(ICON_DATEIEN[i]).toString());
+        }
+    }
+
+    /**
+     * Zeichnet das Laden-Logo mittig auf ein Quadrat in der Kartenfarbe.
+     *
+     * <p>Das Icon ist quadratisch, die meisten Laden-Logos sind breit. Blosses
+     * Skalieren würde aus einem 480x150-Logo einen 29x9-Streifen machen - hier
+     * bleibt das Seitenverhältnis erhalten und der Rest ist Kartenfarbe.
+     */
+    static BufferedImage iconMitLogo(BufferedImage logo, Color bg, int size) {
+        BufferedImage img = new BufferedImage(size, size, BufferedImage.TYPE_INT_ARGB);
+        Graphics2D g = img.createGraphics();
+        g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+        g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+        g.setColor(bg);
+        g.fillRoundRect(0, 0, size, size, size / 4, size / 4);
+
+        // Rand, damit das Logo nicht an den abgerundeten Ecken klebt
+        int innen = Math.max(1, (int) Math.round(size * 0.78));
+        double faktor = Math.min((double) innen / logo.getWidth(), (double) innen / logo.getHeight());
+        int w = Math.max(1, (int) Math.round(logo.getWidth() * faktor));
+        int h = Math.max(1, (int) Math.round(logo.getHeight() * faktor));
+        g.drawImage(halbiereBisPasst(logo, w, h), (size - w) / 2, (size - h) / 2, w, h, null);
+        g.dispose();
+        return img;
+    }
+
+    /**
+     * Verkleinert schrittweise um jeweils die Haelfte, bis das Ziel nah ist.
+     *
+     * Ein 480 breites Logo in einem Rutsch auf 23 Pixel zu ziehen ueberspringt
+     * fast jede Pixelreihe - Schrift franst aus. Mehrere halbe Schritte mitteln
+     * dagegen, das kostet hier nichts und ist bei 29 Pixeln der Unterschied
+     * zwischen lesbar und Brei.
+     */
+    private static BufferedImage halbiereBisPasst(BufferedImage bild, int zielW, int zielH) {
+        BufferedImage aktuell = bild;
+        while (aktuell.getWidth() > zielW * 2 && aktuell.getHeight() > zielH * 2) {
+            int w = Math.max(zielW, aktuell.getWidth() / 2);
+            int h = Math.max(zielH, aktuell.getHeight() / 2);
+            BufferedImage kleiner = new BufferedImage(w, h, BufferedImage.TYPE_INT_ARGB);
+            Graphics2D g = kleiner.createGraphics();
+            g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+            g.drawImage(aktuell, 0, 0, w, h, null);
+            g.dispose();
+            aktuell = kleiner;
+        }
+        return aktuell;
     }
 
     private void createTextLogo(String text, String bgColor, int width, int height,
