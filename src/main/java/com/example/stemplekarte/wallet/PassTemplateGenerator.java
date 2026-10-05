@@ -38,6 +38,15 @@ public class PassTemplateGenerator {
      */
     private static BufferedImage ladeBild(String zweck, String url) throws IOException {
         log.info("[WALLET] BILD-START zweck={} url={}", zweck, url);
+        // Zweite Sperre. Geprueft wird schon beim Speichern - aber hier
+        // stehen auch Adressen aus der Zeit davor, und ein Name kann
+        // zwischen Speichern und Abruf auf eine interne Adresse zeigen.
+        // Faellt eine Adresse durch, greift die uebliche Ersatzkette
+        // (Text-Logo, Balken, Plattform-Icon).
+        if (!com.example.stemplekarte.service.BildUrl.istErlaubt(url)) {
+            log.warn("[WALLET] BILD-ABGELEHNT zweck={} url={} grund=nicht_erlaubte_adresse", zweck, url);
+            throw new IOException("Bild-Adresse nicht erlaubt: " + url);
+        }
         long t0 = System.nanoTime();
         try {
             BufferedImage img = ImageIO.read(new URL(url));

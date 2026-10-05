@@ -77,6 +77,7 @@ public class StampDesignController {
         card.updateColors(req.colorBackground(), req.colorForeground(), req.colorLabel());
         // Leerer String entfernt das Bild, null laesst es unberuehrt.
         if (req.stripImageUrl() != null) {
+            com.example.stemplekarte.service.BildUrl.pruefe(req.stripImageUrl(), "stripImageUrl");
             card.setStripImageUrl(req.stripImageUrl().isBlank() ? null : req.stripImageUrl());
         }
         cardService.save(card);

@@ -225,6 +225,7 @@ public class ShopController {
     public Map<String, Object> updateProfile(@RequestBody UpdateProfileRequest req,
                                              Authentication auth) {
         Shop shop = currentShop(auth);
+        com.example.stemplekarte.service.BildUrl.pruefe(req.logoUrl(), "logoUrl");
         Shop updated = shopService.updateProfile(shop.getId(), req.name(), req.logoUrl(),
                 req.colorBackground(), req.colorForeground(), req.colorLabel());
         return Map.of(
@@ -246,7 +247,12 @@ public class ShopController {
                 req.stampColor(), req.emptyStampStyle());
         card.updateColors(req.colorBackground(), req.colorForeground(), req.colorLabel());
 
-        // URLs setzen, falls sie beim Erstellen mitgeschickt wurden
+        // URLs setzen, falls sie beim Erstellen mitgeschickt wurden. Der
+        // Server laedt diese Adressen spaeter beim Bauen des Passes, deshalb
+        // zuerst pruefen.
+        com.example.stemplekarte.service.BildUrl.pruefe(req.logoUrl(), "logoUrl");
+        com.example.stemplekarte.service.BildUrl.pruefe(req.heroImageUrl(), "heroImageUrl");
+        com.example.stemplekarte.service.BildUrl.pruefe(req.stampIconUrl(), "stampIconUrl");
         if (req.logoUrl() != null) card.setLogoUrl(req.logoUrl());
         if (req.heroImageUrl() != null) card.setHeroImageUrl(req.heroImageUrl());
         if (req.stampIconUrl() != null) card.setStampIconUrl(req.stampIconUrl());
@@ -274,6 +280,8 @@ public class ShopController {
         Card card = cardService.createPoints(shop, req.name(), req.description(),
                 req.pointsPerEuroX100(), rundung);
         card.updateColors(req.colorBackground(), req.colorForeground(), req.colorLabel());
+        com.example.stemplekarte.service.BildUrl.pruefe(req.logoUrl(), "logoUrl");
+        com.example.stemplekarte.service.BildUrl.pruefe(req.heroImageUrl(), "heroImageUrl");
         if (req.logoUrl() != null) card.setLogoUrl(req.logoUrl());
         if (req.heroImageUrl() != null) card.setHeroImageUrl(req.heroImageUrl());
         cardService.save(card);
