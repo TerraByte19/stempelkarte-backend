@@ -62,10 +62,10 @@ class PunkteControllerTest {
     @Test
     void ohneStaffToken_gibt401() {
         PointsController controller = new PointsController(
-                mock(PointsService.class), mock(WalletNotifier.class));
+                mock(PointsService.class), mock(WalletNotifier.class), geoStumpf());
 
         assertThatThrownBy(() -> controller.earn(
-                new PointsController.EarnRequest("{}", 1000), null))
+                new PointsController.EarnRequest("{}", 1000, null, null), null))
                 .isInstanceOf(ResponseStatusException.class)
                 .extracting(e -> ((ResponseStatusException) e).getStatusCode())
                 .isEqualTo(HttpStatus.UNAUTHORIZED);
@@ -79,10 +79,10 @@ class PunkteControllerTest {
         when(service.earn(anyString(), any(Shop.class), anyLong(), anyString()))
                 .thenReturn(ergebnis());
 
-        PointsController controller = new PointsController(service, mock(WalletNotifier.class));
+        PointsController controller = new PointsController(service, mock(WalletNotifier.class), geoStumpf());
 
         var antwort = controller.earn(
-                new PointsController.EarnRequest("{}", 14_500),
+                new PointsController.EarnRequest("{}", 14_500, null, null),
                 authMit(shop, "Kasse 1"));
 
         verify(service).earn(anyString(), any(Shop.class), anyLong(), eq("Kasse 1"));
@@ -99,12 +99,19 @@ class PunkteControllerTest {
         when(service.earn(anyString(), any(Shop.class), anyLong(), anyString()))
                 .thenReturn(ergebnis());
 
-        new PointsController(service, notifier).earn(
-                new PointsController.EarnRequest("{}", 14_500),
+        new PointsController(service, notifier, geoStumpf()).earn(
+                new PointsController.EarnRequest("{}", 14_500, null, null),
                 authMit(shop, "Kasse 1"));
 
         // Nur die ID wandert nach draussen, keine Entity - der Controller
         // sitzt ausserhalb der Transaktion.
         verify(notifier).nachPunkteAenderung("CC-1", 14_500, "Kuchen", 10_500);
     }
+
+    /** Geo-Pruefung ohne Datenbank: protokolliert ins Leere. */
+    private static com.example.stemplekarte.service.GeoPruefung geoStumpf() {
+        return new com.example.stemplekarte.service.GeoPruefung(
+                mock(com.example.stemplekarte.repository.GeoVorfallRepository.class));
+    }
+
 }

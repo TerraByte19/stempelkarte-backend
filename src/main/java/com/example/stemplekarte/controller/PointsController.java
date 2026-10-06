@@ -29,15 +29,19 @@ public class PointsController {
 
     private final PointsService service;
     private final WalletNotifier notifier;
+    private final com.example.stemplekarte.service.GeoPruefung geoPruefung;
 
-    public PointsController(PointsService service, WalletNotifier notifier) {
+    public PointsController(PointsService service, WalletNotifier notifier,
+                            com.example.stemplekarte.service.GeoPruefung geoPruefung) {
         this.service = service;
         this.notifier = notifier;
+        this.geoPruefung = geoPruefung;
     }
 
     // ── Anfragen ──────────────────────────────────────────────────────────
 
-    public record EarnRequest(@NotBlank String qrPayload, long amountCents) {}
+    public record EarnRequest(@NotBlank String qrPayload, long amountCents,
+                              Double lat, Double lon) {}
     public record RedeemRequest(@NotBlank String qrPayload, @NotBlank String rewardId) {}
     public record CorrectRequest(@NotBlank String qrPayload, Long amountCents, Long pointsX100) {}
     public record UndoRequest(@NotBlank String qrPayload, @NotBlank String bookingId) {}
@@ -64,6 +68,8 @@ public class PointsController {
     public PointsResponse earn(@Valid @RequestBody EarnRequest req, Authentication auth) {
         Staff staff = staffAus(auth);
         var ergebnis = service.earn(req.qrPayload(), staff.shop(), req.amountCents(), staff.label());
+        geoPruefung.protokolliere(staff.shop(), ergebnis.cardId(),
+                ergebnis.customerCardId(), staff.label(), req.lat(), req.lon());
         melden(ergebnis);
         return antwort(ergebnis);
     }

@@ -62,7 +62,9 @@ class ScanControllerTest {
         return new ScanController(service, new WalletNotifier(
                 mock(CardEventHub.class), mock(ApnsPushService.class),
                 mock(GoogleWalletService.class)),
-                mock(com.example.stemplekarte.service.PointsService.class));
+                mock(com.example.stemplekarte.service.PointsService.class),
+                new com.example.stemplekarte.service.GeoPruefung(
+                        mock(com.example.stemplekarte.repository.GeoVorfallRepository.class)));
     }
 
     private Authentication authFuer(Shop shop) {
@@ -81,7 +83,7 @@ class ScanControllerTest {
                 "Could not initialize proxy [Shop#SHOP-TEST] - no session"));
 
         ScanController controller = controllerMitShop(shop);
-        var req = new ScanController.ScanRequest("{\"cid\":\"CUST-TEST\",\"cardId\":\"CARD-TEST\"}", 1);
+        var req = new ScanController.ScanRequest("{\"cid\":\"CUST-TEST\",\"cardId\":\"CARD-TEST\"}", 1, null, null);
 
         var antwort = assertDoesNotThrow(() -> controller.scan(req, authFuer(shop)));
 

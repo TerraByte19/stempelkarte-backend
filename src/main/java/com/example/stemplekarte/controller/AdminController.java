@@ -46,6 +46,7 @@ public class AdminController {
     private final ShopService shopService;
     private final StatsService statsService;
     private final PasswordEncoder passwordEncoder;
+    private final com.example.stemplekarte.repository.GeoVorfallRepository geoVorfaelle;
 
     @Value("${stempelkarte.admin-secret:admin-geheim-nur-lokal}")
     private String adminSecret;
@@ -63,7 +64,8 @@ public class AdminController {
                            JwtService jwtService,
                            ShopService shopService,
                            StatsService statsService,
-                           PasswordEncoder passwordEncoder) {
+                           PasswordEncoder passwordEncoder,
+                           com.example.stemplekarte.repository.GeoVorfallRepository geoVorfaelle) {
         this.googleWalletSetup = googleWalletSetup;
         this.shopRepo = shopRepo;
         this.cardRepo = cardRepo;
@@ -74,6 +76,7 @@ public class AdminController {
         this.shopService = shopService;
         this.statsService = statsService;
         this.passwordEncoder = passwordEncoder;
+        this.geoVorfaelle = geoVorfaelle;
     }
 
     @PostMapping("/login")
@@ -216,6 +219,42 @@ public class AdminController {
         } catch (java.time.format.DateTimeParseException e) {
             return ResponseEntity.status(400).body(Map.of("error", "Ungueltiges Datum (erwartet JJJJ-MM-TT)"));
         }
+    }
+
+    /**
+     * Scans, die nicht am Laden passiert sind.
+     *
+     * <p>Absichtlich nur eine Liste und keine Sperre: der Ort kommt aus dem
+     * Browser des Personals und ist nur so genau wie dessen Geraet. Wer hier
+     * etwas sieht, schaut nach - der Stempel selbst ist durchgelaufen.
+     */
+    @GetMapping("/geo-vorfaelle")
+    public ResponseEntity<List<Map<String, Object>>> getGeoVorfaelle(
+            @RequestParam(required = false) String shopId) {
+        var liste = (shopId == null || shopId.isBlank())
+                ? geoVorfaelle.findTop100ByOrderByPassiertAmDesc()
+                : geoVorfaelle.findTop100ByShopIdOrderByPassiertAmDesc(shopId);
+
+        Map<String, String> namen = new java.util.HashMap<>();
+        shopRepo.findAll().forEach(sh -> namen.put(sh.getId(), sh.getName()));
+
+        List<Map<String, Object>> out = liste.stream().map(v -> {
+            Map<String, Object> m = new java.util.LinkedHashMap<>();
+            m.put("id", v.getId());
+            m.put("shopId", v.getShopId());
+            m.put("shopName", namen.getOrDefault(v.getShopId(), v.getShopId()));
+            m.put("art", v.getArt().name());
+            m.put("distanzMeter", v.getDistanzMeter());
+            m.put("latitude", v.getLatitude());
+            m.put("longitude", v.getLongitude());
+            m.put("staffLabel", v.getStaffLabel());
+            m.put("cardId", v.getCardId());
+            m.put("customerId", v.getCustomerId());
+            m.put("passiertAm", v.getPassiertAm().toString());
+            return m;
+        }).toList();
+
+        return ResponseEntity.ok(out);
     }
 
     @GetMapping("/stats")

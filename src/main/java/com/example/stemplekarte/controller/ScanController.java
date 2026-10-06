@@ -29,12 +29,15 @@ public class ScanController {
     private final CustomerService service;
     private final WalletNotifier notifier;
     private final PointsService pointsService;
+    private final com.example.stemplekarte.service.GeoPruefung geoPruefung;
 
     public ScanController(CustomerService service, WalletNotifier notifier,
-                          PointsService pointsService) {
+                          PointsService pointsService,
+                          com.example.stemplekarte.service.GeoPruefung geoPruefung) {
         this.service = service;
         this.notifier = notifier;
         this.pointsService = pointsService;
+        this.geoPruefung = geoPruefung;
     }
 
     public record StateRequest(@NotBlank String qrPayload) {}
@@ -54,7 +57,12 @@ public class ScanController {
 
     public record ScanRequest(
             @NotBlank String qrPayload,
-            @Min(1) @Max(20) int count
+            @Min(1) @Max(20) int count,
+            // Ort des Geraets, falls der Browser ihn hergibt. Optional: ohne
+            // Erlaubnis oder ohne Empfang kommt hier null an, und der Scan
+            // laeuft trotzdem durch.
+            Double lat,
+            Double lon
     ) {}
 
     public record ScanResponse(
@@ -85,6 +93,11 @@ public class ScanController {
 
         ScanResult result = service.processScan(req.qrPayload(), shop, count);
         var cc = result.customerCard();
+
+        // Nach dem Stempel: nur melden, nie blockieren.
+        geoPruefung.protokolliere(shop, cc.getCard().getId(), cc.getCustomer().getId(),
+                ((StaffTokenFilter.StaffPrincipal) auth.getPrincipal()).staff().getLabel(),
+                req.lat(), req.lon());
 
         // Startpunkt jeder Wallet-Kette. Ab hier laesst sich ein Vorfall
         // vollstaendig verfolgen: nach serial greppen und die [WALLET]-Zeilen
