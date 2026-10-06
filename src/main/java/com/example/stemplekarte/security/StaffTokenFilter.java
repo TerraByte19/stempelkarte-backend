@@ -29,7 +29,10 @@ public class StaffTokenFilter extends OncePerRequestFilter {
         String header = req.getHeader("X-Staff-Token");
 
         if (header != null && !header.isBlank()) {
-            repo.findById(header.trim()).ifPresent(staff -> {
+            // MIT Laden laden: gleich danach ist die Sitzung zu, und was
+            // hier in den SecurityContext geht, wird spaeter ohne
+            // Transaktion gelesen (Standort-Pflicht, Geo-Pruefung).
+            repo.findWithShopByToken(header.trim()).ifPresent(staff -> {
                 var auth = new UsernamePasswordAuthenticationToken(
                         new StaffPrincipal(staff),
                         null,
