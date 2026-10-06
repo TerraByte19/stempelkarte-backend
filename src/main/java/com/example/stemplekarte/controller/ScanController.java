@@ -89,6 +89,15 @@ public class ScanController {
         }
 
         Shop shop = ((StaffTokenFilter.StaffPrincipal) auth.getPrincipal()).staff().getShop();
+
+        // Ohne Ladenort laeuft die Geo-Pruefung ins Leere - dann ist das
+        // Stempeln selbst der Hebel, der fehlt.
+        if (!com.example.stemplekarte.service.StandortPflicht.darfScannen(shop, java.time.Instant.now())) {
+            log.warn("[SCAN] GESPERRT laden={} grund=kein_standort", shop.getId());
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                    com.example.stemplekarte.service.StandortPflicht.sperrText());
+        }
+
         int count = req.count() <= 0 ? 1 : req.count();
 
         ScanResult result = service.processScan(req.qrPayload(), shop, count);

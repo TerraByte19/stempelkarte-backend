@@ -67,6 +67,7 @@ public class PointsController {
     @PostMapping("/earn")
     public PointsResponse earn(@Valid @RequestBody EarnRequest req, Authentication auth) {
         Staff staff = staffAus(auth);
+        pruefeStandort(staff);
         var ergebnis = service.earn(req.qrPayload(), staff.shop(), req.amountCents(), staff.label());
         geoPruefung.protokolliere(staff.shop(), ergebnis.cardId(),
                 ergebnis.customerCardId(), staff.label(), req.lat(), req.lon());
@@ -78,6 +79,7 @@ public class PointsController {
     @PostMapping("/redeem")
     public PointsResponse redeem(@Valid @RequestBody RedeemRequest req, Authentication auth) {
         Staff staff = staffAus(auth);
+        pruefeStandort(staff);
         var ergebnis = service.redeem(req.qrPayload(), staff.shop(), req.rewardId(), staff.label());
         melden(ergebnis);
         return antwort(ergebnis);
@@ -87,6 +89,7 @@ public class PointsController {
     @PostMapping("/correct")
     public PointsResponse correct(@Valid @RequestBody CorrectRequest req, Authentication auth) {
         Staff staff = staffAus(auth);
+        pruefeStandort(staff);
         var ergebnis = service.correct(req.qrPayload(), staff.shop(),
                 req.amountCents(), req.pointsX100(), staff.label());
         melden(ergebnis);
@@ -97,6 +100,7 @@ public class PointsController {
     @PostMapping("/undo")
     public PointsResponse undo(@Valid @RequestBody UndoRequest req, Authentication auth) {
         Staff staff = staffAus(auth);
+        pruefeStandort(staff);
         var ergebnis = service.undo(req.qrPayload(), staff.shop(), req.bookingId(), staff.label());
         melden(ergebnis);
         return antwort(ergebnis);
@@ -107,6 +111,20 @@ public class PointsController {
     /** Laden und Geraetename. Das Token selbst bleibt hier - sein Wert ist
      *  die Zugangsberechtigung und hat in keiner Antwort etwas verloren. */
     private record Staff(Shop shop, String label) {}
+
+    /**
+     * Dieselbe Sperre wie beim Stempeln: ohne Ladenort keine Buchung.
+     * Auch Korrektur und Ruecknahme - sonst bliebe ein Weg offen, auf dem
+     * sich Punkte ohne jede Ortspruefung verschieben lassen.
+     */
+    private void pruefeStandort(Staff staff) {
+        if (!com.example.stemplekarte.service.StandortPflicht.darfScannen(
+                staff.shop(), java.time.Instant.now())) {
+            throw new org.springframework.web.server.ResponseStatusException(
+                    org.springframework.http.HttpStatus.FORBIDDEN,
+                    com.example.stemplekarte.service.StandortPflicht.sperrText());
+        }
+    }
 
     private Staff staffAus(Authentication auth) {
         if (auth == null || !(auth.getPrincipal() instanceof StaffTokenFilter.StaffPrincipal p)) {

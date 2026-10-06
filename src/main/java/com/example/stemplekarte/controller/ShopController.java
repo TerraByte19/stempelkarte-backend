@@ -177,6 +177,12 @@ public class ShopController {
         map.put("lockScreenActive", shop.isLockScreenActive());
         map.put("latitude", shop.getLatitude());
         map.put("longitude", shop.getLongitude());
+        // Standort-Pflicht: das Dashboard zeigt daraus Hinweis oder Warnung.
+        map.put("standortGesetzt", com.example.stemplekarte.service.StandortPflicht.hatStandort(shop));
+        map.put("scanGesperrt", !com.example.stemplekarte.service.StandortPflicht
+                .darfScannen(shop, java.time.Instant.now()));
+        map.put("standortFristBis",
+                com.example.stemplekarte.service.StandortPflicht.fristEnde().toString());
         map.put("lockScreenTextFull", shop.getLockScreenTextFull());
         map.put("lockScreenTextProgress", shop.getLockScreenTextProgress());
         return map;
