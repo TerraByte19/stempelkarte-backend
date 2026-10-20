@@ -39,6 +39,8 @@ stempelkarte:
   mail:
     enabled: ${MAIL_ENABLED:false}
     from: ${MAIL_FROM:}
+    # Empfaenger der Kontaktanfragen von der Landing-Page. Leer = MAIL_FROM.
+    contact-to: ${CONTACT_TO:}
 
   apple:
     pass-type-identifier: ${APPLE_PASS_TYPE_ID:pass.com.cafeespresso.stempelkarte}
