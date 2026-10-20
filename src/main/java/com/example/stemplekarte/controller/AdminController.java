@@ -47,6 +47,7 @@ public class AdminController {
     private final StatsService statsService;
     private final PasswordEncoder passwordEncoder;
     private final com.example.stemplekarte.repository.GeoVorfallRepository geoVorfaelle;
+    private final com.example.stemplekarte.repository.KontaktanfrageRepository kontaktanfragen;
 
     @Value("${stempelkarte.admin-secret:admin-geheim-nur-lokal}")
     private String adminSecret;
@@ -65,7 +66,8 @@ public class AdminController {
                            ShopService shopService,
                            StatsService statsService,
                            PasswordEncoder passwordEncoder,
-                           com.example.stemplekarte.repository.GeoVorfallRepository geoVorfaelle) {
+                           com.example.stemplekarte.repository.GeoVorfallRepository geoVorfaelle,
+                           com.example.stemplekarte.repository.KontaktanfrageRepository kontaktanfragen) {
         this.googleWalletSetup = googleWalletSetup;
         this.shopRepo = shopRepo;
         this.cardRepo = cardRepo;
@@ -77,6 +79,7 @@ public class AdminController {
         this.statsService = statsService;
         this.passwordEncoder = passwordEncoder;
         this.geoVorfaelle = geoVorfaelle;
+        this.kontaktanfragen = kontaktanfragen;
     }
 
     @PostMapping("/login")
@@ -255,6 +258,39 @@ public class AdminController {
         }).toList();
 
         return ResponseEntity.ok(out);
+    }
+
+    /** Anfragen aus dem Kontaktformular der Landing-Page, neueste zuerst. */
+    @GetMapping("/kontaktanfragen")
+    public ResponseEntity<List<Map<String, Object>>> getKontaktanfragen() {
+        List<Map<String, Object>> out = kontaktanfragen.findTop200ByOrderByEingegangenAmDesc().stream().map(k -> {
+            Map<String, Object> m = new java.util.LinkedHashMap<>();
+            m.put("id", k.getId());
+            m.put("name", k.getName());
+            m.put("laden", k.getLaden());
+            m.put("email", k.getEmail());
+            m.put("nachricht", k.getNachricht());
+            m.put("eingegangenAm", k.getEingegangenAm().toString());
+            m.put("erledigt", k.isErledigt());
+            return m;
+        }).toList();
+        return ResponseEntity.ok(out);
+    }
+
+    @PostMapping("/kontaktanfragen/{id}/erledigt")
+    public ResponseEntity<?> toggleKontaktanfrageErledigt(@PathVariable String id) {
+        return kontaktanfragen.findById(id).map(k -> {
+            k.setErledigt(!k.isErledigt());
+            kontaktanfragen.save(k);
+            return ResponseEntity.ok(Map.of("erledigt", k.isErledigt()));
+        }).orElse(ResponseEntity.notFound().build());
+    }
+
+    @DeleteMapping("/kontaktanfragen/{id}")
+    public ResponseEntity<Void> deleteKontaktanfrage(@PathVariable String id) {
+        if (!kontaktanfragen.existsById(id)) return ResponseEntity.notFound().build();
+        kontaktanfragen.deleteById(id);
+        return ResponseEntity.noContent().build();
     }
 
     @GetMapping("/stats")

@@ -1,5 +1,7 @@
 package com.example.stemplekarte.controller;
 
+import com.example.stemplekarte.model.Kontaktanfrage;
+import com.example.stemplekarte.repository.KontaktanfrageRepository;
 import com.example.stemplekarte.service.EmailService;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.slf4j.Logger;
@@ -37,10 +39,12 @@ public class PublicContactController {
     private static final int MAX_TRACKED = 5000;
 
     private final EmailService emailService;
+    private final KontaktanfrageRepository anfragen;
     private final Map<String, Instant> lastRequest = new ConcurrentHashMap<>();
 
-    public PublicContactController(EmailService emailService) {
+    public PublicContactController(EmailService emailService, KontaktanfrageRepository anfragen) {
         this.emailService = emailService;
+        this.anfragen = anfragen;
     }
 
     public record ContactRequest(String name, String shop, String email,
@@ -72,6 +76,10 @@ public class PublicContactController {
             return ResponseEntity.status(429).build();
         }
 
+        // Erst speichern, dann mailen: die Mail ist nur der Hinweis, die
+        // Anfrage selbst steht im Admin-Panel.
+        anfragen.save(Kontaktanfrage.create(
+                req.name().trim(), req.shop().trim(), req.email().trim(), req.message().trim()));
         emailService.sendContactRequestMail(req.name(), req.shop(), req.email(), req.message());
         return ResponseEntity.ok().build();
     }
