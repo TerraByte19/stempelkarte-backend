@@ -3,7 +3,6 @@ package com.example.stemplekarte.controller;
 import com.example.stemplekarte.controller.PublicContactController.ContactRequest;
 import com.example.stemplekarte.model.Kontaktanfrage;
 import com.example.stemplekarte.repository.KontaktanfrageRepository;
-import com.example.stemplekarte.service.EmailService;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
@@ -15,18 +14,16 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
 /**
- * Anfragen aus dem Kontaktformular landen im Admin-Panel. Die Mail an den
- * Betreiber ist nur der Hinweis - geht sie verloren, steht die Anfrage
- * trotzdem in der Datenbank.
+ * Anfragen aus dem Kontaktformular landen nur im Admin-Panel, es geht
+ * keine Mail raus.
  */
 class KontaktanfrageTest {
 
-    private final EmailService mail = mock(EmailService.class);
     private final KontaktanfrageRepository repo = mock(KontaktanfrageRepository.class);
-    private final PublicContactController controller = new PublicContactController(mail, repo);
+    private final PublicContactController controller = new PublicContactController(repo);
 
     @Test
-    void gueltigeAnfrageWirdGespeichertUndGemeldet() {
+    void gueltigeAnfrageWirdGespeichert() {
         var res = controller.contact(
                 new ContactRequest(" Adham ", "Cafe Mitte", "a@b.de", "Hallo", ""), "1.2.3.4");
 
@@ -36,7 +33,6 @@ class KontaktanfrageTest {
         assertEquals("Adham", gespeichert.getValue().getName());
         assertEquals("Cafe Mitte", gespeichert.getValue().getLaden());
         assertFalse(gespeichert.getValue().isErledigt());
-        verify(mail).sendContactRequestMail(" Adham ", "Cafe Mitte", "a@b.de", "Hallo");
     }
 
     @Test
