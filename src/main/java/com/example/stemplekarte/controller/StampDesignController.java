@@ -250,8 +250,7 @@ public class StampDesignController {
         return out;
     }
 
-    /** Auch vom Admin-Panel benutzt - dieselbe Sicht wie im Karten-Editor des Ladens. */
-    static Map<String, Object> toMap(Card card) {
+    private Map<String, Object> toMap(Card card) {
         Map<String, Object> map = new HashMap<>();
         map.put("walletStyle", card.getWalletStyle());
         map.put("stampIconType", card.getStampIconType());
