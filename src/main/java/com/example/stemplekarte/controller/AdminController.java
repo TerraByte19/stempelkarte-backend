@@ -260,6 +260,28 @@ public class AdminController {
         return ResponseEntity.ok(out);
     }
 
+    /**
+     * Aktive Karten eines Ladens mit Design - fuer die Wallet-Vorschau im
+     * Admin-Panel. Nur lesen; geaendert wird weiter im Dashboard des Ladens.
+     */
+    @GetMapping("/shops/{shopId}/cards")
+    @Transactional(readOnly = true)
+    public ResponseEntity<?> getShopCards(@PathVariable String shopId) {
+        return shopRepo.findById(shopId).<ResponseEntity<?>>map(shop -> {
+            List<Map<String, Object>> out = cardRepo.findByShopAndActiveTrue(shop).stream().map(c -> {
+                Map<String, Object> m = new java.util.LinkedHashMap<>();
+                m.put("id", c.getId());
+                m.put("name", c.getName());
+                m.put("type", c.getType().name());
+                m.put("rewardThreshold", c.getRewardThreshold());
+                m.put("rewardText", c.getRewardText());
+                m.put("design", StampDesignController.toMap(c));
+                return m;
+            }).toList();
+            return ResponseEntity.ok(out);
+        }).orElse(ResponseEntity.notFound().build());
+    }
+
     /** Anfragen aus dem Kontaktformular der Landing-Page, neueste zuerst. */
     @GetMapping("/kontaktanfragen")
     public ResponseEntity<List<Map<String, Object>>> getKontaktanfragen() {
