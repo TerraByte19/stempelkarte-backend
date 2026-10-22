@@ -191,7 +191,6 @@ public class LandingController {
                             %s
                             <div>
                                 <div class="shop-name">%s</div>
-                                <div class="card-name">%s</div>
                             </div>
                         </div>
                         <div class="customer-name">\uD83D\uDC64 %s</div>
@@ -306,7 +305,7 @@ public class LandingController {
                 // escapeHtml ersetzt ihn durch &#39;.
                 logoUrl.isBlank() ? ""
                         : "<img src='" + escapeHtml(logoUrl) + "' class='shop-logo' alt='Logo'>",
-                escapeHtml(shopName), escapeHtml(card.getName()),
+                escapeHtml(shopName),
                 escapeHtml(customer.getName()),
                 PointsMath.formatiere(stand),
                 zielZeile,
@@ -550,7 +549,6 @@ public class LandingController {
                                 %s
                                 <div>
                                     <div class="shop-name">%s</div>
-                                    <div class="card-name">%s</div>
                                 </div>
                             </div>
                             <div class="customer-name">👤 %s</div>
@@ -638,7 +636,7 @@ public class LandingController {
                     escapeHtml(shopName), safeCssColor(bgColor),
                     logoUrl.isBlank() ? ""
                             : "<img src='" + escapeHtml(logoUrl) + "' class='shop-logo' alt='Logo'>",
-                    escapeHtml(shopName), escapeHtml(card.getName()),
+                    escapeHtml(shopName),
                     escapeHtml(customer.getName()),
                     stampsShown, threshold,
                     stampsHtml,
@@ -781,7 +779,6 @@ public class LandingController {
                                 %s
                                 <div>
                                     <div class="shop-name">%s</div>
-                                    <div class="card-name">%s</div>
                                 </div>
                             </div>
                             <div class="info">
@@ -856,7 +853,7 @@ public class LandingController {
                     escapeHtml(shopName), safeCssColor(bgColor), safeCssColor(bgColor),
                     logoUrl.isBlank() ? ""
                             : "<img src='" + escapeHtml(logoUrl) + "' class='logo' alt='Logo'>",
-                    escapeHtml(shopName), escapeHtml(card.getName()),
+                    escapeHtml(shopName),
                     escapeHtml(shopName),
                     // cardId steht in einer JS-Zeichenkette - toJsString
                     // liefert die Anfuehrungszeichen mit.
