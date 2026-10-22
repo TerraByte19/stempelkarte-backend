@@ -89,8 +89,8 @@ public class LandingController {
     private ResponseEntity<String> punkteSeite(CustomerCard cc, Card card, Customer customer,
                                                String customerId, String cardId) {
         String shopName = card.getShop().getName();
-        String bgColor = card.getShop().getColorBackground();
-        String logoUrl = card.getShop().getLogoUrl() != null ? card.getShop().getLogoUrl() : "";
+        String bgColor = farbeVon(card);
+        String logoUrl = logoVon(card);
 
         String googleSaveUrl = "";
         try {
@@ -409,9 +409,8 @@ public class LandingController {
             }
 
             String shopName = card.getShop().getName();
-            String bgColor = card.getShop().getColorBackground();
-            String logoUrl = card.getShop().getLogoUrl() != null
-                    ? card.getShop().getLogoUrl() : "";
+            String bgColor = farbeVon(card);
+            String logoUrl = logoVon(card);
 
             String googleSaveUrl = "";
             try {
@@ -684,9 +683,8 @@ public class LandingController {
         try {
             Card card = cardService.getById(cardId);
             String shopName = card.getShop().getName();
-            String bgColor = card.getShop().getColorBackground();
-            String logoUrl = card.getShop().getLogoUrl() != null
-                    ? card.getShop().getLogoUrl() : "";
+            String bgColor = farbeVon(card);
+            String logoUrl = logoVon(card);
 
             String html = """
                     <!DOCTYPE html>
@@ -869,5 +867,20 @@ public class LandingController {
         } catch (Exception e) {
             return ResponseEntity.ok("<html><body style='font-family:sans-serif;padding:40px;text-align:center'><h2>Karte nicht gefunden</h2></body></html>");
         }
+    }
+
+    /**
+     * Logo und Farbe kommen seit dem Karten-Design von der Karte, wie im
+     * Wallet-Pass. Der Laden ist nur noch der Rueckfall fuer alte Karten.
+     */
+    static String logoVon(Card card) {
+        if (card.getLogoUrl() != null && !card.getLogoUrl().isBlank()) return card.getLogoUrl();
+        String shopLogo = card.getShop().getLogoUrl();
+        return shopLogo != null ? shopLogo : "";
+    }
+
+    static String farbeVon(Card card) {
+        String farbe = card.getColorBackground();
+        return (farbe != null && !farbe.isBlank()) ? farbe : card.getShop().getColorBackground();
     }
 }
