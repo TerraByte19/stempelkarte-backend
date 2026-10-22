@@ -66,12 +66,13 @@ public class CloudinaryService {
             }
 
             Transformation<?> transformation = switch (type) {
+                // Kein weisser Rand und kein Rundschnitt: ein freigestelltes
+                // PNG-Logo bekam sonst einen weissen Kreis und sah aus, als
+                // waere der Hintergrund weiss. Transparenz bleibt erhalten.
                 case LOGO -> new Transformation<>()
                         .width(660).height(660)
                         .crop("pad")
                         .background("transparent")
-                        .border("12px_solid_white")
-                        .radius("max")
                         .quality("auto").fetchFormat("png");
                 case HERO -> new Transformation<>()
                         .width(1125).height(369).crop("fill").gravity("center")
