@@ -247,8 +247,12 @@ public class PassTemplateGenerator {
                            String preset, Color stampColor, String emptyStyle) {
         double r = d / 2;
         if (filled) {
-            g.setColor(new Color(255, 255, 255, 242));
-            g.fill(new Ellipse2D.Double(cx - r, cy - r, d, d));
+            // Eigenes Bild ohne weisse Scheibe dahinter - sonst wird ein
+            // freigestelltes PNG weiss hinterlegt.
+            if (!useCustom) {
+                g.setColor(new Color(255, 255, 255, 242));
+                g.fill(new Ellipse2D.Double(cx - r, cy - r, d, d));
+            }
             if (useCustom) {
                 drawImageInCircle(g, customIcon, cx, cy, d * 0.92, 1f);
             } else {
