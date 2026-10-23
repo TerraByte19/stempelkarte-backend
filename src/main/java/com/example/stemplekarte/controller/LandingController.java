@@ -133,13 +133,13 @@ public class LandingController {
                             padding: 28px;
                             width: 100%%;
                             max-width: 380px;
-                            color: white;
+                            color: rgb(var(--ink));
                             box-shadow: 0 20px 60px rgba(0,0,0,0.3);
                         }
                         .shop-header { display: flex; align-items: center; gap: 12px; margin-bottom: 24px; }
                         .shop-logo {
                             width: 50px; height: 50px; border-radius: 12px;
-                            object-fit: cover; background: rgba(255,255,255,0.2);
+                            object-fit: cover; background: rgba(var(--ink),0.2);
                         }
                         .shop-name { font-size: 20px; font-weight: 600; }
                         .card-name { font-size: 13px; opacity: 0.75; margin-top: 2px; }
@@ -155,21 +155,21 @@ public class LandingController {
                             letter-spacing: 0.5px; margin-bottom: 10px;
                         }
                         .reward {
-                            background: rgba(255,255,255,0.12);
+                            background: rgba(var(--ink),0.12);
                             border-radius: 12px; padding: 12px; margin-bottom: 8px;
                         }
-                        .reward.ready { background: rgba(255,255,255,0.28); }
+                        .reward.ready { background: rgba(var(--ink),0.28); }
                         .reward-head {
                             display: flex; justify-content: space-between;
                             align-items: baseline; gap: 8px; margin-bottom: 8px;
                         }
                         .reward-name { font-size: 15px; font-weight: 600; }
                         .reward-cost { font-size: 13px; opacity: 0.85; }
-                        .bar { height: 6px; border-radius: 3px; background: rgba(255,255,255,0.25); overflow: hidden; }
-                        .bar-fill { height: 100%%; background: rgba(255,255,255,0.95); border-radius: 3px; }
+                        .bar { height: 6px; border-radius: 3px; background: rgba(var(--ink),0.25); overflow: hidden; }
+                        .bar-fill { height: 100%%; background: rgba(var(--ink),0.95); border-radius: 3px; }
                         .leer {
                             font-size: 14px; opacity: 0.85; padding: 12px;
-                            background: rgba(255,255,255,0.15); border-radius: 10px;
+                            background: rgba(var(--ink),0.15); border-radius: 10px;
                         }
                         .wallet-buttons { display: flex; flex-direction: column; gap: 12px; margin-top: 24px; }
                         .btn-apple {
@@ -326,7 +326,7 @@ public class LandingController {
         return ResponseEntity.ok()
                 .header("Cache-Control", "no-store, no-cache, must-revalidate")
                 .header("Pragma", "no-cache")
-                .body(html);
+                .body(mitKontrast(html, bgColor));
     }
 
     /** Die Zeile unter dem Punktestand. Ohne Praemie steht dort kein
@@ -462,7 +462,7 @@ public class LandingController {
                                 padding: 28px;
                                 width: 100%%;
                                 max-width: 380px;
-                                color: white;
+                                color: rgb(var(--ink));
                                 box-shadow: 0 20px 60px rgba(0,0,0,0.3);
                             }
                             .shop-header {
@@ -476,7 +476,7 @@ public class LandingController {
                                 height: 50px;
                                 border-radius: 12px;
                                 object-fit: cover;
-                                background: rgba(255,255,255,0.2);
+                                background: rgba(var(--ink),0.2);
                             }
                             .shop-name { font-size: 20px; font-weight: 600; }
                             .card-name { font-size: 13px; opacity: 0.75; margin-top: 2px; }
@@ -502,9 +502,9 @@ public class LandingController {
                                 justify-content: center;
                                 font-size: 18px;
                             }
-                            .stamp.filled { background: rgba(255,255,255,0.9); }
+                            .stamp.filled { background: rgba(var(--ink),0.9); }
                             .stamp.empty {
-                                border: 1.5px dashed rgba(255,255,255,0.4);
+                                border: 1.5px dashed rgba(var(--ink),0.4);
                                 font-size: 12px;
                                 opacity: 0.6;
                             }
@@ -513,7 +513,7 @@ public class LandingController {
                                 opacity: 0.9;
                                 margin-bottom: 28px;
                                 padding: 12px;
-                                background: rgba(255,255,255,0.15);
+                                background: rgba(var(--ink),0.15);
                                 border-radius: 10px;
                                 text-align: center;
                             }
@@ -663,7 +663,7 @@ public class LandingController {
             // der pageshow/visibilitychange-Handler ziehen den Stand live nach.
             return ResponseEntity.ok()
                     .header(org.springframework.http.HttpHeaders.CACHE_CONTROL, "no-cache")
-                    .body(html);
+                    .body(mitKontrast(html, bgColor));
 
         } catch (Exception e) {
             return ResponseEntity.ok("""
@@ -708,7 +708,7 @@ public class LandingController {
                                 padding: 28px;
                                 width: 100%%;
                                 max-width: 380px;
-                                color: white;
+                                color: rgb(var(--ink));
                                 box-shadow: 0 20px 60px rgba(0,0,0,0.3);
                             }
                             .header { display: flex; align-items: center; gap: 12px; margin-bottom: 24px; }
@@ -716,7 +716,7 @@ public class LandingController {
                             .shop-name { font-size: 20px; font-weight: 600; }
                             .card-name { font-size: 13px; opacity: 0.75; margin-top: 2px; }
                             .info {
-                                background: rgba(255,255,255,0.15);
+                                background: rgba(var(--ink),0.15);
                                 border-radius: 12px;
                                 padding: 16px;
                                 margin-bottom: 20px;
@@ -728,7 +728,7 @@ public class LandingController {
                             input[type=text], input[type=email] {
                                 padding: 12px 16px;
                                 border-radius: 10px;
-                                border: none;
+                                border: 1px solid rgba(var(--ink),0.25);
                                 font-size: 15px;
                                 outline: none;
                                 width: 100%%;
@@ -749,7 +749,7 @@ public class LandingController {
                                 padding: 14px;
                                 border-radius: 12px;
                                 border: none;
-                                background: white;
+                                background: rgb(var(--ink));
                                 color: %s;
                                 font-size: 15px;
                                 font-weight: 600;
@@ -860,7 +860,7 @@ public class LandingController {
                     toJsString(cardId)
             );
 
-            return ResponseEntity.ok(html);
+            return ResponseEntity.ok(mitKontrast(html, bgColor));
         } catch (Exception e) {
             return ResponseEntity.ok("<html><body style='font-family:sans-serif;padding:40px;text-align:center'><h2>Karte nicht gefunden</h2></body></html>");
         }
@@ -880,4 +880,35 @@ public class LandingController {
         String farbe = card.getColorBackground();
         return (farbe != null && !farbe.isBlank()) ? farbe : card.getShop().getColorBackground();
     }
+
+    /**
+     * Schrift und helle Elemente der Kundenseiten laufen ueber --ink. Auf
+     * einer hellen Karte waere weisse Schrift unlesbar - deshalb nimmt die
+     * Seite je nach Kartenfarbe Weiss oder Dunkel, was mehr Kontrast hat.
+     */
+    static String mitKontrast(String html, String bgColor) {
+        return html.replaceFirst("<body>", "<body style=\"--ink: " + inkFuer(bgColor) + "\">");
+    }
+
+    /** "255,255,255" oder "26,26,46" - je nachdem, was auf bgColor besser lesbar ist. */
+    static String inkFuer(String bgColor) {
+        String hex = safeCssColor(bgColor).substring(1);
+        if (hex.length() == 3 || hex.length() == 4) {
+            hex = "" + hex.charAt(0) + hex.charAt(0) + hex.charAt(1) + hex.charAt(1)
+                    + hex.charAt(2) + hex.charAt(2);
+        }
+        if (hex.length() < 6) return "255,255,255";
+        double l = 0.2126 * kanal(hex.substring(0, 2))
+                + 0.7152 * kanal(hex.substring(2, 4))
+                + 0.0722 * kanal(hex.substring(4, 6));
+        double gegenWeiss = 1.05 / (l + 0.05);
+        double gegenDunkel = (l + 0.05) / (0.0115 + 0.05);
+        return gegenWeiss >= gegenDunkel ? "255,255,255" : "26,26,46";
+    }
+
+    private static double kanal(String hex) {
+        double c = Integer.parseInt(hex, 16) / 255.0;
+        return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+    }
+
 }
