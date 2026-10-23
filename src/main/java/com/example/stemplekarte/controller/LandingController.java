@@ -750,7 +750,7 @@ public class LandingController {
                                 border-radius: 12px;
                                 border: none;
                                 background: rgb(var(--ink));
-                                color: %s;
+                                color: rgb(var(--ink-gegen));
                                 font-size: 15px;
                                 font-weight: 600;
                                 cursor: pointer;
@@ -850,7 +850,7 @@ public class LandingController {
                     </body>
                     </html>
                     """.formatted(
-                    escapeHtml(shopName), safeCssColor(bgColor), safeCssColor(bgColor),
+                    escapeHtml(shopName), safeCssColor(bgColor),
                     logoUrl.isBlank() ? ""
                             : "<img src='" + escapeHtml(logoUrl) + "' class='logo' alt='Logo'>",
                     escapeHtml(shopName),
@@ -887,7 +887,10 @@ public class LandingController {
      * Seite je nach Kartenfarbe Weiss oder Dunkel, was mehr Kontrast hat.
      */
     static String mitKontrast(String html, String bgColor) {
-        return html.replaceFirst("<body>", "<body style=\"--ink: " + inkFuer(bgColor) + "\">");
+        String ink = inkFuer(bgColor);
+        String gegen = ink.equals("255,255,255") ? "26,26,46" : "255,255,255";
+        return html.replaceFirst("<body>",
+                "<body style=\"--ink: " + ink + "; --ink-gegen: " + gegen + "\">");
     }
 
     /** "255,255,255" oder "26,26,46" - je nachdem, was auf bgColor besser lesbar ist. */

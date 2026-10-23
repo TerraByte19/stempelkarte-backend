@@ -37,6 +37,6 @@ class KartenKontrastTest {
     @Test
     void variableLandetAmBody() {
         assertThat(LandingController.mitKontrast("<html><body><div class=\"card\"></div></body></html>", "#FFFFFF"))
-                .contains("<body style=\"--ink: 26,26,46\">");
+                .contains("<body style=\"--ink: 26,26,46; --ink-gegen: 255,255,255\">");
     }
 }
