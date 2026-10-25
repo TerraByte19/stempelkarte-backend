@@ -25,8 +25,11 @@ public class GeoPruefung {
 
     private static final Logger log = LoggerFactory.getLogger(GeoPruefung.class);
 
-    /** Bis hierhin gilt ein Scan als "im Laden". */
-    public static final long RADIUS_METER = 500;
+    /**
+     * Bis hierhin gilt ein Scan als "im Laden". Derselbe Radius wie die
+     * Sperrbildschirm-Meldung im Wallet-Pass (ApplePassService).
+     */
+    public static final long RADIUS_METER = 150;
 
     private static final double ERDRADIUS_METER = 6_371_000;
 
