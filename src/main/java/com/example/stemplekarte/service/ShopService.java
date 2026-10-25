@@ -101,17 +101,6 @@ public class ShopService {
         return shopRepo.save(shop);
     }
 
-    /** Scan-Radius der Geo-Sperre. Nur die Werte aus der Auswahl im Profil. */
-    @Transactional
-    public Shop updateScanRadius(String shopId, int meter) {
-        if (!GeoPruefung.ERLAUBTE_RADIEN.contains(meter)) {
-            throw new IllegalArgumentException("Radius muss 150, 200 oder 250 Meter sein");
-        }
-        Shop shop = getById(shopId);
-        shop.updateScanRadius(meter);
-        return shopRepo.save(shop);
-    }
-
     /** Eigener Text fuer die Sperrbildschirm-Erinnerung. Leer = Standardtext. */
     @Transactional
     public Shop updateLockScreenTexts(String shopId, String textFull, String textProgress) {

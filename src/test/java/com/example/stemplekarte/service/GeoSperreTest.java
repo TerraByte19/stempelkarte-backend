@@ -55,21 +55,4 @@ class GeoSperreTest {
         when(repo.save(any())).thenThrow(new RuntimeException("DB weg"));
         assertThat(pruefung.sperre(laden(), "Kasse 1", null, null)).isNotNull();
     }
-
-    /** Rund 220 m vom Laden: bei 150 m gesperrt, bei 250 m erlaubt. */
-    @Test
-    void gewaehlterRadiusZaehlt() {
-        Shop shop = laden();
-        double lat220 = LAT + 0.002;
-        assertThat(pruefung.sperre(shop, "Kasse 1", lat220, LON)).isNotNull();
-        when(shop.getScanRadiusMeter()).thenReturn(250);
-        assertThat(pruefung.sperre(shop, "Kasse 1", lat220, LON)).isNull();
-    }
-
-    @Test
-    void unbekannterRadiusFaelltAufStandard() {
-        Shop shop = laden();
-        when(shop.getScanRadiusMeter()).thenReturn(5000);
-        assertThat(GeoPruefung.radiusFuer(shop)).isEqualTo(GeoPruefung.RADIUS_METER);
-    }
 }

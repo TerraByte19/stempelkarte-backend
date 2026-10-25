@@ -26,20 +26,10 @@ public class GeoPruefung {
     private static final Logger log = LoggerFactory.getLogger(GeoPruefung.class);
 
     /**
-     * Bis hierhin gilt ein Scan als "im Laden", solange der Inhaber nichts
-     * anderes waehlt. Derselbe Radius wie die Sperrbildschirm-Meldung im
-     * Wallet-Pass (ApplePassService).
+     * Bis hierhin gilt ein Scan als "im Laden". Derselbe Radius wie die
+     * Sperrbildschirm-Meldung im Wallet-Pass (ApplePassService).
      */
     public static final long RADIUS_METER = 150;
-
-    /** Zur Auswahl im Profil. Mehr nicht: groesser waere kein "im Laden" mehr. */
-    public static final java.util.List<Integer> ERLAUBTE_RADIEN = java.util.List.of(150, 200, 250);
-
-    /** Radius des Ladens. Fehlt er oder ist er keiner der erlaubten, gilt der Standard. */
-    public static long radiusFuer(Shop shop) {
-        Integer r = shop.getScanRadiusMeter();
-        return (r != null && ERLAUBTE_RADIEN.contains(r)) ? r : RADIUS_METER;
-    }
 
     private static final double ERDRADIUS_METER = 6_371_000;
 
@@ -88,7 +78,7 @@ public class GeoPruefung {
      */
     public String sperre(Shop shop, String staffLabel, Double scanLat, Double scanLon) {
         GeoVorfall.Art art = pruefe(shop.getLatitude(), shop.getLongitude(),
-                scanLat, scanLon, radiusFuer(shop));
+                scanLat, scanLon, RADIUS_METER);
         if (art == null) return null;
 
         Long distanz = (art == GeoVorfall.Art.WEIT_WEG)
