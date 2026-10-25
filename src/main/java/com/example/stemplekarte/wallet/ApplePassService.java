@@ -200,7 +200,7 @@ public class ApplePassService {
         // verwerfen. Laeden ohne diese Funktion bekommen denselben Pass wie vorher.
         List<PKLocation> orte = sperrbildschirmOrte(shop, card, cc);
         if (!orte.isEmpty()) {
-            passBuilder.maxDistance(LOCK_SCREEN_RADIUS_M).locations(orte);
+            passBuilder.maxDistance(radiusFuer(shop)).locations(orte);
         }
 
         PKPass pass = passBuilder.build();
@@ -211,9 +211,18 @@ public class ApplePassService {
     }
 
     // Ab welcher Entfernung zum Laden iOS die Karte auf dem Sperrbildschirm
-    // anbietet. 150 m ist nah genug, dass der Kunde wirklich vor Ort ist, und
-    // weit genug, dass es schon beim Ankommen erscheint.
-    private static final long LOCK_SCREEN_RADIUS_M = 150L;
+    // anbietet. Der Laden waehlt im Profil. maxDistance kann den Radius nur
+    // verkleinern: iOS nimmt den kleineren Wert aus unserem und seinem
+    // eigenen, und der liegt bei einer StoreCard bei rund 100 m. Mehr als
+    // 100 anzubieten waere deshalb Augenwischerei.
+    public static final long LOCK_SCREEN_RADIUS_M = 100L;
+    public static final List<Integer> ERLAUBTE_RADIEN = List.of(50, 75, 100);
+
+    /** Radius des Ladens. Fehlt er oder ist er keiner der erlaubten, gilt der Standard. */
+    public static long radiusFuer(Shop shop) {
+        Integer r = shop.getLockScreenRadiusMeter();
+        return (r != null && ERLAUBTE_RADIEN.contains(r)) ? r : LOCK_SCREEN_RADIUS_M;
+    }
 
     /**
      * Orte fuer die Sperrbildschirm-Erinnerung.

@@ -110,6 +110,11 @@ public class Shop {
     @Column(name = "lock_screen_text_progress", length = 120)
     private String lockScreenTextProgress;
 
+    // Ab welcher Naehe iOS die Karte auf dem Sperrbildschirm anbietet, in
+    // Metern (ApplePassService.ERLAUBTE_RADIEN). Null = Standard.
+    @Column(name = "lock_screen_radius_meter")
+    private Integer lockScreenRadiusMeter;
+
     // Sonntag aus der Statistik ausrechnen (Ø/Tag, staerkster/ruhigster Tag) -
     // viele Laeden haben sonntags zu, dann ist Sonntag trivial immer "ruhigster
     // Tag". Pro Laden vom Laden selbst umschaltbar; das Admin-Panel zeigt nur
@@ -268,6 +273,13 @@ public class Shop {
 
     public String getLockScreenTextFull() { return lockScreenTextFull; }
     public String getLockScreenTextProgress() { return lockScreenTextProgress; }
+
+    public Integer getLockScreenRadiusMeter() { return lockScreenRadiusMeter; }
+
+    public void updateLockScreenRadius(int meter) {
+        this.lockScreenRadiusMeter = meter;
+        this.updatedAt = Instant.now();
+    }
 
     /** Leerer Text = zurueck auf den Standardtext. */
     public void updateLockScreenTexts(String full, String progress) {

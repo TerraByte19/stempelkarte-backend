@@ -185,11 +185,14 @@ public class ShopController {
                 com.example.stemplekarte.service.StandortPflicht.fristEnde().toString());
         map.put("lockScreenTextFull", shop.getLockScreenTextFull());
         map.put("lockScreenTextProgress", shop.getLockScreenTextProgress());
+        map.put("lockScreenRadiusMeter",
+                com.example.stemplekarte.wallet.ApplePassService.radiusFuer(shop));
         return map;
     }
 
     public record LockScreenRequest(Boolean enabled, Double latitude, Double longitude,
-                                    String textFull, String textProgress) {}
+                                    String textFull, String textProgress,
+                                    Integer radiusMeter) {}
 
     @Operation(summary = "Sperrbildschirm-Erinnerung ein-/ausschalten",
             description = "Ist die Karte voll, bietet iOS sie in Ladennaehe auf dem "
@@ -203,6 +206,10 @@ public class ShopController {
                 shop.getId(), req.enabled(), req.latitude(), req.longitude());
         updated = shopService.updateLockScreenTexts(
                 shop.getId(), req.textFull(), req.textProgress());
+        // Aeltere Oberflaechen schicken keinen Radius - dann bleibt er, wie er ist.
+        if (req.radiusMeter() != null) {
+            updated = shopService.updateLockScreenRadius(shop.getId(), req.radiusMeter());
+        }
         Map<String, Object> out = new HashMap<>();
         out.put("lockScreenEnabled", Boolean.TRUE.equals(updated.getLockScreenEnabled()));
         out.put("lockScreenActive", updated.isLockScreenActive());
@@ -210,6 +217,8 @@ public class ShopController {
         out.put("longitude", updated.getLongitude());
         out.put("lockScreenTextFull", updated.getLockScreenTextFull());
         out.put("lockScreenTextProgress", updated.getLockScreenTextProgress());
+        out.put("lockScreenRadiusMeter",
+                com.example.stemplekarte.wallet.ApplePassService.radiusFuer(updated));
         return out;
     }
 

@@ -33,7 +33,7 @@ class GeoSperreTest {
 
     @Test
     void imLadenDarfDurch() {
-        assertThat(pruefung.sperre(laden(), "Kasse 1", LAT + 0.0009, LON)).isNull();
+        assertThat(pruefung.sperre(laden(), "Kasse 1", LAT + 0.0005, LON)).isNull();
         verify(repo, never()).save(any());
     }
 

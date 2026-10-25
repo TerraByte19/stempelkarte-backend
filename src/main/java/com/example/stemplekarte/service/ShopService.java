@@ -101,6 +101,17 @@ public class ShopService {
         return shopRepo.save(shop);
     }
 
+    /** Radius der Sperrbildschirm-Erinnerung. Nur die Werte aus der Auswahl im Profil. */
+    @Transactional
+    public Shop updateLockScreenRadius(String shopId, int meter) {
+        if (!com.example.stemplekarte.wallet.ApplePassService.ERLAUBTE_RADIEN.contains(meter)) {
+            throw new IllegalArgumentException("Radius muss 50, 75 oder 100 Meter sein");
+        }
+        Shop shop = getById(shopId);
+        shop.updateLockScreenRadius(meter);
+        return shopRepo.save(shop);
+    }
+
     /** Eigener Text fuer die Sperrbildschirm-Erinnerung. Leer = Standardtext. */
     @Transactional
     public Shop updateLockScreenTexts(String shopId, String textFull, String textProgress) {

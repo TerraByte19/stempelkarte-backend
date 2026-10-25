@@ -42,7 +42,7 @@ class GeoPruefungTest {
 
     @Test
     void scanAmLadenIstInOrdnung() {
-        assertThat(pruefe(TOR_LAT, TOR_LON, TOR_LAT + 0.0009, TOR_LON, RADIUS_METER)).isNull();
+        assertThat(pruefe(TOR_LAT, TOR_LON, TOR_LAT + 0.0005, TOR_LON, RADIUS_METER)).isNull();
     }
 
     @Test
