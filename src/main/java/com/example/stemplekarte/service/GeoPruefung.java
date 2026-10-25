@@ -14,10 +14,11 @@ import org.springframework.stereotype.Service;
  * Ortsfelder im Wallet-Pass, damit die Karte auf dem Sperrbildschirm
  * auftaucht. Dieselben Koordinaten dienen hier als Mittelpunkt.
  *
- * <p>Nichts wird abgelehnt. Der Ort kommt aus dem Browser des Personals und
- * ist dort nur so gut wie das Geraet: ein Tablet ohne GPS schaetzt ueber das
- * WLAN. Ein harter Riegel wuerde Stempel verhindern, die voellig in Ordnung
- * sind - und davon haette der Laden mehr Aerger als vom Missbrauch.
+ * <p>Seit 25.10.2026 ein harter Riegel: ohne Ort oder ausserhalb des
+ * Radius wird gar nicht erst gestempelt. Vorher lief alles durch und wurde
+ * nur gemeldet - wer die Ortsabfrage im Browser wegklickte, stempelte
+ * trotzdem, und genau so wurde es umgangen. Der Radius ist grosszuegig,
+ * weil ein Tablet ohne GPS ueber das WLAN schaetzt.
  */
 @Service
 public class GeoPruefung {
@@ -68,29 +69,37 @@ public class GeoPruefung {
     }
 
     /**
-     * Protokolliert einen auffaelligen Scan. Laeuft nach dem Stempel: ein
-     * Fehler hier darf eine Buchung nicht nachtraeglich kaputtmachen.
+     * Entscheidet vor dem Stempel, ob der Scan durch darf. Null heisst ja,
+     * sonst kommt der Text fuer das Personal zurueck und der Versuch steht
+     * als Vorfall in der Datenbank.
      */
-    public void protokolliere(Shop shop, String cardId, String customerId, String staffLabel,
-                              Double scanLat, Double scanLon) {
+    public String sperre(Shop shop, String staffLabel, Double scanLat, Double scanLon) {
+        GeoVorfall.Art art = pruefe(shop.getLatitude(), shop.getLongitude(),
+                scanLat, scanLon, RADIUS_METER);
+        if (art == null) return null;
+
+        Long distanz = (art == GeoVorfall.Art.WEIT_WEG)
+                ? distanzMeter(shop.getLatitude(), shop.getLongitude(), scanLat, scanLon)
+                : null;
+
         try {
-            GeoVorfall.Art art = pruefe(shop.getLatitude(), shop.getLongitude(),
-                    scanLat, scanLon, RADIUS_METER);
-            if (art == null) return;
-
-            Long distanz = (art == GeoVorfall.Art.WEIT_WEG)
-                    ? distanzMeter(shop.getLatitude(), shop.getLongitude(), scanLat, scanLon)
-                    : null;
-
-            vorfaelle.save(GeoVorfall.create(shop.getId(), cardId, customerId, staffLabel,
+            vorfaelle.save(GeoVorfall.create(shop.getId(), null, null, staffLabel,
                     art, scanLat, scanLon, distanz));
-
-            log.warn("[GEO] VORFALL laden={} art={} distanzMeter={} kasse={}",
-                    shop.getId(), art, distanz, staffLabel);
         } catch (Exception e) {
-            // Der Stempel ist laengst gesetzt. Ein Protokollfehler darf dem
-            // Kunden an der Kasse nicht als Fehlermeldung begegnen.
+            // Gesperrt wird trotzdem. Das Protokoll ist nur die Spur dazu.
             log.error("[GEO] VORFALL-FEHLER laden={}", shop.getId(), e);
         }
+        log.warn("[GEO] GESPERRT laden={} art={} distanzMeter={} kasse={}",
+                shop.getId(), art, distanz, staffLabel);
+        return sperrText(art, distanz);
+    }
+
+    public static String sperrText(GeoVorfall.Art art, Long distanz) {
+        if (art == GeoVorfall.Art.WEIT_WEG) {
+            return "Scan abgelehnt: Das Gerät ist rund " + distanz + " m vom Laden entfernt. "
+                    + "Gescannt werden kann nur im Laden.";
+        }
+        return "Scan abgelehnt: Das Gerät hat keinen Standort geschickt. "
+                + "Standort für diese Seite erlauben und erneut scannen.";
     }
 }

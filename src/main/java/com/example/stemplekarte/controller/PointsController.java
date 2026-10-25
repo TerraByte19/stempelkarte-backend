@@ -42,9 +42,12 @@ public class PointsController {
 
     public record EarnRequest(@NotBlank String qrPayload, long amountCents,
                               Double lat, Double lon) {}
-    public record RedeemRequest(@NotBlank String qrPayload, @NotBlank String rewardId) {}
-    public record CorrectRequest(@NotBlank String qrPayload, Long amountCents, Long pointsX100) {}
-    public record UndoRequest(@NotBlank String qrPayload, @NotBlank String bookingId) {}
+    public record RedeemRequest(@NotBlank String qrPayload, @NotBlank String rewardId,
+                                Double lat, Double lon) {}
+    public record CorrectRequest(@NotBlank String qrPayload, Long amountCents, Long pointsX100,
+                                 Double lat, Double lon) {}
+    public record UndoRequest(@NotBlank String qrPayload, @NotBlank String bookingId,
+                              Double lat, Double lon) {}
 
     // ── Antwort ───────────────────────────────────────────────────────────
     //
@@ -67,10 +70,8 @@ public class PointsController {
     @PostMapping("/earn")
     public PointsResponse earn(@Valid @RequestBody EarnRequest req, Authentication auth) {
         Staff staff = staffAus(auth);
-        pruefeStandort(staff);
+        pruefeStandort(staff, req.lat(), req.lon());
         var ergebnis = service.earn(req.qrPayload(), staff.shop(), req.amountCents(), staff.label());
-        geoPruefung.protokolliere(staff.shop(), ergebnis.cardId(),
-                ergebnis.customerCardId(), staff.label(), req.lat(), req.lon());
         melden(ergebnis);
         return antwort(ergebnis);
     }
@@ -79,7 +80,7 @@ public class PointsController {
     @PostMapping("/redeem")
     public PointsResponse redeem(@Valid @RequestBody RedeemRequest req, Authentication auth) {
         Staff staff = staffAus(auth);
-        pruefeStandort(staff);
+        pruefeStandort(staff, req.lat(), req.lon());
         var ergebnis = service.redeem(req.qrPayload(), staff.shop(), req.rewardId(), staff.label());
         melden(ergebnis);
         return antwort(ergebnis);
@@ -89,7 +90,7 @@ public class PointsController {
     @PostMapping("/correct")
     public PointsResponse correct(@Valid @RequestBody CorrectRequest req, Authentication auth) {
         Staff staff = staffAus(auth);
-        pruefeStandort(staff);
+        pruefeStandort(staff, req.lat(), req.lon());
         var ergebnis = service.correct(req.qrPayload(), staff.shop(),
                 req.amountCents(), req.pointsX100(), staff.label());
         melden(ergebnis);
@@ -100,7 +101,7 @@ public class PointsController {
     @PostMapping("/undo")
     public PointsResponse undo(@Valid @RequestBody UndoRequest req, Authentication auth) {
         Staff staff = staffAus(auth);
-        pruefeStandort(staff);
+        pruefeStandort(staff, req.lat(), req.lon());
         var ergebnis = service.undo(req.qrPayload(), staff.shop(), req.bookingId(), staff.label());
         melden(ergebnis);
         return antwort(ergebnis);
@@ -113,16 +114,21 @@ public class PointsController {
     private record Staff(Shop shop, String label) {}
 
     /**
-     * Dieselbe Sperre wie beim Stempeln: ohne Ladenort keine Buchung.
-     * Auch Korrektur und Ruecknahme - sonst bliebe ein Weg offen, auf dem
-     * sich Punkte ohne jede Ortspruefung verschieben lassen.
+     * Dieselbe Sperre wie beim Stempeln: ohne Ladenort oder ausserhalb des
+     * Ladens keine Buchung. Auch Korrektur und Ruecknahme - sonst bliebe ein
+     * Weg offen, auf dem sich Punkte ohne jede Ortspruefung verschieben lassen.
      */
-    private void pruefeStandort(Staff staff) {
+    private void pruefeStandort(Staff staff, Double lat, Double lon) {
         if (!com.example.stemplekarte.service.StandortPflicht.darfScannen(
                 staff.shop(), java.time.Instant.now())) {
             throw new org.springframework.web.server.ResponseStatusException(
                     org.springframework.http.HttpStatus.FORBIDDEN,
                     com.example.stemplekarte.service.StandortPflicht.sperrText());
+        }
+        String geoSperre = geoPruefung.sperre(staff.shop(), staff.label(), lat, lon);
+        if (geoSperre != null) {
+            throw new org.springframework.web.server.ResponseStatusException(
+                    org.springframework.http.HttpStatus.FORBIDDEN, geoSperre);
         }
     }
 

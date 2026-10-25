@@ -17,10 +17,8 @@ import java.util.UUID;
  * die Faelle, die jemand ansehen soll. Jeder normale Scan traegt dann auch
  * keinen Aufenthaltsort des Personals in der Datenbank mit sich herum.
  *
- * <p>Es wird nichts blockiert. Der Ort aus dem Browser ist zu unzuverlaessig,
- * um daran einen Stempel scheitern zu lassen - ein Tablet ohne GPS schaetzt
- * ueber das WLAN und liegt gern hundert Meter daneben. Der Vorfall ist ein
- * Hinweis, kein Urteil.
+ * <p>Seit 25.10.2026 ist jeder Vorfall ein abgelehnter Scan (GeoPruefung.sperre).
+ * Gestempelt wurde dabei nichts, deshalb fehlen Karte und Kunde.
  */
 @Entity
 @Table(name = "geo_vorfall")

@@ -83,7 +83,8 @@ class ScanControllerTest {
                 "Could not initialize proxy [Shop#SHOP-TEST] - no session"));
 
         ScanController controller = controllerMitShop(shop);
-        var req = new ScanController.ScanRequest("{\"cid\":\"CUST-TEST\",\"cardId\":\"CARD-TEST\"}", 1, null, null);
+        var req = new ScanController.ScanRequest("{\"cid\":\"CUST-TEST\",\"cardId\":\"CARD-TEST\"}", 1, 0.0, 0.0);
+        // Mock-Laden steht bei 0/0 (Mockito-Standard), gescannt wird am selben Ort.
 
         var antwort = assertDoesNotThrow(() -> controller.scan(req, authFuer(shop)));
 

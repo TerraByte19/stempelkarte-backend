@@ -82,7 +82,7 @@ class PunkteControllerTest {
         PointsController controller = new PointsController(service, mock(WalletNotifier.class), geoStumpf());
 
         var antwort = controller.earn(
-                new PointsController.EarnRequest("{}", 14_500, null, null),
+                new PointsController.EarnRequest("{}", 14_500, 0.0, 0.0),
                 authMit(shop, "Kasse 1"));
 
         verify(service).earn(anyString(), any(Shop.class), anyLong(), eq("Kasse 1"));
@@ -100,7 +100,7 @@ class PunkteControllerTest {
                 .thenReturn(ergebnis());
 
         new PointsController(service, notifier, geoStumpf()).earn(
-                new PointsController.EarnRequest("{}", 14_500, null, null),
+                new PointsController.EarnRequest("{}", 14_500, 0.0, 0.0),
                 authMit(shop, "Kasse 1"));
 
         // Nur die ID wandert nach draussen, keine Entity - der Controller

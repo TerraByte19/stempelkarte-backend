@@ -58,9 +58,8 @@ public class ScanController {
     public record ScanRequest(
             @NotBlank String qrPayload,
             @Min(1) @Max(20) int count,
-            // Ort des Geraets, falls der Browser ihn hergibt. Optional: ohne
-            // Erlaubnis oder ohne Empfang kommt hier null an, und der Scan
-            // laeuft trotzdem durch.
+            // Ort des Geraets. Fehlt er oder liegt er ausserhalb des Radius,
+            // wird nicht gestempelt (GeoPruefung.sperre).
             Double lat,
             Double lon
     ) {}
@@ -98,15 +97,18 @@ public class ScanController {
                     com.example.stemplekarte.service.StandortPflicht.sperrText());
         }
 
+        // Vor dem Stempel: nicht im Laden, kein Stempel.
+        String geoSperre = geoPruefung.sperre(shop,
+                ((StaffTokenFilter.StaffPrincipal) auth.getPrincipal()).staff().getLabel(),
+                req.lat(), req.lon());
+        if (geoSperre != null) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, geoSperre);
+        }
+
         int count = req.count() <= 0 ? 1 : req.count();
 
         ScanResult result = service.processScan(req.qrPayload(), shop, count);
         var cc = result.customerCard();
-
-        // Nach dem Stempel: nur melden, nie blockieren.
-        geoPruefung.protokolliere(shop, cc.getCard().getId(), cc.getCustomer().getId(),
-                ((StaffTokenFilter.StaffPrincipal) auth.getPrincipal()).staff().getLabel(),
-                req.lat(), req.lon());
 
         // Startpunkt jeder Wallet-Kette. Ab hier laesst sich ein Vorfall
         // vollstaendig verfolgen: nach serial greppen und die [WALLET]-Zeilen
