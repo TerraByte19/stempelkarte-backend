@@ -110,6 +110,11 @@ public class Shop {
     @Column(name = "lock_screen_text_progress", length = 120)
     private String lockScreenTextProgress;
 
+    // Scan-Radius der Geo-Sperre in Metern, vom Inhaber waehlbar
+    // (GeoPruefung.ERLAUBTE_RADIEN). Null = Standard.
+    @Column(name = "scan_radius_meter")
+    private Integer scanRadiusMeter;
+
     // Sonntag aus der Statistik ausrechnen (Ø/Tag, staerkster/ruhigster Tag) -
     // viele Laeden haben sonntags zu, dann ist Sonntag trivial immer "ruhigster
     // Tag". Pro Laden vom Laden selbst umschaltbar; das Admin-Panel zeigt nur
@@ -268,6 +273,13 @@ public class Shop {
 
     public String getLockScreenTextFull() { return lockScreenTextFull; }
     public String getLockScreenTextProgress() { return lockScreenTextProgress; }
+
+    public Integer getScanRadiusMeter() { return scanRadiusMeter; }
+
+    public void updateScanRadius(int meter) {
+        this.scanRadiusMeter = meter;
+        this.updatedAt = Instant.now();
+    }
 
     /** Leerer Text = zurueck auf den Standardtext. */
     public void updateLockScreenTexts(String full, String progress) {

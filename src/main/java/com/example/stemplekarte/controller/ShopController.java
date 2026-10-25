@@ -185,7 +185,18 @@ public class ShopController {
                 com.example.stemplekarte.service.StandortPflicht.fristEnde().toString());
         map.put("lockScreenTextFull", shop.getLockScreenTextFull());
         map.put("lockScreenTextProgress", shop.getLockScreenTextProgress());
+        map.put("scanRadiusMeter", com.example.stemplekarte.service.GeoPruefung.radiusFuer(shop));
         return map;
+    }
+
+    public record ScanRadiusRequest(int meter) {}
+
+    @Operation(summary = "Scan-Radius der Geo-Sperre waehlen (150, 200 oder 250 m)")
+    @PutMapping("/me/scan-radius")
+    public Map<String, Object> updateScanRadius(@RequestBody ScanRadiusRequest req,
+                                                Authentication auth) {
+        Shop updated = shopService.updateScanRadius(currentShop(auth).getId(), req.meter());
+        return Map.of("scanRadiusMeter", com.example.stemplekarte.service.GeoPruefung.radiusFuer(updated));
     }
 
     public record LockScreenRequest(Boolean enabled, Double latitude, Double longitude,
