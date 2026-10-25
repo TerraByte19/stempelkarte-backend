@@ -112,6 +112,20 @@ public class ShopService {
         return shopRepo.save(shop);
     }
 
+    /** Rueckhol-Nachricht. Tage nur aus der Auswahl im Profil. */
+    @Transactional
+    public Shop updateRueckhol(String shopId, boolean enabled, int days, String text) {
+        if (!RueckholService.ERLAUBTE_TAGE.contains(days)) {
+            throw new IllegalArgumentException("Tage muessen 14, 21 oder 30 sein");
+        }
+        if (text != null && text.length() > 160) {
+            throw new IllegalArgumentException("Text darf hoechstens 160 Zeichen haben");
+        }
+        Shop shop = getById(shopId);
+        shop.updateRueckhol(enabled, days, text);
+        return shopRepo.save(shop);
+    }
+
     /** Eigener Text fuer die Sperrbildschirm-Erinnerung. Leer = Standardtext. */
     @Transactional
     public Shop updateLockScreenTexts(String shopId, String textFull, String textProgress) {

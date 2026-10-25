@@ -56,6 +56,21 @@ public class CustomerCard {
     @Column(name = "consent_at")
     private Instant consentAt;
 
+    // ── Rueckhol-Nachricht (RueckholService) ─────────────────────────────
+    // Letzter Besuch = letzte Buchung durch das Personal. updatedAt taugt
+    // dafuer nicht: das aendert sich auch beim Verschicken der Nachricht.
+    // Null bei Karten von vor dieser Spalte - dann gilt updatedAt.
+    @Column(name = "last_visit_at")
+    private Instant lastVisitAt;
+
+    @Column(name = "winback_sent_at")
+    private Instant winbackSentAt;
+
+    // Der Text, wie er verschickt wurde. Steht im Pass, bis der Kunde
+    // wiederkommt - aendert der Laden seinen Text, bleibt die alte Nachricht.
+    @Column(name = "winback_text", length = 300)
+    private String winbackText;
+
     protected CustomerCard() {}
 
     public static CustomerCard create(Customer customer, Card card) {
@@ -74,6 +89,7 @@ public class CustomerCard {
     public void addStamp() {
         this.stamps++;
         this.updatedAt = Instant.now();
+        this.lastVisitAt = this.updatedAt;
     }
 
     /**
@@ -88,6 +104,7 @@ public class CustomerCard {
         this.stamps = Math.max(0, this.stamps - Math.max(1, threshold));
         this.totalRewards++;
         this.updatedAt = Instant.now();
+        this.lastVisitAt = this.updatedAt;
     }
 
     /**
@@ -116,6 +133,7 @@ public class CustomerCard {
         long vorher = this.pointsX100;
         this.pointsX100 = Math.max(0, vorher + deltaX100);
         this.updatedAt = Instant.now();
+        this.lastVisitAt = this.updatedAt;
         return this.pointsX100 - vorher;
     }
 
@@ -128,6 +146,7 @@ public class CustomerCard {
     public void zaehleBelohnung() {
         this.totalRewards++;
         this.updatedAt = Instant.now();
+        this.lastVisitAt = this.updatedAt;
     }
 
     /** Ruecknahme einer Einloesung. Geht nie unter null - sonst stuende auf
@@ -148,6 +167,44 @@ public class CustomerCard {
         this.marketingConsent = false;
     }
 
+    public Instant letzterBesuch() {
+        return lastVisitAt != null ? lastVisitAt : updatedAt;
+    }
+
+    /**
+     * Seit vor der Grenze nicht mehr da UND seit dem letzten Besuch noch
+     * keine Nachricht bekommen. Pro Pause also genau eine Nachricht.
+     */
+    public boolean rueckholFaellig(Instant grenze) {
+        Instant besuch = letzterBesuch();
+        return besuch != null && besuch.isBefore(grenze)
+                && (winbackSentAt == null || winbackSentAt.isBefore(besuch));
+    }
+
+    /** Nachricht verschickt und der Kunde war seitdem nicht da. */
+    public boolean rueckholSichtbar() {
+        return winbackSentAt != null && winbackText != null
+                && (lastVisitAt == null || winbackSentAt.isAfter(lastVisitAt));
+    }
+
+    /**
+     * Pass neu ausliefern lassen, ohne etwas zu melden: bringt das
+     * Nachrichtenfeld aufs Handy, bevor die erste Nachricht kommt. Der letzte
+     * Besuch wird vorher festgehalten, sonst saehe updatedAt wie einer aus.
+     */
+    public void passAuffrischen(Instant jetzt) {
+        if (lastVisitAt == null) lastVisitAt = updatedAt;
+        this.updatedAt = jetzt;
+    }
+
+    public void rueckholGesendet(String text, Instant jetzt) {
+        if (lastVisitAt == null) lastVisitAt = updatedAt;
+        this.winbackText = text;
+        this.winbackSentAt = jetzt;
+        // updatedAt bewegen, damit iOS den Pass mit der Nachricht abholt.
+        this.updatedAt = jetzt;
+    }
+
     public String getId() { return id; }
     public Customer getCustomer() { return customer; }
     public Card getCard() { return card; }
@@ -159,4 +216,7 @@ public class CustomerCard {
     public Instant getUpdatedAt() { return updatedAt; }
     public boolean isMarketingConsent() { return marketingConsent; }
     public Instant getConsentAt() { return consentAt; }
+    public Instant getLastVisitAt() { return lastVisitAt; }
+    public Instant getWinbackSentAt() { return winbackSentAt; }
+    public String getWinbackText() { return winbackText; }
 }

@@ -46,4 +46,15 @@ public interface CustomerCardRepository extends JpaRepository<CustomerCard, Stri
     // open-in-view aus ist - sonst knallt der Zugriff spaeter.
     @EntityGraph(attributePaths = {"customer", "card"})
     List<CustomerCard> findByCard_ShopAndMarketingConsentTrue(Shop shop);
+
+    // Rueckhol-Nachricht: aktive Karten eines Ladens, deren Kunde seit vor der
+    // Grenze nicht da war und seitdem keine Nachricht bekommen hat. Laengste
+    // Pause zuerst. Dieselbe Regel steht als CustomerCard#rueckholFaellig.
+    @EntityGraph(attributePaths = {"card", "card.shop", "customer"})
+    @Query("select cc from CustomerCard cc where cc.card.shop = :shop and cc.card.active = true "
+            + "and coalesce(cc.lastVisitAt, cc.updatedAt) < :grenze "
+            + "and (cc.winbackSentAt is null or cc.winbackSentAt < coalesce(cc.lastVisitAt, cc.updatedAt)) "
+            + "order by coalesce(cc.lastVisitAt, cc.updatedAt)")
+    List<CustomerCard> findRueckholKandidaten(Shop shop, java.time.Instant grenze,
+                                              org.springframework.data.domain.Pageable seite);
 }

@@ -179,6 +179,41 @@ public class GoogleWalletService {
     }
 
     /**
+     * Rueckhol-Nachricht (RueckholService). TEXT_AND_NOTIFY statt TEXT: nur
+     * damit zeigt Android eine Benachrichtigung, sonst steht die Nachricht
+     * nur still in der Karte. Google laesst davon hoechstens drei pro Tag
+     * und Karte durch - eine pro Pause liegt weit darunter.
+     */
+    @Async
+    @Transactional
+    public void sendeNachricht(String customerCardId, String titel, String text) {
+        if (credentials == null || walletClient == null) return;
+        try {
+            CustomerCard cc = customerCardRepo.findById(customerCardId)
+                    .orElseThrow(() -> new NoSuchElementException("CustomerCard nicht gefunden: " + customerCardId));
+            String objectId = objectIdFor(cc);
+
+            Message message = new Message()
+                    .setHeader(titel)
+                    .setBody(text)
+                    .setMessageType("TEXT_AND_NOTIFY")
+                    .setId("winback-" + customerCardId + "-" + System.currentTimeMillis());
+
+            walletClient.loyaltyobject()
+                    .addmessage(objectId, new AddMessageRequest().setMessage(message))
+                    .execute();
+            log.info("Google Wallet Rueckhol-Nachricht gesendet: {}", objectId);
+        } catch (com.google.api.client.googleapis.json.GoogleJsonResponseException e) {
+            // 404 = Kunde hat die Karte nie in Google Wallet gelegt. Normalfall.
+            if (e.getStatusCode() != 404) {
+                log.error("Google Wallet Rueckhol-Nachricht Fehler: {}", e.getMessage());
+            }
+        } catch (Exception e) {
+            log.error("Google Wallet Rueckhol-Nachricht Fehler: {}", e.getMessage());
+        }
+    }
+
+    /**
      * Schreibt das Design (Farbe, Logo, Hero, Name) einer Karte in die
      * Google Wallet Class neu — damit Änderungen aus dem Design-Panel
      * sofort bei allen bereits gespeicherten Karten ankommen.

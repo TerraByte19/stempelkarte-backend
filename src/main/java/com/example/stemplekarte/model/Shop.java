@@ -115,6 +115,23 @@ public class Shop {
     @Column(name = "lock_screen_radius_meter")
     private Integer lockScreenRadiusMeter;
 
+    // Rueckhol-Nachricht: wer so viele Tage nicht da war, bekommt eine
+    // Wallet-Nachricht (RueckholService). Nullable -> Bestandslaeden = aus.
+    @Column(name = "winback_enabled")
+    private Boolean winbackEnabled;
+
+    // Seit wann an. Nur Paesse, die danach ausgeliefert wurden, tragen das
+    // Nachrichtenfeld - aeltere bekommen es erst still nachgereicht.
+    @Column(name = "winback_enabled_at")
+    private Instant winbackEnabledAt;
+
+    @Column(name = "winback_days")
+    private Integer winbackDays;
+
+    // Eigener Text, Platzhalter wie beim Sperrbildschirm. Null = Standard.
+    @Column(name = "winback_text", length = 160)
+    private String winbackText;
+
     // Sonntag aus der Statistik ausrechnen (Ø/Tag, staerkster/ruhigster Tag) -
     // viele Laeden haben sonntags zu, dann ist Sonntag trivial immer "ruhigster
     // Tag". Pro Laden vom Laden selbst umschaltbar; das Admin-Panel zeigt nur
@@ -285,6 +302,21 @@ public class Shop {
     public void updateLockScreenTexts(String full, String progress) {
         this.lockScreenTextFull = (full == null || full.isBlank()) ? null : full.trim();
         this.lockScreenTextProgress = (progress == null || progress.isBlank()) ? null : progress.trim();
+        this.updatedAt = Instant.now();
+    }
+
+    // ── Rueckhol-Nachricht ────────────────────────────────────────────────
+
+    public boolean isRueckholAktiv() { return Boolean.TRUE.equals(winbackEnabled); }
+    public Instant getWinbackEnabledAt() { return winbackEnabledAt; }
+    public Integer getWinbackDays() { return winbackDays; }
+    public String getWinbackText() { return winbackText; }
+
+    public void updateRueckhol(boolean enabled, int days, String text) {
+        if (enabled && !isRueckholAktiv()) this.winbackEnabledAt = Instant.now();
+        this.winbackEnabled = enabled;
+        this.winbackDays = days;
+        this.winbackText = (text == null || text.isBlank()) ? null : text.trim();
         this.updatedAt = Instant.now();
     }
 

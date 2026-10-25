@@ -187,7 +187,28 @@ public class ShopController {
         map.put("lockScreenTextProgress", shop.getLockScreenTextProgress());
         map.put("lockScreenRadiusMeter",
                 com.example.stemplekarte.wallet.ApplePassService.radiusFuer(shop));
+        rueckholFelder(map, shop);
         return map;
+    }
+
+    private static void rueckholFelder(Map<String, Object> map, Shop shop) {
+        map.put("winbackEnabled", shop.isRueckholAktiv());
+        map.put("winbackDays", com.example.stemplekarte.service.RueckholService.tageFuer(shop));
+        map.put("winbackText", shop.getWinbackText());
+    }
+
+    public record WinbackRequest(boolean enabled, int days, String text) {}
+
+    @Operation(summary = "Rueckhol-Nachricht einstellen",
+            description = "Wer so viele Tage (14, 21 oder 30) nicht da war, bekommt einmal "
+                    + "eine Nachricht auf seine Wallet-Karte. Text leer = Standardtext.")
+    @PutMapping("/me/winback")
+    public Map<String, Object> updateWinback(@RequestBody WinbackRequest req, Authentication auth) {
+        Shop updated = shopService.updateRueckhol(
+                currentShop(auth).getId(), req.enabled(), req.days(), req.text());
+        Map<String, Object> out = new HashMap<>();
+        rueckholFelder(out, updated);
+        return out;
     }
 
     public record LockScreenRequest(Boolean enabled, Double latitude, Double longitude,

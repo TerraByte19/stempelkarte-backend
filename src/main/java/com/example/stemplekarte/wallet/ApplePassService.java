@@ -5,6 +5,7 @@ import com.example.stemplekarte.model.Card;
 import com.example.stemplekarte.model.CustomerCard;
 import com.example.stemplekarte.model.Reward;
 import com.example.stemplekarte.model.Shop;
+import com.example.stemplekarte.service.KartenFortschritt;
 import com.example.stemplekarte.service.PointsMath;
 import com.example.stemplekarte.service.RewardService;
 import de.brendamour.jpasskit.PKBarcode;
@@ -14,6 +15,7 @@ import de.brendamour.jpasskit.PKPass;
 import de.brendamour.jpasskit.enums.PKBarcodeFormat;
 import de.brendamour.jpasskit.enums.PKPassType;
 import de.brendamour.jpasskit.passes.PKGenericPass;
+import de.brendamour.jpasskit.passes.PKGenericPassBuilder;
 import de.brendamour.jpasskit.signing.PKFileBasedSigningUtil;
 import de.brendamour.jpasskit.signing.PKPassTemplateFolder;
 import de.brendamour.jpasskit.signing.PKSigningInformation;
@@ -258,7 +260,9 @@ public class ApplePassService {
         // Regel dieses Umbaus: die Pässe, die gerade in echten Laeden liegen,
         // bleiben Feld fuer Feld wie sie sind.
         if (card.isPoints()) {
-            return baueFelderPunkte(card, cc);
+            var punkte = baueFelderPunkte(card, cc);
+            nachrichtFeld(punkte, card.getShop(), cc);
+            return punkte.build();
         }
 
         int threshold = card.getRewardThreshold();
@@ -307,7 +311,32 @@ public class ApplePassService {
                             .key("name").label("KUNDE").value(cc.getCustomer().getName()));
         }
 
+        nachrichtFeld(genericPass, card.getShop(), cc);
         return genericPass.build();
+    }
+
+    /**
+     * Rueckseitenfeld fuer die Rueckhol-Nachricht (RueckholService).
+     *
+     * Nur bei Laeden, die die Funktion an haben - alle anderen Paesse bleiben
+     * Feld fuer Feld wie sie sind. Das Feld steht dann IMMER im Pass, nicht
+     * nur waehrend einer Nachricht: iOS meldet eine Aenderung nur sicher, wenn
+     * es den alten Wert kennt. Ein Feld, das erst mit der Nachricht
+     * auftaucht, kann still bleiben.
+     *
+     * Das changeMessage haengt nur am Feld, solange die Nachricht gilt. Kommt
+     * der Kunde wieder, faellt das Feld auf den Ruhetext zurueck, ohne
+     * changeMessage - sonst gaebe es beim Stempeln eine zweite Meldung.
+     */
+    private void nachrichtFeld(PKGenericPassBuilder pass, Shop shop, CustomerCard cc) {
+        if (shop == null || !shop.isRueckholAktiv()) return;
+        var feld = PKField.builder().key("nachricht").label("NACHRICHT");
+        if (cc.rueckholSichtbar()) {
+            feld.value(cc.getWinbackText()).changeMessage("%@");
+        } else {
+            feld.value("Hier erscheinen Nachrichten von " + shop.getName() + ".");
+        }
+        pass.backFieldBuilder(feld);
     }
 
     /**
@@ -322,7 +351,7 @@ public class ApplePassService {
      * sich, wenn ueberhaupt etwas einloesbar ist - nicht bei jeder Buchung,
      * sonst wird die Sperrbildschirm-Meldung zum Rauschen.
      */
-    private PKGenericPass baueFelderPunkte(Card card, CustomerCard cc) {
+    private PKGenericPassBuilder baueFelderPunkte(Card card, CustomerCard cc) {
         long stand = cc.getPointsX100();
         List<Reward> katalog = rewardService.list(card);
         Reward ziel = RewardService.naechstesZiel(katalog, stand);
@@ -380,7 +409,7 @@ public class ApplePassService {
                 .key("rate").label("So sammelst du")
                 .value(kursText(card)));
 
-        return genericPass.build();
+        return genericPass;
     }
 
     /** Der Kurs im Klartext, damit der Kunde seine Punkte selbst nachrechnen
@@ -399,52 +428,22 @@ public class ApplePassService {
             return List.of();
         }
 
-        String belohnung;
-        String offen;
-        String einheit;
-        boolean erreicht;
+        KartenFortschritt f = KartenFortschritt.von(card, cc, rewardService);
+        // Ohne Praemie gibt es nichts Sinnvolles zu melden. Lieber keine
+        // Ortsbindung als "Noch 0 Punkte bis: null".
+        if (f == null) return List.of();
 
-        if (card.isPoints()) {
-            List<Reward> katalog = rewardService.list(card);
-            Reward ziel = RewardService.naechstesZiel(katalog, cc.getPointsX100());
-            // Ohne Praemie gibt es nichts Sinnvolles zu melden. Lieber keine
-            // Ortsbindung als "Noch 0 Punkte bis: null".
-            if (ziel == null) return List.of();
-            long fehlend = Math.max(0, ziel.getCostPointsX100() - cc.getPointsX100());
-            belohnung = ziel.getName();
-            offen = PointsMath.formatiere(fehlend);
-            einheit = "Punkte";
-            erreicht = fehlend == 0;
-        } else {
-            int fehlend = card.getRewardThreshold() - cc.getStamps();
-            belohnung = card.getRewardText();
-            offen = String.valueOf(Math.max(0, fehlend));
-            // Einzahl beibehalten: "Noch 1 Stempel bis:" stand so schon da.
-            einheit = fehlend == 1 ? "Stempel" : "Stempel";
-            erreicht = fehlend <= 0;
-        }
-
-        String eigener = erreicht
+        String eigener = f.erreicht()
                 ? shop.getLockScreenTextFull()
                 : shop.getLockScreenTextProgress();
 
         String hinweis;
         if (eigener != null && !eigener.isBlank()) {
-            // Deutsche und englische Schreibweise, damit ein Laden den
-            // Platzhalter so nutzen kann, wie er in seiner Oberflaeche steht.
-            // Bei Punktekarten traegt {stempel}/{stamps} die fehlenden Punkte
-            // und {belohnung}/{reward} den Namen der naechsten Praemie - ein
-            // Text, den ein Laden fuer seine Stempelkarte geschrieben hat,
-            // laeuft damit unveraendert auch auf einer Punktekarte.
-            hinweis = eigener
-                    .replace("{belohnung}", belohnung)
-                    .replace("{reward}", belohnung)
-                    .replace("{stempel}", offen)
-                    .replace("{stamps}", offen);
+            hinweis = f.ersetze(eigener);
         } else {
-            hinweis = erreicht
-                    ? belohnung + " wartet auf dich"
-                    : "Noch " + offen + " " + einheit + " bis: " + belohnung;
+            hinweis = f.erreicht()
+                    ? f.belohnung() + " wartet auf dich"
+                    : "Noch " + f.offen() + " " + f.einheit() + " bis: " + f.belohnung();
         }
 
         return List.of(PKLocation.builder()
