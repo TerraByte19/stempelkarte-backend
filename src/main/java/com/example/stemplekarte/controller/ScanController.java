@@ -40,6 +40,17 @@ public class ScanController {
         this.geoPruefung = geoPruefung;
     }
 
+    @Operation(summary = "Einstellungen des Ladens fuer den Scanner",
+            description = "standortPflicht=false: der Laden ist vom Admin befreit, der "
+                    + "Scanner fragt dann nicht nach dem Standort. Erfordert X-Staff-Token.")
+    @GetMapping("/einstellungen")
+    public java.util.Map<String, Object> einstellungen(Authentication auth) {
+        if (auth == null || !(auth.getPrincipal() instanceof StaffTokenFilter.StaffPrincipal p)) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Kein gueltiger Staff-Token");
+        }
+        return java.util.Map.of("standortPflicht", !p.staff().getShop().isGeoBefreit());
+    }
+
     public record StateRequest(@NotBlank String qrPayload) {}
 
     @Operation(summary = "QR aufloesen: welcher Kartentyp, welcher Stand",

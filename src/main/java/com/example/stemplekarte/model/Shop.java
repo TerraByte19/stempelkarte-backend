@@ -144,6 +144,11 @@ public class Shop {
     @Column(name = "name_color", length = 7)
     private String nameColor;
 
+    // Vom Admin befreit: kein Ladenort noetig, keine Geo-Pruefung beim Scan.
+    // Null = nicht befreit, also Pflicht wie fuer alle.
+    @Column(name = "geo_befreit")
+    private Boolean geoBefreit;
+
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
@@ -322,6 +327,15 @@ public class Shop {
         this.winbackEnabled = enabled;
         this.winbackDays = days;
         this.winbackText = (text == null || text.isBlank()) ? null : text.trim();
+        this.updatedAt = Instant.now();
+    }
+
+    // ── Standort-Pflicht ────────────────────────────────────────────────
+
+    public boolean isGeoBefreit() { return Boolean.TRUE.equals(geoBefreit); }
+
+    public void setGeoBefreit(boolean befreit) {
+        this.geoBefreit = befreit;
         this.updatedAt = Instant.now();
     }
 

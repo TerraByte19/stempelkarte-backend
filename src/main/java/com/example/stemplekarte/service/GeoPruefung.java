@@ -74,6 +74,8 @@ public class GeoPruefung {
      * als Vorfall in der Datenbank.
      */
     public String sperre(Shop shop, String staffLabel, Double scanLat, Double scanLon) {
+        // Vom Admin befreit: weder Ort noetig noch Entfernung geprueft.
+        if (shop.isGeoBefreit()) return null;
         GeoVorfall.Art art = pruefe(shop.getLatitude(), shop.getLongitude(),
                 scanLat, scanLon, RADIUS_METER);
         if (art == null) return null;

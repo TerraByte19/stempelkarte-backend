@@ -179,6 +179,7 @@ public class ShopController {
         map.put("longitude", shop.getLongitude());
         // Standort-Pflicht: das Dashboard zeigt daraus Hinweis oder Warnung.
         map.put("standortGesetzt", com.example.stemplekarte.service.StandortPflicht.hatStandort(shop));
+        map.put("geoBefreit", shop.isGeoBefreit());
         map.put("scanGesperrt", !com.example.stemplekarte.service.StandortPflicht
                 .darfScannen(shop, java.time.Instant.now()));
         map.put("standortFristBis",

@@ -159,6 +159,9 @@ public class AdminController {
             map.put("customerCount", customerCount);
             map.put("maxTokens", shop.getMaxTokens());
             map.put("language", shop.getLanguageOrDefault());
+            map.put("geoBefreit", shop.isGeoBefreit());
+            map.put("standortGesetzt",
+                    com.example.stemplekarte.service.StandortPflicht.hatStandort(shop));
             return map;
         }).toList();
 
@@ -378,6 +381,23 @@ public class AdminController {
                     "error", "Sperren fehlgeschlagen",
                     "detail", String.valueOf(e.getMessage())));
         }
+    }
+
+    /**
+     * Standort-Pflicht fuer einen Laden an/aus. Befreit heisst: kein Ladenort
+     * noetig, keine Geo-Pruefung beim Scannen, der Scanner fragt nicht nach
+     * dem Standort.
+     */
+    @PostMapping("/shops/{shopId}/geo-pflicht")
+    public ResponseEntity<Map<String, Object>> toggleGeoPflicht(@PathVariable String shopId) {
+        Shop shop = shopRepo.findById(shopId).orElse(null);
+        if (shop == null) {
+            return ResponseEntity.status(404).body(Map.of("error", "Shop nicht gefunden: " + shopId));
+        }
+        shop.setGeoBefreit(!shop.isGeoBefreit());
+        shopRepo.save(shop);
+        log.info("[ADMIN] Standort-Pflicht laden={} befreit={}", shop.getId(), shop.isGeoBefreit());
+        return ResponseEntity.ok(Map.of("id", shop.getId(), "geoBefreit", shop.isGeoBefreit()));
     }
 
     /**

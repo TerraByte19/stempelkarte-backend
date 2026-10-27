@@ -50,6 +50,8 @@ public final class StandortPflicht {
     }
 
     public static boolean darfScannen(Shop shop, Instant jetzt) {
+        // Vom Admin befreit: der Laden braucht keinen Ort.
+        if (shop.isGeoBefreit()) return true;
         if (hatStandort(shop)) return true;
         if (istNeu(shop)) return false;
         return jetzt.isBefore(fristEnde());

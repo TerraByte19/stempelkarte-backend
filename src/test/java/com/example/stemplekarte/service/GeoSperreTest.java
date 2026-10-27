@@ -50,6 +50,24 @@ class GeoSperreTest {
         verify(repo).save(any(GeoVorfall.class));
     }
 
+    /** Vom Admin befreit: weder ohne Ort noch weit weg wird gesperrt. */
+    @Test
+    void befreiterLadenScanntUeberall() {
+        Shop shop = laden();
+        when(shop.isGeoBefreit()).thenReturn(true);
+        assertThat(pruefung.sperre(shop, "Kasse 1", null, null)).isNull();
+        assertThat(pruefung.sperre(shop, "Kasse 1", 52.5190, 13.4010)).isNull();
+        verify(repo, never()).save(any());
+    }
+
+    @Test
+    void befreiterLadenBrauchtKeinenStandort() {
+        Shop shop = mock(Shop.class);
+        when(shop.isGeoBefreit()).thenReturn(true);
+        when(shop.getCreatedAt()).thenReturn(java.time.Instant.now());
+        assertThat(StandortPflicht.darfScannen(shop, java.time.Instant.now())).isTrue();
+    }
+
     @Test
     void protokollFehlerHebtSperreNichtAuf() {
         when(repo.save(any())).thenThrow(new RuntimeException("DB weg"));
