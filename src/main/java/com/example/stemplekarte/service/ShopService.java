@@ -112,6 +112,20 @@ public class ShopService {
         return shopRepo.save(shop);
     }
 
+    /**
+     * Farbe des Ladennamens. Nur #RRGGBB: der Wert landet in CSS auf der
+     * Kundenseite und als Zeichenfarbe im Pass-Logo.
+     */
+    @Transactional
+    public Shop updateNameColor(String shopId, String color) {
+        if (color != null && !color.isBlank() && !color.trim().matches("#[0-9A-Fa-f]{6}")) {
+            throw new IllegalArgumentException("Farbe muss im Format #RRGGBB sein");
+        }
+        Shop shop = getById(shopId);
+        shop.updateNameColor(color);
+        return shopRepo.save(shop);
+    }
+
     /** Rueckhol-Nachricht. Tage nur aus der Auswahl im Profil. */
     @Transactional
     public Shop updateRueckhol(String shopId, boolean enabled, int days, String text) {

@@ -139,6 +139,11 @@ public class Shop {
     @Column(name = "exclude_sunday_from_stats")
     private Boolean excludeSundayFromStats;
 
+    // Eigene Farbe fuer den Ladennamen (#RRGGBB). Null = wie bisher: auf der
+    // Kundenseite die Kontrastfarbe, im Apple-Pass die Textfarbe der Karte.
+    @Column(name = "name_color", length = 7)
+    private String nameColor;
+
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
@@ -317,6 +322,16 @@ public class Shop {
         this.winbackEnabled = enabled;
         this.winbackDays = days;
         this.winbackText = (text == null || text.isBlank()) ? null : text.trim();
+        this.updatedAt = Instant.now();
+    }
+
+    // ── Farbe des Ladennamens ───────────────────────────────────────────
+
+    public String getNameColor() { return nameColor; }
+
+    /** Null oder leer = automatisch. Geprueft wird im ShopService. */
+    public void updateNameColor(String color) {
+        this.nameColor = (color == null || color.isBlank()) ? null : color.trim().toUpperCase();
         this.updatedAt = Instant.now();
     }
 

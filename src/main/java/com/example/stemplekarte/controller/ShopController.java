@@ -188,7 +188,21 @@ public class ShopController {
         map.put("lockScreenRadiusMeter",
                 com.example.stemplekarte.wallet.ApplePassService.radiusFuer(shop));
         rueckholFelder(map, shop);
+        map.put("nameColor", shop.getNameColor());
         return map;
+    }
+
+    public record NameColorRequest(String color) {}
+
+    @Operation(summary = "Farbe des Ladennamens setzen",
+            description = "Wirkt auf der Kundenseite und im Apple-Pass (Name wird dann ins "
+                    + "Logo gezeichnet). Leer = automatisch. Google Wallet waehlt die Farbe selbst.")
+    @PutMapping("/me/name-color")
+    public Map<String, Object> updateNameColor(@RequestBody NameColorRequest req, Authentication auth) {
+        Shop updated = shopService.updateNameColor(currentShop(auth).getId(), req.color());
+        Map<String, Object> out = new HashMap<>();
+        out.put("nameColor", updated.getNameColor());
+        return out;
     }
 
     private static void rueckholFelder(Map<String, Object> map, Shop shop) {

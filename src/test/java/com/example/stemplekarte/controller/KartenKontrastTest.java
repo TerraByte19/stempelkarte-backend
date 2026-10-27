@@ -39,4 +39,20 @@ class KartenKontrastTest {
         assertThat(LandingController.mitKontrast("<html><body><div class=\"card\"></div></body></html>", "#FFFFFF"))
                 .contains("<body style=\"--ink: 26,26,46; --ink-gegen: 255,255,255\">");
     }
+
+    private static final String SEITE = "<html><head></head><body><div class=\"shop-name\">X</div></body></html>";
+
+    @Test
+    void eigeneNamensFarbe_landetAlsRegel() {
+        assertThat(LandingController.mitKontrast(SEITE, "#000000", "#FF8800"))
+                .contains("<style>.shop-name { color: #FF8800; }</style></head>")
+                .contains("--ink: 255,255,255");
+    }
+
+    @Test
+    void ohneOderKaputteNamensFarbe_keineRegel() {
+        assertThat(LandingController.mitKontrast(SEITE, "#000000", null)).doesNotContain(".shop-name {");
+        assertThat(LandingController.mitKontrast(SEITE, "#000000", "red;}body{opacity:0"))
+                .doesNotContain("opacity");
+    }
 }

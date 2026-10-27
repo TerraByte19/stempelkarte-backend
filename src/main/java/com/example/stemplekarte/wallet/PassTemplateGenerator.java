@@ -122,7 +122,12 @@ public class PassTemplateGenerator {
         Files.writeString(templatePath.resolve("pass.json"),
                 generatePassJson(shop.getName(), card.getName(), bgColor, fgColor, labelColor));
 
-        generateLogoImages(logoUrl, shop.getName(), bgColor, templatePath);
+        Color namensFarbe = eigeneNamensFarbe(shop);
+        if (namensFarbe != null) {
+            generateLogoMitName(logoUrl, shop.getName(), namensFarbe, templatePath);
+        } else {
+            generateLogoImages(logoUrl, shop.getName(), bgColor, templatePath);
+        }
         generateIconImages(logoUrl, bgColor, templatePath);
 
         deleteStripImages(templatePath);
@@ -373,6 +378,84 @@ public class PassTemplateGenerator {
                 templatePath.resolve("logo@2x.png").toString());
         createTextLogo(shopName, bgColor, 480, 150,
                 templatePath.resolve("logo@3x.png").toString());
+    }
+
+    /** Eigene Farbe des Ladennamens, oder null = wie bisher (logoText). */
+    static Color eigeneNamensFarbe(Shop shop) {
+        String c = shop.getNameColor();
+        if (c == null || !c.matches("#[0-9A-Fa-f]{6}")) return null;
+        return new Color(Integer.parseInt(c.substring(1), 16));
+    }
+
+    private void generateLogoMitName(String logoUrl, String shopName, Color farbe,
+                                     Path templatePath) throws IOException {
+        BufferedImage logo = null;
+        if (notBlank(logoUrl)) {
+            try {
+                logo = ladeBild("laden-logo", logoUrl);
+            } catch (Exception e) {
+                log.warn("[WALLET] BILD-FALLBACK zweck=laden-logo -> nur Name", e);
+            }
+        }
+        String[] dateien = {"logo.png", "logo@2x.png", "logo@3x.png"};
+        for (int faktor = 1; faktor <= 3; faktor++) {
+            ImageIO.write(logoMitName(logo, shopName, farbe, 160 * faktor, 50 * faktor), "PNG",
+                    templatePath.resolve(dateien[faktor - 1]).toFile());
+        }
+    }
+
+    /**
+     * Logo und Ladenname nebeneinander in einem Bild, der Name in der eigenen
+     * Farbe. Apple faerbt logoText immer in der Textfarbe der Karte - eine
+     * eigene Farbe fuer den Namen geht nur, wenn er im Bild steckt.
+     *
+     * Hoechstens maxW x h (Apple: 160 x 50 pt). Schrift so gross wie Apples
+     * eigener logoText; reicht der Platz nicht, wird sie kleiner und zuletzt
+     * der Name gekuerzt. Das Bild ist nur so breit wie sein Inhalt, damit
+     * die Kopffelder rechts daneben ihren Platz behalten.
+     */
+    static BufferedImage logoMitName(BufferedImage logo, String name, Color farbe, int maxW, int h) {
+        int logoW = 0;
+        int logoH = 0;
+        if (logo != null) {
+            double f = Math.min((double) h / logo.getHeight(), maxW * 0.45 / logo.getWidth());
+            logoW = Math.max(1, (int) Math.round(logo.getWidth() * f));
+            logoH = Math.max(1, (int) Math.round(logo.getHeight() * f));
+        }
+        int abstand = logo != null ? (int) Math.round(h * 0.16) : 0;
+        int platz = Math.max(1, maxW - logoW - abstand);
+
+        BufferedImage mess = new BufferedImage(1, 1, BufferedImage.TYPE_INT_ARGB);
+        Graphics2D mg = mess.createGraphics();
+        int groesse = (int) Math.round(h * 0.36);
+        int minGroesse = (int) Math.round(h * 0.26);
+        Font font = new Font(Font.SANS_SERIF, Font.BOLD, groesse);
+        FontMetrics fm = mg.getFontMetrics(font);
+        while (fm.stringWidth(name) > platz && groesse > minGroesse) {
+            font = new Font(Font.SANS_SERIF, Font.BOLD, --groesse);
+            fm = mg.getFontMetrics(font);
+        }
+        String text = name;
+        while (fm.stringWidth(text) > platz && text.length() > 1) {
+            text = text.substring(0, text.length() - 2).stripTrailing() + "…";
+        }
+        mg.dispose();
+
+        int textW = fm.stringWidth(text);
+        int w = Math.min(maxW, logoW + abstand + textW + 2);
+        BufferedImage img = new BufferedImage(Math.max(1, w), h, BufferedImage.TYPE_INT_ARGB);
+        Graphics2D g = img.createGraphics();
+        g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+        g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+        g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+        if (logo != null) {
+            g.drawImage(halbiereBisPasst(logo, logoW, logoH), 0, (h - logoH) / 2, logoW, logoH, null);
+        }
+        g.setFont(font);
+        g.setColor(farbe);
+        g.drawString(text, logoW + abstand, (h + fm.getAscent() - fm.getDescent()) / 2);
+        g.dispose();
+        return img;
     }
 
     // --- ICON FÜR DIE PUSH-BENACHRICHTIGUNG ---

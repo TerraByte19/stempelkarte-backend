@@ -183,7 +183,7 @@ public class ApplePassService {
                 .organizationName(shop.getName())
                 .serialNumber(cc.getId())
                 .description(card.getName())
-                .logoText(shop.getName())
+                .logoText(logoTextFuer(shop))
                 // KEIN groupingIdentifier: laut Apple nur fuer Bordkarten und
                 // Event-Tickets zulaessig. Auf einer StoreCard koennen neuere
                 // iOS den aktualisierten Pass bei der Validierung ablehnen ->
@@ -217,6 +217,15 @@ public class ApplePassService {
     // verkleinern: iOS nimmt den kleineren Wert aus unserem und seinem
     // eigenen, und der liegt bei einer StoreCard bei rund 100 m. Mehr als
     // 100 anzubieten waere deshalb Augenwischerei.
+    /**
+     * Mit eigener Namensfarbe steckt der Name im Logo-Bild
+     * (PassTemplateGenerator#logoMitName). Apple faerbt logoText immer in der
+     * Textfarbe der Karte - stuende er zusaetzlich da, kaeme der Name doppelt.
+     */
+    static String logoTextFuer(Shop shop) {
+        return PassTemplateGenerator.eigeneNamensFarbe(shop) != null ? null : shop.getName();
+    }
+
     public static final long LOCK_SCREEN_RADIUS_M = 100L;
     public static final List<Integer> ERLAUBTE_RADIEN = List.of(50, 75, 100);
 

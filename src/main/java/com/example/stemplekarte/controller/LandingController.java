@@ -326,7 +326,7 @@ public class LandingController {
         return ResponseEntity.ok()
                 .header("Cache-Control", "no-store, no-cache, must-revalidate")
                 .header("Pragma", "no-cache")
-                .body(mitKontrast(html, bgColor));
+                .body(mitKontrast(html, bgColor, card.getShop().getNameColor()));
     }
 
     /** Die Zeile unter dem Punktestand. Ohne Praemie steht dort kein
@@ -663,7 +663,7 @@ public class LandingController {
             // der pageshow/visibilitychange-Handler ziehen den Stand live nach.
             return ResponseEntity.ok()
                     .header(org.springframework.http.HttpHeaders.CACHE_CONTROL, "no-cache")
-                    .body(mitKontrast(html, bgColor));
+                    .body(mitKontrast(html, bgColor, card.getShop().getNameColor()));
 
         } catch (Exception e) {
             return ResponseEntity.ok("""
@@ -860,7 +860,7 @@ public class LandingController {
                     toJsString(cardId)
             );
 
-            return ResponseEntity.ok(mitKontrast(html, bgColor));
+            return ResponseEntity.ok(mitKontrast(html, bgColor, card.getShop().getNameColor()));
         } catch (Exception e) {
             return ResponseEntity.ok("<html><body style='font-family:sans-serif;padding:40px;text-align:center'><h2>Karte nicht gefunden</h2></body></html>");
         }
@@ -887,6 +887,22 @@ public class LandingController {
      * Seite je nach Kartenfarbe Weiss oder Dunkel, was mehr Kontrast hat.
      */
     static String mitKontrast(String html, String bgColor) {
+        return mitKontrast(html, bgColor, null);
+    }
+
+    /**
+     * Wie oben, dazu die eigene Farbe des Ladennamens, falls gesetzt. Nur
+     * eine strenge Hex-Farbe kommt in die Seite - der Wert stammt vom Laden.
+     */
+    static String mitKontrast(String html, String bgColor, String nameColor) {
+        if (nameColor != null && nameColor.matches("#[0-9A-Fa-f]{6}")) {
+            html = html.replaceFirst("</head>",
+                    "<style>.shop-name { color: " + nameColor + "; }</style></head>");
+        }
+        return mitKontrastNurInk(html, bgColor);
+    }
+
+    private static String mitKontrastNurInk(String html, String bgColor) {
         String ink = inkFuer(bgColor);
         String gegen = ink.equals("255,255,255") ? "26,26,46" : "255,255,255";
         return html.replaceFirst("<body>",
