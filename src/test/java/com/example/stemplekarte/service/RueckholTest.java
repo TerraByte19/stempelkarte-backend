@@ -121,6 +121,13 @@ class RueckholTest {
         assertThat(cc.getUpdatedAt()).isEqualTo(spaeter);
     }
 
+    @Test
+    void zuLangerText_wirdGekuerztStattDasSpeichernZuSprengen() {
+        CustomerCard cc = kundenkarte(3);
+        cc.rueckholGesendet("x".repeat(500), spaeter);
+        assertThat(cc.getWinbackText()).hasSize(300);
+    }
+
     // ── Text ─────────────────────────────────────────────────────────────
 
     @Test

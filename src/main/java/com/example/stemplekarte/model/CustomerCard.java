@@ -199,7 +199,10 @@ public class CustomerCard {
 
     public void rueckholGesendet(String text, Instant jetzt) {
         if (lastVisitAt == null) lastVisitAt = updatedAt;
-        this.winbackText = text;
+        // Spalte fasst 300. Der Ladentext hat hoechstens 160, aber die
+        // Platzhalter koennen ihn verlaengern - ein zu langer Text liesse das
+        // Speichern scheitern, und die Karte kaeme jede Stunde wieder dran.
+        this.winbackText = (text != null && text.length() > 300) ? text.substring(0, 299) + "…" : text;
         this.winbackSentAt = jetzt;
         // updatedAt bewegen, damit iOS den Pass mit der Nachricht abholt.
         this.updatedAt = jetzt;
