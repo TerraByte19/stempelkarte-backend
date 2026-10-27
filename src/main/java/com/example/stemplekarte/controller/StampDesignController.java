@@ -21,6 +21,9 @@ import java.util.Map;
 @RequestMapping("/api/shop")
 public class StampDesignController {
 
+    // Gleiche Grenze wie das Namensfeld im Frontend.
+    static final int NAME_MAX = 18;
+
     private final ShopRepository shopRepo;
     private final CardService cardService;
     private final CloudinaryService cloudinary;
@@ -86,10 +89,12 @@ public class StampDesignController {
         return toMap(card);
     }
 
-    public record CardInfoRequest(String rewardText, Integer rewardThreshold) {}
+    public record CardInfoRequest(String name, String rewardText, Integer rewardThreshold) {}
 
-    // ── Karten-Text (Belohnung) und Stempelzahl einer bestehenden Karte ───
-    // aendern. Die Stempelzahl wirkt sofort auf bestehende Kundenkarten:
+    // ── Kartenname, Karten-Text (Belohnung) und Stempelzahl einer ──────────
+    // bestehenden Karte aendern. Der Name geht an Google als programName;
+    // die Klasse wird unten neu geschrieben.
+    // Die Stempelzahl wirkt sofort auf bestehende Kundenkarten:
     // hochsetzen heisst, volle Karten sind nicht mehr voll; runtersetzen
     // heisst, wer schon drueber liegt, loest beim naechsten Scan ein.
     @PutMapping("/cards/{cardId}/info")
@@ -98,6 +103,14 @@ public class StampDesignController {
                                               Authentication auth) {
         Shop shop = currentShop(auth);
         Card card = cardService.getByIdAndShop(cardId, shop);
+        if (req.name() != null) {
+            String name = req.name().trim();
+            if (name.isEmpty() || name.length() > NAME_MAX) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "Kartenname muss 1 bis " + NAME_MAX + " Zeichen lang sein");
+            }
+            card.setName(name);
+        }
         if (req.rewardText() != null && !req.rewardText().isBlank()) {
             card.setRewardText(req.rewardText().trim());
         }
@@ -115,7 +128,10 @@ public class StampDesignController {
         // Apple aktualisiert beim naechsten Pass-Abruf (latestPass baut aus
         // dem aktuellen Stand).
         googleWalletService.refreshClassForCard(card);
+        // "name" in der Antwort: daran erkennt das Frontend, ob das Backend das
+        // Feld schon kennt (ein aelteres ignoriert es und antwortet ohne).
         return Map.of(
+                "name", card.getName(),
                 "rewardText", card.getRewardText(),
                 "rewardThreshold", card.getRewardThreshold());
     }

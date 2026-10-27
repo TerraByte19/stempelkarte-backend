@@ -187,6 +187,7 @@ public class Card {
     public String getId() { return id; }
     public Shop getShop() { return shop; }
     public String getName() { return name; }
+    public void setName(String name) { this.name = name; }
     public String getDescription() { return description; }
     public int getRewardThreshold() { return rewardThreshold; }
     public String getRewardText() { return rewardText; }
