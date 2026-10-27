@@ -92,8 +92,9 @@ public class StampDesignController {
     public record CardInfoRequest(String name, String rewardText, Integer rewardThreshold) {}
 
     // ── Kartenname, Karten-Text (Belohnung) und Stempelzahl einer ──────────
-    // bestehenden Karte aendern. Der Name steht bei Google als programName
-    // auf der Karte; die Klasse wird unten neu geschrieben. Die Stempelzahl wirkt sofort auf bestehende Kundenkarten:
+    // bestehenden Karte aendern. Der Name geht an Google als programName;
+    // die Klasse wird unten neu geschrieben.
+    // Die Stempelzahl wirkt sofort auf bestehende Kundenkarten:
     // hochsetzen heisst, volle Karten sind nicht mehr voll; runtersetzen
     // heisst, wer schon drueber liegt, loest beim naechsten Scan ein.
     @PutMapping("/cards/{cardId}/info")

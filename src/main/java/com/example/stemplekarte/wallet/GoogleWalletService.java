@@ -259,13 +259,18 @@ public class GoogleWalletService {
         try {
             String classId = classIdFor(card);
             createOrUpdateClass(card, classId, true);
-            // Karten, die schon vor der Umstellung im Wallet liegen, haengen
-            // noch an der Laden-Klasse. Nur nachziehen, wenn es sie gibt -
-            // neue Laeden bekommen keine.
-            createOrUpdateClass(card, legacyClassIdFor(card.getShop()), false);
             log.info("Google Wallet Class nach Design-Aenderung aktualisiert: {}", classId);
         } catch (Exception e) {
             log.error("Google Wallet Class Refresh Fehler: {}", e.getMessage());
+        }
+        // Karten, die schon vor der Umstellung im Wallet liegen, haengen noch
+        // an der Laden-Klasse. Nur nachziehen, wenn es sie gibt - neue Laeden
+        // bekommen keine. Eigener try-Block: scheitert die Karten-Klasse,
+        // sollen diese Kunden ihr Design trotzdem bekommen.
+        try {
+            createOrUpdateClass(card, legacyClassIdFor(card.getShop()), false);
+        } catch (Exception e) {
+            log.error("Google Wallet Laden-Class Refresh Fehler: {}", e.getMessage());
         }
     }
 
