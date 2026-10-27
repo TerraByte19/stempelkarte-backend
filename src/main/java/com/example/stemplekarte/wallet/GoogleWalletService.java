@@ -80,8 +80,44 @@ public class GoogleWalletService {
         }
     }
 
-    private String classIdFor(Shop shop) {
+    /**
+     * Eine Google-Klasse pro Karte. Die Klasse traegt Kartenname, Logo, Farbe
+     * und Hero-Bild. Teilten sich zwei Karten eines Ladens eine Klasse, hat die
+     * zuletzt gespeicherte ihren Namen und ihr Design auf die andere
+     * geschrieben - auf Android stand dann der falsche Kartenname.
+     */
+    String classIdFor(Card card) {
+        return props.google().issuerId() + ".card_" + card.getId().replace("-", "_");
+    }
+
+    /**
+     * Die alte gemeinsame Klasse je Laden. Google erlaubt nicht, das classId
+     * eines schon gespeicherten Objekts zu aendern - Karten, die Kunden vor
+     * der Umstellung ins Wallet gelegt haben, haengen deshalb weiter hier.
+     */
+    String legacyClassIdFor(Shop shop) {
         return props.google().issuerId() + ".shop_" + shop.getId().replace("-", "_");
+    }
+
+    /**
+     * Klasse, an der das Objekt dieser Kundenkarte haengt: liegt es schon bei
+     * Google, bleibt es bei seiner (evtl. alten Laden-)Klasse, sonst bekommt es
+     * die der Karte.
+     */
+    private String classIdForObject(CustomerCard cc) {
+        try {
+            LoyaltyObject vorhanden = walletClient.loyaltyobject().get(objectIdFor(cc)).execute();
+            String bestehend = vorhanden.getClassId();
+            if (bestehend != null && !bestehend.isBlank()) return bestehend;
+        } catch (com.google.api.client.googleapis.json.GoogleJsonResponseException e) {
+            if (e.getStatusCode() != 404) {
+                log.warn("Google Wallet Objekt {} nicht lesbar ({}), nehme Klasse der Karte",
+                        objectIdFor(cc), e.getStatusCode());
+            }
+        } catch (Exception e) {
+            log.warn("Google Wallet Objekt {} nicht lesbar: {}", objectIdFor(cc), e.getMessage());
+        }
+        return classIdFor(cc.getCard());
     }
 
     private String objectIdFor(CustomerCard cc) {
@@ -93,12 +129,11 @@ public class GoogleWalletService {
             throw new IllegalStateException("Google Service Account nicht konfiguriert.");
         }
 
-        Shop shop = cc.getCard().getShop();
-        String classId = classIdFor(shop);
+        String classId = classIdForObject(cc);
         String objectId = objectIdFor(cc);
 
         try {
-            createOrUpdateClass(cc.getCard(), classId);
+            createOrUpdateClass(cc.getCard(), classId, true);
             createOrUpdateObject(cc, classId, objectId);
         } catch (Exception e) {
             log.error("Google Wallet Fehler im Lifecycle: {}", e.getMessage());
@@ -137,9 +172,9 @@ public class GoogleWalletService {
         try {
             CustomerCard cc = customerCardRepo.findById(customerCardId)
                     .orElseThrow(() -> new NoSuchElementException("CustomerCard nicht gefunden: " + customerCardId));
-            String classId = classIdFor(cc.getCard().getShop());
+            String classId = classIdForObject(cc);
             // Auch die Class aktualisieren, damit Design-Änderungen ankommen
-            createOrUpdateClass(cc.getCard(), classId);
+            createOrUpdateClass(cc.getCard(), classId, true);
             createOrUpdateObject(cc, classId, objectIdFor(cc));
         } catch (Exception e) {
             log.error("Google Wallet Update Fehler: {}", e.getMessage());
@@ -222,15 +257,19 @@ public class GoogleWalletService {
     public void refreshClassForCard(Card card) {
         if (credentials == null || walletClient == null) return;
         try {
-            String classId = classIdFor(card.getShop());
-            createOrUpdateClass(card, classId);
+            String classId = classIdFor(card);
+            createOrUpdateClass(card, classId, true);
+            // Karten, die schon vor der Umstellung im Wallet liegen, haengen
+            // noch an der Laden-Klasse. Nur nachziehen, wenn es sie gibt -
+            // neue Laeden bekommen keine.
+            createOrUpdateClass(card, legacyClassIdFor(card.getShop()), false);
             log.info("Google Wallet Class nach Design-Aenderung aktualisiert: {}", classId);
         } catch (Exception e) {
             log.error("Google Wallet Class Refresh Fehler: {}", e.getMessage());
         }
     }
 
-    private void createOrUpdateClass(Card card, String classId) throws Exception {
+    private void createOrUpdateClass(Card card, String classId, boolean anlegen) throws Exception {
         Shop shop = card.getShop();
 
         String bgColor = card.getColorBackground() != null ? card.getColorBackground() : shop.getColorBackground();
@@ -258,6 +297,7 @@ public class GoogleWalletService {
             log.info("Google Wallet Class aktualisiert: {}", classId);
         } catch (com.google.api.client.googleapis.json.GoogleJsonResponseException e) {
             if (e.getStatusCode() == 404) {
+                if (!anlegen) return;
                 try {
                     walletClient.loyaltyclass().insert(lc).execute();
                     log.info("Google Wallet Class erstellt: {}", classId);
