@@ -173,6 +173,7 @@ public class Card {
         if (colorLabel != null) this.colorLabel = colorLabel;
     }
 
+    public void setName(String name) { this.name = name; }
     public void setRewardText(String rewardText) { this.rewardText = rewardText; }
     public void setRewardThreshold(int rewardThreshold) { this.rewardThreshold = rewardThreshold; }
     public void setLogoUrl(String logoUrl) { this.logoUrl = logoUrl; }
