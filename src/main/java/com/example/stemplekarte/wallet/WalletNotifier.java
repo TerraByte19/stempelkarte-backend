@@ -65,6 +65,17 @@ public class WalletNotifier {
         sicher("Google Wallet Update", () -> googleWalletService.notifyUpdate(customerCardId));
     }
 
+    /**
+     * Willkommensgeschenk eingeloest. Apple meldet es ueber das
+     * changeMessage im neuen Pass, Google braucht wie bei "Karte voll" einen
+     * eigenen Aufruf.
+     */
+    public void nachFreischaltung(CustomerCard cc) {
+        nachStempelAenderung(cc);
+        sicher("Google Wallet 'Freigeschaltet'",
+                () -> googleWalletService.notifyFreigeschaltet(cc.getId()));
+    }
+
     /** Zusaetzliche "Karte voll"-Meldung. Apple bekommt sie ueber das
      *  changeMessage im Pass, Google braucht den expliziten Aufruf. */
     public void googleKarteVoll(String customerCardId, String text) {

@@ -168,6 +168,56 @@ public class ScanController {
         );
     }
 
+    public record WillkommenRequest(@NotBlank String qrPayload, Double lat, Double lon) {}
+
+    @Operation(summary = "Willkommensgeschenk einloesen und Karte freischalten",
+            description = "Erfordert X-Staff-Token. Gleiche Standort-Pruefung wie beim Stempeln. "
+                    + "Danach ist die Karte eine normale Stempelkarte mit 0 Stempeln.")
+    @PostMapping("/willkommen")
+    public ScanResponse willkommen(@Valid @RequestBody WillkommenRequest req, Authentication auth) {
+        boolean tokenOk = auth != null && auth.getPrincipal() instanceof StaffTokenFilter.StaffPrincipal;
+        log.info("[SCAN] willkommen eingang token={} payload={}", tokenOk ? "ok" : "FEHLT", req.qrPayload());
+        if (!tokenOk) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Kein gueltiger Staff-Token");
+        }
+
+        // Dieselben Sperren wie beim Stempel. Ein Gratis-Artikel ist mehr
+        // wert als ein Stempel - von zu Hause darf er erst recht nicht gehen.
+        // Bewusst nicht aus scan() herausgezogen: der Stempel-Weg laeuft in
+        // echten Laeden und bleibt dafuer unangetastet.
+        var staff = ((StaffTokenFilter.StaffPrincipal) auth.getPrincipal()).staff();
+        Shop shop = staff.getShop();
+        if (!com.example.stemplekarte.service.StandortPflicht.darfScannen(shop, java.time.Instant.now())) {
+            log.warn("[SCAN] GESPERRT laden={} grund=kein_standort", shop.getId());
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                    com.example.stemplekarte.service.StandortPflicht.sperrText());
+        }
+        String geoSperre = geoPruefung.sperre(shop, staff.getLabel(), req.lat(), req.lon());
+        if (geoSperre != null) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, geoSperre);
+        }
+
+        var cc = service.willkommenEinloesen(req.qrPayload(), shop);
+
+        // Nur IDs - shop ist ein Lazy-Proxy (siehe scan()).
+        log.info("[WALLET] WILLKOMMEN serial={} kunde={} karte={} laden={}",
+                cc.getId(), cc.getCustomer().getId(), cc.getCard().getId(), shop.getId());
+
+        notifier.nachFreischaltung(cc);
+
+        return new ScanResponse(
+                "welcome", "Karte freigeschaltet",
+                cc.getCustomer().getId(),
+                cc.getCard().getId(),
+                cc.getStamps(),
+                cc.getTotalRewards(),
+                cc.getCard().getRewardThreshold(),
+                0,
+                false,
+                null
+        );
+    }
+
     public record ResetRequest(@NotBlank String qrPayload) {}
 
     @Operation(summary = "Karte zurücksetzen (Stempel + Belohnungen auf 0)",

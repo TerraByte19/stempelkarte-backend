@@ -179,6 +179,40 @@ public class GoogleWalletService {
     }
 
     /**
+     * "Karte freigeschaltet" nach dem Willkommensgeschenk. Wie notifyCardFull:
+     * Google meldet geaenderte Felder nicht von selbst.
+     */
+    @Async
+    @Transactional
+    public void notifyFreigeschaltet(String customerCardId) {
+        if (credentials == null || walletClient == null) return;
+        try {
+            CustomerCard cc = customerCardRepo.findById(customerCardId)
+                    .orElseThrow(() -> new NoSuchElementException("CustomerCard nicht gefunden: " + customerCardId));
+            String objectId = objectIdFor(cc);
+
+            Message message = new Message()
+                    .setHeader("🎉 Karte freigeschaltet!")
+                    .setBody("Ab deinem nächsten Besuch sammelst du Stempel bei "
+                            + cc.getCard().getShop().getName() + ".")
+                    .setMessageType("TEXT")
+                    .setId("welcome-" + customerCardId + "-" + System.currentTimeMillis());
+
+            walletClient.loyaltyobject()
+                    .addmessage(objectId, new AddMessageRequest().setMessage(message))
+                    .execute();
+            log.info("Google Wallet 'Freigeschaltet'-Nachricht gesendet: {}", objectId);
+        } catch (com.google.api.client.googleapis.json.GoogleJsonResponseException e) {
+            // 404 = Kunde hat die Karte nie in Google Wallet gelegt. Normalfall.
+            if (e.getStatusCode() != 404) {
+                log.error("Google Wallet 'Freigeschaltet' Fehler: {}", e.getMessage());
+            }
+        } catch (Exception e) {
+            log.error("Google Wallet 'Freigeschaltet' Fehler: {}", e.getMessage());
+        }
+    }
+
+    /**
      * Rueckhol-Nachricht (RueckholService). TEXT_AND_NOTIFY statt TEXT: nur
      * damit zeigt Android eine Benachrichtigung, sonst steht die Nachricht
      * nur still in der Karte. Google laesst davon hoechstens drei pro Tag

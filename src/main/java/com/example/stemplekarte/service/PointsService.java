@@ -99,7 +99,11 @@ public class PointsService {
             int stamps, int rewardThreshold, String rewardText,
             Integer pointsPerEuroX100, String pointsRounding,
             List<RewardView> katalog, RewardView ziel, long fehlendX100,
-            String fehlendText, BookingView letzteBuchung) {}
+            String fehlendText, BookingView letzteBuchung,
+            // Willkommensgeschenk offen: der Scanner zeigt statt der
+            // Stempelmaske die Einloese-Maske. Hinten angehaengt, damit
+            // ein Scanner mit altem Stand die Antwort weiter versteht.
+            boolean willkommenOffen, String willkommenText) {}
 
     /** Ergebnis einer Buchung. */
     public record PointsResult(
@@ -123,7 +127,8 @@ public class PointsService {
             return new PointsState(cc.getId(), cc.getCustomer().getName(),
                     card.getId(), card.getName(), CardType.STAMP,
                     0, "0", cc.getStamps(), card.getRewardThreshold(), card.getRewardText(),
-                    null, null, List.of(), null, 0, "0", null);
+                    null, null, List.of(), null, 0, "0", null,
+                    cc.isWillkommenOffen(), cc.isWillkommenOffen() ? cc.getWillkommenText() : null);
         }
 
         long stand = cc.getPointsX100();
@@ -139,7 +144,9 @@ public class PointsService {
                 katalog.stream().map(r -> RewardView.von(r, stand)).toList(),
                 ziel != null ? RewardView.von(ziel, stand) : null,
                 fehlend, PointsMath.formatiere(fehlend),
-                BookingView.von(letzteBuchung(cc.getId())));
+                BookingView.von(letzteBuchung(cc.getId())),
+                // Punktekarten haben kein Willkommensgeschenk.
+                false, null);
     }
 
     // ── Buchen ────────────────────────────────────────────────────────────
