@@ -69,7 +69,10 @@ public class CustomerController {
 
     public record CustomerCardResponse(String customerCardId, String cardId, String cardName,
                                        String shopName, int stamps, int rewardThreshold,
-                                       boolean rewardAvailable, int totalRewards) {
+                                       boolean rewardAvailable, int totalRewards,
+                                       // Die Kundenseite schaltet darauf um - der
+                                       // Stempelstand allein bleibt beim Freischalten 0.
+                                       boolean willkommenOffen) {
         static CustomerCardResponse from(CustomerCard cc) {
             return new CustomerCardResponse(
                     cc.getId(),
@@ -79,7 +82,8 @@ public class CustomerController {
                     cc.getStamps(),
                     cc.getCard().getRewardThreshold(),
                     cc.getStamps() >= cc.getCard().getRewardThreshold(),
-                    cc.getTotalRewards()
+                    cc.getTotalRewards(),
+                    cc.isWillkommenOffen()
             );
         }
     }

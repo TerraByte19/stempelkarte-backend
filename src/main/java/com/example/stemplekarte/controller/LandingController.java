@@ -541,6 +541,16 @@ public class LandingController {
                                 font-weight: 500;
                             }
                             .hidden { display: none; }
+                            .welcome-box {
+                                text-align: center;
+                                padding: 20px 16px;
+                                margin-bottom: 24px;
+                                background: rgba(var(--ink),0.15);
+                                border-radius: 14px;
+                            }
+                            .welcome-icon { font-size: 44px; margin-bottom: 8px; }
+                            .welcome-title { font-size: 19px; font-weight: 700; margin-bottom: 6px; }
+                            .welcome-text { font-size: 14px; opacity: 0.9; line-height: 1.5; }
                         </style>
                     </head>
                     <body>
@@ -552,9 +562,12 @@ public class LandingController {
                                 </div>
                             </div>
                             <div class="customer-name">👤 %s</div>
+                            %s
+                            <div id="stempel-teil"%s>
                             <div class="progress">%d von %d Stempeln</div>
                             <div class="stamps-grid">%s</div>
                             <div class="reward-text">%s</div>
+                            </div>
                             <div class="wallet-buttons">
                                 <a href="%s" class="btn-apple" id="apple-btn">
                                     🍎 Zu Apple Wallet hinzufügen
@@ -572,6 +585,19 @@ public class LandingController {
                             const threshold = %d;
                             const rewardText = %s;
                             let shownStamps = %d;
+                            // Willkommensgeschenk offen: Stempel sind versteckt, bis
+                            // das Personal freischaltet. Der Stempelstand bleibt dabei
+                            // 0 - ein Vergleich nur ueber stamps saehe die Freischaltung
+                            // nie. Deshalb das eigene Feld willkommenOffen.
+                            let gesperrt = %s;
+
+                            function freischalten() {
+                                gesperrt = false;
+                                var box = document.getElementById('welcome-box');
+                                if (box) box.classList.add('hidden');
+                                var teil = document.getElementById('stempel-teil');
+                                if (teil) teil.classList.remove('hidden');
+                            }
 
                             function renderStamps(n) {
                                 // shownStamps bleibt der ROHE Server-Stand (fuer ?shown=),
@@ -600,6 +626,11 @@ public class LandingController {
                                     const res = await fetch(url, { cache: 'no-store' });
                                     if (!res.ok) return;
                                     const data = await res.json();
+                                    if (gesperrt && data.willkommenOffen === false) {
+                                        freischalten();
+                                        if (typeof data.stamps === 'number') renderStamps(data.stamps);
+                                        return;
+                                    }
                                     if (typeof data.stamps === 'number' && data.stamps !== shownStamps) {
                                         renderStamps(data.stamps);
                                     }
@@ -611,6 +642,9 @@ public class LandingController {
                             try {
                                 var es = new EventSource('/api/customer/' + custId + '/card/' + cId + '/stream');
                                 es.addEventListener('stamps', function (ev) {
+                                    // Gesperrt: das Ereignis traegt nur den Stand (0), nicht
+                                    // die Freischaltung - also nachfragen.
+                                    if (gesperrt) { check(); return; }
                                     try {
                                         var d = JSON.parse(ev.data);
                                         if (typeof d.stamps === 'number' && d.stamps !== shownStamps) renderStamps(d.stamps);
@@ -638,6 +672,8 @@ public class LandingController {
                             : "<img src='" + escapeHtml(logoUrl) + "' class='shop-logo' alt='Logo'>",
                     escapeHtml(shopName),
                     escapeHtml(customer.getName()),
+                    willkommenBox(cc),
+                    cc.isWillkommenOffen() ? " class=\"hidden\"" : "",
                     stampsShown, threshold,
                     stampsHtml,
                     stamps >= threshold ? "🎉 " + escapeHtml(card.getRewardText()) + " verfügbar!" :
@@ -648,7 +684,9 @@ public class LandingController {
                                     "🤖 Zu Google Wallet hinzufügen</a>",
                     // Parameter fuer das JS: custId, cId, threshold, rewardText (als JS-String), stamps
                     toJsString(customerId), toJsString(cardId), threshold,
-                    toJsString(card.getRewardText()), stamps
+                    toJsString(card.getRewardText()), stamps,
+                    // Nur true oder false - nichts vom Laden landet hier im JS.
+                    String.valueOf(cc.isWillkommenOffen())
             );
 
             log.info("Landing-Karte geladen: customerCard={} card={} stamps={} threshold={}",
@@ -782,11 +820,8 @@ public class LandingController {
                                 </div>
                             </div>
                             <div class="info">
-                                <div class="info-title">🎉 Stempelkarte holen!</div>
-                                <div class="info-text">
-                                    Trag deinen Namen und deine E-Mail ein und bekomme
-                                    die Stempelkarte direkt in deine Wallet!
-                                </div>
+                                <div class="info-title">%s</div>
+                                <div class="info-text">%s</div>
                             </div>
                             <div class="error" id="error"></div>
                             <div class="form" id="form">
@@ -854,6 +889,8 @@ public class LandingController {
                     logoUrl.isBlank() ? ""
                             : "<img src='" + escapeHtml(logoUrl) + "' class='logo' alt='Logo'>",
                     escapeHtml(shopName),
+                    anmeldeTitel(card),
+                    anmeldeText(card),
                     escapeHtml(shopName),
                     // cardId steht in einer JS-Zeichenkette - toJsString
                     // liefert die Anfuehrungszeichen mit.
@@ -864,6 +901,36 @@ public class LandingController {
         } catch (Exception e) {
             return ResponseEntity.ok("<html><body style='font-family:sans-serif;padding:40px;text-align:center'><h2>Karte nicht gefunden</h2></body></html>");
         }
+    }
+
+    /** Ohne Angebot steht hier wortgleich der bisherige Text. */
+    static String anmeldeTitel(Card card) {
+        return card.isWillkommenAktiv()
+                ? "🎁 " + escapeHtml(card.getWillkommenText())
+                : "🎉 Stempelkarte holen!";
+    }
+
+    static String anmeldeText(Card card) {
+        return card.isWillkommenAktiv()
+                ? "Trag deinen Namen und deine E-Mail ein und hol dir die Karte in die Wallet. "
+                        + "Zeig sie an der Kasse, und das Geschenk gehört dir. Danach sammelst du Stempel."
+                : "Trag deinen Namen und deine E-Mail ein und bekomme "
+                        + "die Stempelkarte direkt in deine Wallet!";
+    }
+
+    /**
+     * Geschenk-Box der gesperrten Kundenseite, leer ohne Sperre. Der Text
+     * kommt vom Laden und wird deshalb escaped.
+     */
+    static String willkommenBox(CustomerCard cc) {
+        if (!cc.isWillkommenOffen()) return "";
+        String geschenk = cc.getWillkommenText() != null ? cc.getWillkommenText() : Card.WILLKOMMEN_STANDARD;
+        return "<div class=\"welcome-box\" id=\"welcome-box\">"
+                + "<div class=\"welcome-icon\">🎁</div>"
+                + "<div class=\"welcome-title\">" + escapeHtml(geschenk) + "</div>"
+                + "<div class=\"welcome-text\">Zeig diese Karte an der Kasse. "
+                + "Danach sammelst du hier deine Stempel.</div>"
+                + "</div>";
     }
 
     /**

@@ -366,6 +366,11 @@ public class GoogleWalletService {
                         .setHeader("Pr\u00e4mien")
                         .setBody(sb.toString().trim()));
             }
+        } else if (cc.isWillkommenOffen()) {
+            // Gesperrt: Geschenk statt Stempelstand. Der QR bleibt derselbe.
+            LoyaltyPoints[] felder = willkommenFelder(cc);
+            haupt = felder[0];
+            neben = felder[1];
         } else {
             // Unveraendert der bisherige Stempel-Weg.
             haupt = new LoyaltyPoints()
@@ -419,6 +424,19 @@ public class GoogleWalletService {
                 throw e;
             }
         }
+    }
+
+    /** Haupt- und Nebenfeld einer gesperrten Karte. Paketsichtbar fuer den Test. */
+    static LoyaltyPoints[] willkommenFelder(CustomerCard cc) {
+        String geschenk = cc.getWillkommenText() != null ? cc.getWillkommenText() : Card.WILLKOMMEN_STANDARD;
+        return new LoyaltyPoints[] {
+                new LoyaltyPoints()
+                        .setLabel("Willkommen")
+                        .setBalance(new LoyaltyPointsBalance().setString(geschenk)),
+                new LoyaltyPoints()
+                        .setLabel("So geht's")
+                        .setBalance(new LoyaltyPointsBalance().setString("An der Kasse vorzeigen"))
+        };
     }
 
     private boolean isHttps(String url) {
