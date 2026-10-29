@@ -80,6 +80,16 @@ public class PassTemplateGenerator {
         return walletStyle != null && STREIFEN_STILE.contains(walletStyle.toLowerCase());
     }
 
+    /**
+     * Gesperrte Karte (Willkommensgeschenk offen): kein Streifen. Ein leeres
+     * Stempelraster oder ein Balken bei 0 versprach Stempel, die es noch
+     * nicht gibt. deleteStripImages laeuft davor immer - so bleibt auch
+     * kein alter Streifen im Vorlagenordner liegen.
+     */
+    static boolean brauchtStreifen(String walletStyle, CustomerCard cc) {
+        return istStreifenStil(walletStyle) && !cc.isWillkommenOffen();
+    }
+
     // Apple erwartet icon.png / @2x / @3x - dieselbe Reihenfolge in beiden Feldern.
     // 38 Punkte laut aktuellen Design-Richtlinien (frueher 29), also 38/76/114 Pixel.
     private static final int[] ICON_GROESSEN = {38, 76, 114};
@@ -131,7 +141,7 @@ public class PassTemplateGenerator {
         generateIconImages(logoUrl, bgColor, templatePath);
 
         deleteStripImages(templatePath);
-        if (istStreifenStil(walletStyle)) {
+        if (brauchtStreifen(walletStyle, cc)) {
             if ("grid".equalsIgnoreCase(walletStyle)) {
                 generateStripImages(stamps, threshold, walletStyle, stampColor,
                         stampIconType, stampPreset, stampIconUrl, emptyStampStyle, templatePath);

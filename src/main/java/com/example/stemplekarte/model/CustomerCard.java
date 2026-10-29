@@ -261,7 +261,11 @@ public class CustomerCard {
      * Stempel faellt das von selbst weg.
      */
     public boolean istFrischFreigeschaltet() {
-        return welcomeRedeemedAt != null && stamps == 0 && totalRewards == 0;
+        // lastVisitAt == Einloesezeitpunkt: seitdem kein Besuch. Ohne diese
+        // Bedingung meldete eine spaeter per Reset auf 0 gesetzte Karte
+        // erneut "freigeschaltet" - resetAll fasst lastVisitAt nicht an.
+        return welcomeRedeemedAt != null && welcomeRedeemedAt.equals(lastVisitAt)
+                && stamps == 0 && totalRewards == 0;
     }
 
     public String getWillkommenText() { return welcomeText; }

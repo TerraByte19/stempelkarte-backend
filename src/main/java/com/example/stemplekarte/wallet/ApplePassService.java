@@ -274,6 +274,15 @@ public class ApplePassService {
             return punkte.build();
         }
 
+        // Willkommensgeschenk offen: eigener Zweig, der normale Weg darunter
+        // bleibt unberuehrt. Kommt nur bei Karten vor, die nach dem Einschalten
+        // des Angebots neu angemeldet wurden.
+        if (cc.isWillkommenOffen()) {
+            var gesperrt = baueFelderGesperrt(cc, grid);
+            nachrichtFeld(gesperrt, card.getShop(), cc);
+            return gesperrt.build();
+        }
+
         int threshold = card.getRewardThreshold();
         String reward = rewardText(cc.getStamps(), threshold, card.getRewardText());
 
@@ -289,9 +298,13 @@ public class ApplePassService {
 
         // Push-Nachricht fürs Handy beim Stempelstand-Update.
         // %@ ersetzt Apple durch den neuen Stempelstand (stampRatio).
+        // istFrischFreigeschaltet ist bei jeder Karte ohne Willkommensgeschenk
+        // false - fuer sie bleibt der Text wie er war.
         String changeMsg = (cc.getStamps() >= threshold)
                 ? "\uD83C\uDF89 " + card.getRewardText() + " verdient! Neue Karte: %@"
-                : "Update! Dein Stempelstand: %@";
+                : cc.istFrischFreigeschaltet()
+                        ? "\uD83C\uDF89 Karte freigeschaltet! Stempel: %@"
+                        : "Update! Dein Stempelstand: %@";
 
         var genericPass = PKGenericPass.builder()
                 .passType(PKPassType.PKStoreCard);
@@ -322,6 +335,30 @@ public class ApplePassService {
 
         nachrichtFeld(genericPass, card.getShop(), cc);
         return genericPass.build();
+    }
+
+    /**
+     * Gesperrte Karte: nur Geschenk und QR, keine Stempel.
+     *
+     * Der Kopf traegt denselben Key wie im freigeschalteten Pass ("stamps"
+     * im Raster-Stil, sonst "stamps-header"). Das ist der Trick: iOS meldet
+     * nur Aenderungen an einem Feld, das es schon kennt. Beim Freischalten
+     * springt genau dieses Feld von 🎁 auf "0/10", und das changeMessage
+     * des neuen Passes ("Karte freigeschaltet") erscheint als Mitteilung.
+     */
+    private PKGenericPassBuilder baueFelderGesperrt(CustomerCard cc, boolean grid) {
+        String geschenk = cc.getWillkommenText() != null ? cc.getWillkommenText() : Card.WILLKOMMEN_STANDARD;
+        return PKGenericPass.builder()
+                .passType(PKPassType.PKStoreCard)
+                .headerFieldBuilder(PKField.builder()
+                        .key(grid ? "stamps" : "stamps-header").label("WILLKOMMEN")
+                        .value("🎁"))
+                .primaryFieldBuilder(PKField.builder()
+                        .key("welcome").label("GESCHENK FÜR DICH").value(geschenk))
+                .secondaryFieldBuilder(PKField.builder()
+                        .key("welcome-how").label("SO GEHT'S").value("An der Kasse vorzeigen"))
+                .auxiliaryFieldBuilder(PKField.builder()
+                        .key("name").label("KUNDE").value(cc.getCustomer().getName()));
     }
 
     /**
@@ -435,6 +472,19 @@ public class ApplePassService {
     List<PKLocation> sperrbildschirmOrte(Shop shop, Card card, CustomerCard cc) {
         if (!shop.isLockScreenActive()) {
             return List.of();
+        }
+
+        // Gesperrt: in Ladennaehe an das Geschenk erinnern - genau der Moment,
+        // in dem der Kunde reingehen koennte. Die Stempel-Texte des Ladens
+        // passen hier nicht ("Noch 10 Stempel bis ...").
+        if (cc.isWillkommenOffen()) {
+            String geschenk = cc.getWillkommenText() != null
+                    ? cc.getWillkommenText() : Card.WILLKOMMEN_STANDARD;
+            return List.of(PKLocation.builder()
+                    .latitude(shop.getLatitude())
+                    .longitude(shop.getLongitude())
+                    .relevantText(geschenk + " - wartet auf dich")
+                    .build());
         }
 
         KartenFortschritt f = KartenFortschritt.von(card, cc, rewardService);

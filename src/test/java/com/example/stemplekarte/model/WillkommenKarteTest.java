@@ -117,6 +117,17 @@ class WillkommenKarteTest {
     }
 
     @Test
+    void nachStempelUndReset_nichtWiederFrisch() {
+        CustomerCard cc = CustomerCard.create(null, stempelkarte());
+        cc.willkommenVormerken("Gratis");
+        cc.willkommenEinloesen(Instant.parse("2026-10-29T10:00:00Z"));
+        cc.addStamp();
+        cc.resetAll();
+        assertThat(cc.getStamps()).isZero();
+        assertThat(cc.istFrischFreigeschaltet()).isFalse();
+    }
+
+    @Test
     void gesperrteKarte_bekommtKeineRueckholNachricht() {
         CustomerCard cc = CustomerCard.create(null, stempelkarte());
         cc.willkommenVormerken("Gratis");
