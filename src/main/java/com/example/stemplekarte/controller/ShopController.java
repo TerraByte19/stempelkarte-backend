@@ -346,6 +346,52 @@ public class ShopController {
         return cardService.getByShop(shop).stream().map(CardResponse::from).toList();
     }
 
+    // ── Willkommensgeschenk ─────────────────────────────────────────────
+    // Eigene Route statt Felder in CardResponse: die Zaehler kosten je eine
+    // Abfrage, und die Kartenliste soll dafuer nicht pro Karte zahlen.
+
+    public record WillkommenRequest(boolean enabled, String text) {}
+
+    public record WillkommenResponse(boolean enabled, String text,
+                                     long offen, long eingeloest) {}
+
+    @Operation(summary = "Willkommensgeschenk einer Karte abrufen",
+            description = "Schalter, Text und was der Aushang gebracht hat: offene und "
+                    + "eingeloeste Geschenke.")
+    @GetMapping("/cards/{cardId}/willkommen")
+    public WillkommenResponse willkommen(@PathVariable String cardId, Authentication auth) {
+        return willkommenStand(cardService.getByIdAndShop(cardId, currentShop(auth)));
+    }
+
+    @Operation(summary = "Willkommensgeschenk ein-/ausschalten",
+            description = "Nur Stempelkarten. Wirkt nur auf NEUE Anmeldungen. Ausschalten "
+                    + "laesst bereits vergebene Geschenke einloesbar. Text leer = Standard.")
+    @PutMapping("/cards/{cardId}/willkommen")
+    public WillkommenResponse updateWillkommen(@PathVariable String cardId,
+                                               @RequestBody WillkommenRequest req,
+                                               Authentication auth) {
+        Card card = cardService.getByIdAndShop(cardId, currentShop(auth));
+        if (card.isPoints()) {
+            throw new IllegalArgumentException("Das Willkommensgeschenk gibt es nur für Stempelkarten");
+        }
+        // Steuerzeichen raus: der Text steht im Wallet-Pass, in einer Mail
+        // und auf zwei Webseiten - ein Zeilenumbruch zerlegt mindestens eins davon.
+        String text = req.text() == null ? null : req.text().replaceAll("\\p{Cntrl}", " ").trim();
+        if (text != null && text.length() > Card.WILLKOMMEN_MAX) {
+            throw new IllegalArgumentException(
+                    "Der Text darf höchstens " + Card.WILLKOMMEN_MAX + " Zeichen haben");
+        }
+        card.updateWillkommen(req.enabled(), text);
+        cardService.save(card);
+        return willkommenStand(card);
+    }
+
+    private WillkommenResponse willkommenStand(Card card) {
+        return new WillkommenResponse(card.isWillkommenAktiv(), card.getWillkommenText(),
+                customerCardRepo.countByCardAndWelcomePendingTrue(card),
+                customerCardRepo.countByCardAndWelcomeRedeemedAtIsNotNull(card));
+    }
+
     @Operation(summary = "Praemien einer Karte auflisten")
     @GetMapping("/cards/{cardId}/rewards")
     public List<RewardResponse> listRewards(@PathVariable String cardId, Authentication auth) {
