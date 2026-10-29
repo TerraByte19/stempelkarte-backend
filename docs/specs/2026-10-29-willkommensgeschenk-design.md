@@ -131,16 +131,17 @@ ist es eine normale Stempelkarte mit 0 Stempeln.
 
 ### Laden-Einstellung
 - `PUT /api/shop/cards/{cardId}/willkommen` {enabled, text}. Punktekarte -> 400.
-  Text getrimmt, max. 60, leer = Standard.
-- `CardResponse` + `willkommenAktiv`, `willkommenText`, `willkommenOffen`
-  (Anzahl), `willkommenEingeloest` (Anzahl) - Zaehlung per Repository-Count,
-  damit der Laden sieht, was der Aushang bringt.
+  Text getrimmt, Steuerzeichen raus, max. 60, leer = Standard.
+- `GET /api/shop/cards/{cardId}/willkommen` -> {enabled, text, offen,
+  eingeloest}. Eigene Route statt Felder in `CardResponse`: die Zaehler
+  kosten Abfragen, die Kartenliste soll nicht pro Karte dafuer zahlen.
 
 ### Frontend
 - `components/WillkommenSettings.jsx`: Schalter, Text, Hinweis, Zaehler.
-  In `Karten.jsx` nur im Stempel-Zweig des Editors und nur wenn
-  `editCard.willkommenAktiv !== undefined` (Frontend ist oft neuer als
-  Backend). Speichern mit dem bestehenden Speichern-Knopf, nur bei Aenderung.
+  In `Karten.jsx` nur im Stempel-Zweig des Editors und nur wenn die
+  GET-Route antwortet (Frontend ist oft neuer als Backend - bei 404 bleibt
+  der Abschnitt weg). Speichern mit dem bestehenden Speichern-Knopf, nur bei
+  Aenderung.
 - `Scanner.jsx`: `scanState?.willkommenOffen === true` -> eigene Maske
   (Geschenk, Name, Knopf "Gratis ausgegeben - Karte freischalten").
   Ergebnis-Box "Karte freigeschaltet". Ohne state-Antwort bleibt alles wie
