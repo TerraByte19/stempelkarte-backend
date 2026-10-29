@@ -73,8 +73,13 @@ public class EmailService {
     // Der Bestätigungs-Link bestätigt die E-Mail UND führt direkt zur
     // Stempelkarte (mit Apple/Google Wallet Buttons), da customerId+cardId
     // mitgegeben werden. Zeigt Hero-Bild + Logo des Ladens im Header.
+    //
+    // willkommenText: gesetzt, solange das Willkommensgeschenk der Karte offen
+    // ist. Dann steht es in der Mail - der Grund, warum der Kunde sich
+    // angemeldet hat, ist auch der beste Grund, den Link zu klicken.
     @Async
-    public void sendConfirmationMail(Customer customer, Shop shop, String cardId) {
+    public void sendConfirmationMail(Customer customer, Shop shop, String cardId,
+                                     String willkommenText) {
         if (customer.getConfirmToken() == null) return; // schon bestätigt
 
         String shopName = shop.getName();
@@ -90,6 +95,7 @@ public class EmailService {
                                 + "du hast dich für die digitale Stempelkarte von <b>" + esc(shopName)
                                 + "</b> angemeldet. Bestätige kurz deine E-Mail-Adresse, dann liegt die Karte "
                                 + "in deiner Wallet.")
+                        + willkommenBlock(willkommenText)
                         + knopfBlock("Stempelkarte aufs Handy holen", confirmUrl,
                         shop.getColorBackground() != null ? shop.getColorBackground() : STAMPIT_FARBE)
                         + textBlock(null,
@@ -100,6 +106,16 @@ public class EmailService {
 
         send(customer.getEmail(), shopName, null,
                 "Deine Stempelkarte – " + shopName, html);
+    }
+
+    /** Leer ohne Geschenk - dann ist die Mail Zeichen fuer Zeichen wie vorher. */
+    String willkommenBlock(String willkommenText) {
+        if (willkommenText == null || willkommenText.isBlank()) return "";
+        String text = willkommenText.trim();
+        // "Erster Kaffee gratis!" soll nicht als "gratis!." enden.
+        String ende = text.matches(".*[.!?]$") ? " " : ". ";
+        return textBlock(null, "🎁 <b>Dein Willkommensgeschenk:</b> " + esc(text)
+                + ende + "Zeig die Karte einfach an der Kasse.");
     }
 
     // ── 2. Lösch-Bestätigungs-Mail (Schritt 2, Sicherheits-Mail) ─────────

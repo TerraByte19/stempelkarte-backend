@@ -50,11 +50,33 @@ public interface CustomerCardRepository extends JpaRepository<CustomerCard, Stri
     // Rueckhol-Nachricht: aktive Karten eines Ladens, deren Kunde seit vor der
     // Grenze nicht da war und seitdem keine Nachricht bekommen hat. Laengste
     // Pause zuerst. Dieselbe Regel steht als CustomerCard#rueckholFaellig.
+    //
+    // Gesperrte Karten (Willkommensgeschenk offen) muessen HIER raus, nicht
+    // erst im Java-Filter danach: die Abfrage holt nur eine Seite, aelteste
+    // zuerst. Ein Stapel nie eingeloester Willkommenskarten saesse sonst
+    // dauerhaft vorne und schoebe echte Stammkunden aus jeder Seite.
     @EntityGraph(attributePaths = {"card", "card.shop", "customer"})
     @Query("select cc from CustomerCard cc where cc.card.shop = :shop and cc.card.active = true "
             + "and coalesce(cc.lastVisitAt, cc.updatedAt) < :grenze "
             + "and (cc.winbackSentAt is null or cc.winbackSentAt < coalesce(cc.lastVisitAt, cc.updatedAt)) "
+            + "and (cc.welcomePending is null or cc.welcomePending = false) "
             + "order by coalesce(cc.lastVisitAt, cc.updatedAt)")
     List<CustomerCard> findRueckholKandidaten(Shop shop, java.time.Instant grenze,
                                               org.springframework.data.domain.Pageable seite);
+
+    // Willkommensgeschenk einloesen. Gesperrt, damit zwei Kassen, die
+    // dieselbe Karte im selben Moment scannen, nicht beide den Gratis-Artikel
+    // freigeben: die zweite wartet und sieht danach "schon eingeloest".
+    //
+    // Bewusst OHNE @EntityGraph: der laedt per LEFT JOIN, und Postgres lehnt
+    // FOR UPDATE auf der nullbaren Seite eines Outer Joins ab. Der Aufrufer
+    // laedt Karte und Kunde vorher selbst in derselben Transaktion - die
+    // Beziehungen zeigen dann auf diese schon geladenen Objekte.
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @Query("select cc from CustomerCard cc where cc.customer.id = :customerId and cc.card.id = :cardId")
+    Optional<CustomerCard> findZumEinloesen(String customerId, String cardId);
+
+    // Was der Aushang gebracht hat - im Karten-Editor des Ladens.
+    long countByCardAndWelcomePendingTrue(Card card);
+    long countByCardAndWelcomeRedeemedAtIsNotNull(Card card);
 }

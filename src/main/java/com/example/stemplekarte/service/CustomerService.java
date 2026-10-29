@@ -69,7 +69,7 @@ public class CustomerService {
         customerRepo.save(customer);
 
         CustomerCard cc = customerCardRepo.findByCustomerAndCard(customer, card)
-                .orElseGet(() -> customerCardRepo.save(CustomerCard.create(customer, card)));
+                .orElseGet(() -> customerCardRepo.save(neueKundenkarte(customer, card)));
 
         // Einwilligung speichern (nur wenn neu, nicht ungewollt zurücksetzen)
         if (marketingConsent && !cc.isMarketingConsent()) {
@@ -78,8 +78,25 @@ public class CustomerService {
         }
 
         // Bestätigungs-Mail IMMER verschicken (jede Anmeldung neu).
-        emailService.sendConfirmationMail(customer, card.getShop(), card.getId());
+        // Wer sich nochmal anmeldet, solange das Geschenk offen ist, wird in
+        // der Mail wieder daran erinnert.
+        emailService.sendConfirmationMail(customer, card.getShop(), card.getId(),
+                cc.isWillkommenOffen() ? cc.getWillkommenText() : null);
 
+        return cc;
+    }
+
+    /**
+     * Die EINZIGE Stelle, an der eine Karte gesperrt wird: nur hier, nur bei
+     * einer neu angelegten Kundenkarte. Wer die Karte schon hat - auch eine
+     * eingeloeste oder ueber getOrCreateCustomerCard entstandene -, bekommt
+     * ueber eine zweite Anmeldung kein zweites Geschenk.
+     */
+    private static CustomerCard neueKundenkarte(Customer customer, Card card) {
+        CustomerCard cc = CustomerCard.create(customer, card);
+        if (card.isWillkommenAktiv()) {
+            cc.willkommenVormerken(card.getWillkommenText());
+        }
         return cc;
     }
 
@@ -160,6 +177,18 @@ public class CustomerService {
         }
 
         CustomerCard cc = getOrCreateCustomerCard(customerId, cardId);
+
+        // Gesperrt: kein Stempel, bevor das Geschenk eingeloest ist. Hier und
+        // nicht im Controller, damit JEDER Stempel-Weg haengen bleibt - auch
+        // ein Scanner mit altem Stand, der die Willkommens-Maske nicht kennt.
+        // IllegalArgumentException = 400 mit dieser Meldung im Scanner;
+        // IllegalStateException kaeme als 503 an und saehe nach Ausfall aus.
+        if (cc.isWillkommenOffen()) {
+            log.info("Scan abgelehnt, Willkommensgeschenk offen: Kunde {} Karte {}", customerId, cardId);
+            throw new IllegalArgumentException(
+                    "Erst das Willkommensgeschenk einlösen - bitte Scanner neu laden.");
+        }
+
         int threshold = card.getRewardThreshold();
 
         ScanResult result = null;
@@ -194,6 +223,44 @@ public class CustomerService {
 
         log.info("Scan fuer Kunde {} auf Karte {} ({}x): {}", customerId, cardId, count, result.message());
         return result;
+    }
+
+    /**
+     * Willkommensgeschenk an der Kasse einloesen: Karte frei, 0 Stempel.
+     *
+     * Dieselben Pruefungen wie beim Stempeln (Laden, aktiv). Eine Kundenkarte
+     * wird hier NICHT angelegt - ohne Anmeldung gibt es kein Geschenk.
+     *
+     * Karte und Kunde werden zuerst geladen, dann die Kundenkarte gesperrt.
+     * Die Reihenfolge ist Absicht: die Sperr-Abfrage laedt keine Beziehungen
+     * mit (siehe Repository), und so zeigen sie auf die hier schon geladenen
+     * Objekte. Der Controller liest sie nach dem Ende der Transaktion.
+     */
+    @Transactional
+    public CustomerCard willkommenEinloesen(String qrPayload, Shop shop) {
+        QrPayload qr = QrPayload.parse(qrPayload);
+
+        Card card = cardRepo.findById(qr.cardId())
+                .orElseThrow(() -> new NoSuchElementException("Karte nicht gefunden"));
+        if (!card.getShop().getId().equals(shop.getId())) {
+            throw new IllegalArgumentException("Diese Karte gehoert nicht zu deinem Shop");
+        }
+        if (!card.isActive()) {
+            throw new IllegalArgumentException("Diese Karte ist nicht mehr aktiv");
+        }
+
+        customerRepo.findById(qr.customerId())
+                .orElseThrow(() -> new NoSuchElementException("Dieser Kunde hat die Karte noch nicht"));
+        CustomerCard cc = customerCardRepo.findZumEinloesen(qr.customerId(), card.getId())
+                .orElseThrow(() -> new NoSuchElementException("Dieser Kunde hat die Karte noch nicht"));
+
+        // Wirft bei "schon eingeloest" - das Personal soll es sehen.
+        cc.willkommenEinloesen(java.time.Instant.now());
+        customerCardRepo.save(cc);
+
+        log.info("Willkommensgeschenk eingeloest: Kunde {} Karte {} laden {}",
+                qr.customerId(), card.getId(), shop.getId());
+        return cc;
     }
 
     /**
