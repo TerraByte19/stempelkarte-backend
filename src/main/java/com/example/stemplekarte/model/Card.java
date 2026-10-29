@@ -103,6 +103,19 @@ public class Card {
     @Column(name = "points_rounding", length = 16)
     private PointsRounding pointsRounding;
 
+    // ── Willkommensgeschenk ("Erster Kaffee geht auf uns") ─────────────────
+    // An: wer sich NEU fuer diese Karte anmeldet, bekommt eine gesperrte
+    // Karte, die erst beim Gratis-Artikel an der Kasse freigeschaltet wird.
+    // Nullable -> alle bestehenden Karten bleiben aus.
+    @Column(name = "welcome_enabled")
+    private Boolean welcomeEnabled;
+
+    @Column(name = "welcome_text", length = WILLKOMMEN_MAX)
+    private String welcomeText;
+
+    public static final String WILLKOMMEN_STANDARD = "Erster Kaffee geht auf uns";
+    public static final int WILLKOMMEN_MAX = 60;
+
     protected Card() {}
 
     public static Card create(Shop shop, String name, String description,
@@ -157,6 +170,25 @@ public class Card {
     }
 
     public void setActive(boolean active) { this.active = active; }
+
+    /**
+     * Nur fuer Stempelkarten. Die Punktekarte hat keinen gesperrten Zustand -
+     * selbst wenn die Spalte dort gesetzt waere, greift sie nicht.
+     */
+    public boolean isWillkommenAktiv() {
+        return Boolean.TRUE.equals(welcomeEnabled) && !isPoints();
+    }
+
+    /** Nie null: ohne eigenen Text gilt der Standard. */
+    public String getWillkommenText() {
+        return (welcomeText == null || welcomeText.isBlank()) ? WILLKOMMEN_STANDARD : welcomeText;
+    }
+
+    /** Laenge prueft der Controller - hier wird nur getrimmt. */
+    public void updateWillkommen(boolean enabled, String text) {
+        this.welcomeEnabled = enabled;
+        this.welcomeText = (text == null || text.isBlank()) ? null : text.trim();
+    }
 
     public void updateDesign(String walletStyle, String stampIconType, String stampPreset,
                              String stampColor, String emptyStampStyle) {

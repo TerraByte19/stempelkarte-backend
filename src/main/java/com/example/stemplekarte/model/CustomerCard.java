@@ -71,6 +71,21 @@ public class CustomerCard {
     @Column(name = "winback_text", length = 300)
     private String winbackText;
 
+    // ── Willkommensgeschenk ──────────────────────────────────────────────
+    // true = Karte gesperrt, bis das Personal das Geschenk einloest.
+    // Nullable OHNE Default mit Absicht: null heisst "nicht gesperrt", und
+    // genau das muss fuer jede Karte gelten, die vor dieser Spalte existierte.
+    @Column(name = "welcome_pending")
+    private Boolean welcomePending;
+
+    // Das Versprechen, wie es bei der Anmeldung galt. Aendert der Laden
+    // seinen Text danach, steht beim Kunden weiter, was ihm zugesagt wurde.
+    @Column(name = "welcome_text", length = Card.WILLKOMMEN_MAX)
+    private String welcomeText;
+
+    @Column(name = "welcome_redeemed_at")
+    private Instant welcomeRedeemedAt;
+
     protected CustomerCard() {}
 
     public static CustomerCard create(Customer customer, Card card) {
@@ -176,6 +191,10 @@ public class CustomerCard {
      * keine Nachricht bekommen. Pro Pause also genau eine Nachricht.
      */
     public boolean rueckholFaellig(Instant grenze) {
+        // Gesperrt: der Standardtext saehe "Noch 10 Stempel bis ..." vor,
+        // obwohl der Kunde noch gar nicht stempeln kann. Dieselbe Regel steht
+        // in CustomerCardRepository#findRueckholKandidaten.
+        if (isWillkommenOffen()) return false;
         Instant besuch = letzterBesuch();
         return besuch != null && besuch.isBefore(grenze)
                 && (winbackSentAt == null || winbackSentAt.isBefore(besuch));
@@ -207,6 +226,46 @@ public class CustomerCard {
         // updatedAt bewegen, damit iOS den Pass mit der Nachricht abholt.
         this.updatedAt = jetzt;
     }
+
+    // ── Willkommensgeschenk ──────────────────────────────────────────────
+
+    /** Nur bei der Anmeldung einer NEUEN Kundenkarte (CustomerService). */
+    public void willkommenVormerken(String text) {
+        this.welcomePending = true;
+        this.welcomeText = text;
+    }
+
+    public boolean isWillkommenOffen() { return Boolean.TRUE.equals(welcomePending); }
+
+    /**
+     * Geschenk ausgegeben, Karte frei. Zaehlt als Besuch: die
+     * Rueckhol-Nachricht soll ab dem Gratis-Besuch rechnen - genau dann ist
+     * der Anstoss zum zweiten Besuch am meisten wert.
+     *
+     * Wirft statt still nichts zu tun: ein zweites Einloesen heisst ein
+     * zweiter Gratis-Artikel ueber den Tresen, das muss das Personal sehen.
+     */
+    public void willkommenEinloesen(Instant jetzt) {
+        if (!isWillkommenOffen()) {
+            throw new IllegalArgumentException("Das Willkommensgeschenk wurde schon eingelöst.");
+        }
+        this.welcomePending = false;
+        this.welcomeRedeemedAt = jetzt;
+        this.updatedAt = jetzt;
+        this.lastVisitAt = jetzt;
+    }
+
+    /**
+     * Gerade freigeschaltet und noch nichts passiert. Der Pass meldet in
+     * diesem Zustand "Karte freigeschaltet" statt "Update!" - mit dem ersten
+     * Stempel faellt das von selbst weg.
+     */
+    public boolean istFrischFreigeschaltet() {
+        return welcomeRedeemedAt != null && stamps == 0 && totalRewards == 0;
+    }
+
+    public String getWillkommenText() { return welcomeText; }
+    public Instant getWillkommenEingeloestAt() { return welcomeRedeemedAt; }
 
     public String getId() { return id; }
     public Customer getCustomer() { return customer; }
