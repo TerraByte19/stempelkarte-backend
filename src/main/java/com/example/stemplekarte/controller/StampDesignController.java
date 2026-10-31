@@ -86,18 +86,34 @@ public class StampDesignController {
         return toMap(card);
     }
 
-    public record CardInfoRequest(String rewardText, Integer rewardThreshold) {}
+    public record CardInfoRequest(String name, String rewardText, Integer rewardThreshold) {}
 
-    // ── Karten-Text (Belohnung) und Stempelzahl einer bestehenden Karte ───
-    // aendern. Die Stempelzahl wirkt sofort auf bestehende Kundenkarten:
-    // hochsetzen heisst, volle Karten sind nicht mehr voll; runtersetzen
-    // heisst, wer schon drueber liegt, loest beim naechsten Scan ein.
+    // Dieselbe Grenze wie das Namensfeld beim Anlegen im Panel. Google
+    // Wallet zeigt den Namen gross als Titel, laengere Namen werden auf
+    // kleinen Android-Bildschirmen abgeschnitten.
+    static final int MAX_NAME = 18;
+
+    // ── Name, Karten-Text (Belohnung) und Stempelzahl einer bestehenden ───
+    // Karte aendern. Die Stempelzahl wirkt sofort auf bestehende
+    // Kundenkarten: hochsetzen heisst, volle Karten sind nicht mehr voll;
+    // runtersetzen heisst, wer schon drueber liegt, loest beim naechsten
+    // Scan ein.
     @PutMapping("/cards/{cardId}/info")
     public Map<String, Object> updateCardInfo(@PathVariable String cardId,
                                               @RequestBody CardInfoRequest req,
                                               Authentication auth) {
         Shop shop = currentShop(auth);
         Card card = cardService.getByIdAndShop(cardId, shop);
+        // Leer heisst "nicht aendern", wie beim Belohnungstext - eine Karte
+        // ohne Namen stuende in Google Wallet ohne Titel da.
+        if (req.name() != null && !req.name().isBlank()) {
+            String name = req.name().trim();
+            if (name.length() > MAX_NAME) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "Kartenname darf hoechstens " + MAX_NAME + " Zeichen haben");
+            }
+            card.setName(name);
+        }
         if (req.rewardText() != null && !req.rewardText().isBlank()) {
             card.setRewardText(req.rewardText().trim());
         }
@@ -110,12 +126,16 @@ public class StampDesignController {
             card.setRewardThreshold(t);
         }
         cardService.save(card);
-        // Belohnungstext und Stempelzahl stehen auf der Google-Wallet-Class ->
-        // neu schreiben, damit gespeicherte Karten den neuen Stand bekommen.
-        // Apple aktualisiert beim naechsten Pass-Abruf (latestPass baut aus
-        // dem aktuellen Stand).
+        // Der Name ist der programName der Google-Wallet-Class -> neu
+        // schreiben, dann zeigen auch schon gespeicherte Android-Karten den
+        // neuen Namen. Apple aktualisiert beim naechsten Pass-Abruf
+        // (latestPass baut aus dem aktuellen Stand); dort steht der Name nur
+        // in der description, sichtbar ist oben der Ladenname.
         googleWalletService.refreshClassForCard(card);
+        // "name" in der Antwort zeigt dem Panel, dass der Server das Feld
+        // kennt - ein aelterer Server ignoriert es stillschweigend.
         return Map.of(
+                "name", card.getName(),
                 "rewardText", card.getRewardText(),
                 "rewardThreshold", card.getRewardThreshold());
     }
