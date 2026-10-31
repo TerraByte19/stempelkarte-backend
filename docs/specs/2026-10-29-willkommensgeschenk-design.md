@@ -85,7 +85,7 @@ ist es eine normale Stempelkarte mit 0 Stempeln.
     `stamps-header`), Label "WILLKOMMEN", Wert "🎁". Gleicher Key ist
     Absicht: beim Freischalten aendert sich genau dieses Feld, und nur so
     zeigt iOS die Meldung.
-  - Primaer `welcome`: Label "GESCHENK FÜR DICH", Wert = Text der Kundenkarte.
+  - Primaer `welcome`: Label "GESCHENK", Wert = Text der Kundenkarte.
   - Sekundaer `welcome-how`: "SO GEHT'S" / "An der Kasse vorzeigen".
   - Auxiliary `name` wie bisher. Rueckhol-Feld wie bisher (nachrichtFeld).
 - Frisch freigeschaltet: changeMessage am Header

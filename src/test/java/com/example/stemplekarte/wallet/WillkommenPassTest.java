@@ -61,6 +61,7 @@ class WillkommenPassTest {
 
         assertThat(pass.getPrimaryFields()).hasSize(1);
         assertThat(pass.getPrimaryFields().get(0).getKey()).isEqualTo("welcome");
+        assertThat(pass.getPrimaryFields().get(0).getLabel()).isEqualTo("GESCHENK");
         assertThat(pass.getPrimaryFields().get(0).getValue()).isEqualTo("Erster Kaffee geht auf uns");
         assertThat(pass.getSecondaryFields().get(0).getValue()).isEqualTo("An der Kasse vorzeigen");
         assertThat(pass.getAuxiliaryFields().get(0).getValue()).isEqualTo("Ana");

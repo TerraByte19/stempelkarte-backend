@@ -354,7 +354,7 @@ public class ApplePassService {
                         .key(grid ? "stamps" : "stamps-header").label("WILLKOMMEN")
                         .value("🎁"))
                 .primaryFieldBuilder(PKField.builder()
-                        .key("welcome").label("GESCHENK FÜR DICH").value(geschenk))
+                        .key("welcome").label("GESCHENK").value(geschenk))
                 .secondaryFieldBuilder(PKField.builder()
                         .key("welcome-how").label("SO GEHT'S").value("An der Kasse vorzeigen"))
                 .auxiliaryFieldBuilder(PKField.builder()
