@@ -99,7 +99,7 @@ public class GoogleWalletService {
 
         try {
             createOrUpdateClass(cc.getCard(), classId);
-            createOrUpdateObject(cc, classId, objectId);
+            createOrUpdateObject(cc, classId, objectId, false);
         } catch (Exception e) {
             log.error("Google Wallet Fehler im Lifecycle: {}", e.getMessage());
         }
@@ -140,7 +140,7 @@ public class GoogleWalletService {
             String classId = classIdFor(cc.getCard().getShop());
             // Auch die Class aktualisieren, damit Design-Änderungen ankommen
             createOrUpdateClass(cc.getCard(), classId);
-            createOrUpdateObject(cc, classId, objectIdFor(cc));
+            createOrUpdateObject(cc, classId, objectIdFor(cc), true);
         } catch (Exception e) {
             log.error("Google Wallet Update Fehler: {}", e.getMessage());
         }
@@ -312,7 +312,37 @@ public class GoogleWalletService {
         }
     }
 
-    private void createOrUpdateObject(CustomerCard cc, String classId, String objectId) throws Exception {
+    /**
+     * Patch mit Rueckfall: Google erlaubt nur drei meldende Updates pro Karte
+     * und Tag und dokumentiert nicht, ob das vierte abgelehnt wird. Der
+     * Stempelstand darf daran nie haengen - lehnt Google den meldenden Patch
+     * ab, geht derselbe Stand still noch einmal raus.
+     */
+    private void patchen(String objectId, LoyaltyObject loyaltyObject) throws Exception {
+        if (loyaltyObject.getNotifyPreference() == null) {
+            walletClient.loyaltyobject().patch(objectId, loyaltyObject).execute();
+            return;
+        }
+        try {
+            walletClient.loyaltyobject().patch(objectId, loyaltyObject).execute();
+        } catch (com.google.api.client.googleapis.json.GoogleJsonResponseException e) {
+            if (e.getStatusCode() == 404 || e.getStatusCode() == 409) throw e;
+            log.warn("Google Wallet meldender Patch abgelehnt ({}), sende still: {}",
+                    e.getStatusCode(), objectId);
+            loyaltyObject.setNotifyPreference(null);
+            walletClient.loyaltyobject().patch(objectId, loyaltyObject).execute();
+        }
+    }
+
+    /**
+     * melden: nur nach einer Stempel-/Punkteaenderung. Dann geht der Patch mit
+     * notifyPreference=NOTIFY_ON_UPDATE raus - ohne das gibt Google den neuen Stand
+     * still und oft erst Minuten spaeter ans Handy weiter. Ob Android
+     * tatsaechlich meldet, entscheidet Google (Feld-Allowlist, Tageslimit);
+     * schlimmstenfalls bleibt es beim stillen Update wie bisher.
+     */
+    private void createOrUpdateObject(CustomerCard cc, String classId, String objectId,
+                                      boolean melden) throws Exception {
         // Konstanter QR-Inhalt: nur cid + cardId (kein Zeitstempel), damit sich
         // das QR-Bild nicht bei jedem Update aendert. Der Scanner liest nur cid/cardId.
         String qrValue = "{\"cid\":\"" + cc.getCustomer().getId() +
@@ -400,12 +430,16 @@ public class GoogleWalletService {
                         .setValue(qrValue)
                         .setAlternateText(""));
 
+        if (melden) loyaltyObject.setNotifyPreference("NOTIFY_ON_UPDATE");
+
         try {
             walletClient.loyaltyobject().get(objectId).execute();
-            walletClient.loyaltyobject().patch(objectId, loyaltyObject).execute();
+            patchen(objectId, loyaltyObject);
             log.info("Google Wallet Objekt aktualisiert: {}", objectId);
         } catch (com.google.api.client.googleapis.json.GoogleJsonResponseException e) {
             if (e.getStatusCode() == 404) {
+                // Neu angelegt liegt die Karte noch auf keinem Handy - nichts zu melden.
+                loyaltyObject.setNotifyPreference(null);
                 try {
                     walletClient.loyaltyobject().insert(loyaltyObject).execute();
                     log.info("Google Wallet Objekt erstellt: {}", objectId);
