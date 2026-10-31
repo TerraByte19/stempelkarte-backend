@@ -79,4 +79,7 @@ public interface CustomerCardRepository extends JpaRepository<CustomerCard, Stri
     // Was der Aushang gebracht hat - im Karten-Editor des Ladens.
     long countByCardAndWelcomePendingTrue(Card card);
     long countByCardAndWelcomeRedeemedAtIsNotNull(Card card);
+
+    // Gesperrte Karten, deren Pass nach einer Design-Aenderung neu muss.
+    List<CustomerCard> findByCardAndWelcomePendingTrue(Card card);
 }

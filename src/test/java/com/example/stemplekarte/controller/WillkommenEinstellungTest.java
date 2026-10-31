@@ -8,6 +8,7 @@ import com.example.stemplekarte.repository.SentNewsletterRepository;
 import com.example.stemplekarte.security.JwtAuthFilter;
 import com.example.stemplekarte.service.CardService;
 import com.example.stemplekarte.service.EmailService;
+import com.example.stemplekarte.service.GesperrteKartenAuffrischer;
 import com.example.stemplekarte.service.NewsletterService;
 import com.example.stemplekarte.service.RewardService;
 import com.example.stemplekarte.service.ShopService;
@@ -40,6 +41,7 @@ class WillkommenEinstellungTest {
 
     private CardService cardService;
     private CustomerCardRepository ccRepo;
+    private GesperrteKartenAuffrischer auffrischer;
     private ShopController controller;
     private Shop shop;
     private Authentication auth;
@@ -48,10 +50,11 @@ class WillkommenEinstellungTest {
     void aufbau() {
         cardService = mock(CardService.class);
         ccRepo = mock(CustomerCardRepository.class);
+        auffrischer = mock(GesperrteKartenAuffrischer.class);
         controller = new ShopController(mock(ShopService.class), cardService, ccRepo,
                 mock(CloudinaryService.class), mock(EmailService.class),
                 mock(SentNewsletterRepository.class), mock(StatsService.class),
-                mock(NewsletterService.class), mock(RewardService.class));
+                mock(NewsletterService.class), mock(RewardService.class), auffrischer);
         shop = mock(Shop.class);
         auth = new UsernamePasswordAuthenticationToken(
                 new JwtAuthFilter.ShopPrincipal(shop), null, List.of());
@@ -120,5 +123,90 @@ class WillkommenEinstellungTest {
         assertThat(antwort.enabled()).isFalse();
         // Offene Geschenke bleiben offen - das Versprechen gilt.
         assertThat(antwort.offen()).isEqualTo(2);
+    }
+
+    private ShopController.WillkommenRequest design(String titel, String hinweis, String bild,
+                                                    String bg, String fg, String label) {
+        return new ShopController.WillkommenRequest(true, null, titel, hinweis, bild, bg, fg, label);
+    }
+
+    @Test
+    void design_setzen_undAuffrischen() {
+        Card card = stempelkarte();
+        var antwort = controller.updateWillkommen(card.getId(),
+                design(" Hallo!\n", "Gilt bis Monatsende", null, "#112233", "#ffffff", ""), auth);
+
+        assertThat(antwort.title()).isEqualTo("Hallo!");
+        assertThat(antwort.hint()).isEqualTo("Gilt bis Monatsende");
+        assertThat(antwort.colorBackground()).isEqualTo("#112233");
+        assertThat(antwort.colorForeground()).isEqualTo("#ffffff");
+        assertThat(antwort.colorLabel()).isNull();
+        verify(auffrischer).auffrischen(card);
+    }
+
+    @Test
+    void ohneDesignAenderung_keinAuffrischen() {
+        // Jeder Push kostet bei Apple vom Tageslimit - Text oder Schalter
+        // aendern den gesperrten Pass nicht.
+        Card card = stempelkarte();
+        controller.updateWillkommen(card.getId(),
+                new ShopController.WillkommenRequest(true, "Erster Tee gratis"), auth);
+        verify(auffrischer, never()).auffrischen(any());
+    }
+
+    @Test
+    void altesPanel_nullLaesstDesignStehen() {
+        Card card = stempelkarte();
+        card.updateWillkommenDesign("Hallo", "Hinweis", null, "#112233", null, null);
+        var antwort = controller.updateWillkommen(card.getId(),
+                new ShopController.WillkommenRequest(true, "x"), auth);
+        assertThat(antwort.title()).isEqualTo("Hallo");
+        assertThat(antwort.colorBackground()).isEqualTo("#112233");
+    }
+
+    @Test
+    void leer_setztZurueck() {
+        Card card = stempelkarte();
+        card.updateWillkommenDesign("Hallo", "Hinweis", null, "#112233", null, null);
+        var antwort = controller.updateWillkommen(card.getId(), design("", "", "", "", "", ""), auth);
+        assertThat(antwort.title()).isNull();
+        assertThat(antwort.hint()).isNull();
+        assertThat(antwort.colorBackground()).isNull();
+        assertThat(card.getWillkommenTitel()).isEqualTo("Willkommen");
+    }
+
+    @Test
+    void titelZuLang_abgelehnt_nichtsGeaendert() {
+        Card card = stempelkarte();
+        assertThatThrownBy(() -> controller.updateWillkommen(card.getId(),
+                design("x".repeat(19), null, null, null, null, null), auth))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("18");
+        assertThatThrownBy(() -> controller.updateWillkommen(card.getId(),
+                design(null, "x".repeat(41), null, null, null, null), auth))
+                .hasMessageContaining("40");
+        verify(cardService, never()).save(any());
+    }
+
+    @Test
+    void falscheFarbe_abgelehnt() {
+        Card card = stempelkarte();
+        assertThatThrownBy(() -> controller.updateWillkommen(card.getId(),
+                design(null, null, null, "rot", null, null), auth))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("#RRGGBB");
+        assertThatThrownBy(() -> controller.updateWillkommen(card.getId(),
+                design(null, null, null, null, "#12345", null), auth))
+                .isInstanceOf(IllegalArgumentException.class);
+        verify(cardService, never()).save(any());
+    }
+
+    @Test
+    void bildOhneHttps_abgelehnt() {
+        Card card = stempelkarte();
+        assertThatThrownBy(() -> controller.updateWillkommen(card.getId(),
+                design(null, null, "http://intern/bild.png", null, null, null), auth))
+                .isInstanceOf(IllegalArgumentException.class);
+        verify(cardService, never()).save(any());
     }
 }

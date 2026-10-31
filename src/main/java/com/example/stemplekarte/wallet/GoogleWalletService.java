@@ -11,6 +11,7 @@ import com.example.stemplekarte.service.RewardService;
 import com.google.api.client.googleapis.javanet.GoogleNetHttpTransport;
 import com.google.api.client.json.gson.GsonFactory;
 import com.google.api.services.walletobjects.Walletobjects;
+import com.google.api.client.util.Data;
 import com.google.api.services.walletobjects.model.*;
 import com.google.auth.http.HttpCredentialsAdapter;
 import com.google.auth.oauth2.GoogleCredentials;
@@ -482,6 +483,13 @@ public class GoogleWalletService {
                         .setValue(qrValue)
                         .setAlternateText(""));
 
+        // Willkommensbild nur am Objekt dieses Kunden, nie an der Klasse
+        // (die teilen sich alle Karten des Ladens). Der HEAD-Abruf laeuft nur,
+        // wenn ueberhaupt ein Bild in Frage kommt.
+        boolean bildErreichbar = cc.isWillkommenOffen() && isImageReachable(card.getWelcomeImageUrl());
+        Image hero = willkommenHero(cc, bildErreichbar);
+        if (hero != null) loyaltyObject.setHeroImage(hero);
+
         try {
             walletClient.loyaltyobject().get(objectId).execute();
             walletClient.loyaltyobject().patch(objectId, loyaltyObject).execute();
@@ -511,14 +519,33 @@ public class GoogleWalletService {
     /** Haupt- und Nebenfeld einer gesperrten Karte. Paketsichtbar fuer den Test. */
     static LoyaltyPoints[] willkommenFelder(CustomerCard cc) {
         String geschenk = cc.getWillkommenText() != null ? cc.getWillkommenText() : Card.WILLKOMMEN_STANDARD;
+        Card card = cc.getCard();
         return new LoyaltyPoints[] {
                 new LoyaltyPoints()
-                        .setLabel("Willkommen")
+                        .setLabel(card.getWillkommenTitel())
                         .setBalance(new LoyaltyPointsBalance().setString(geschenk)),
                 new LoyaltyPoints()
                         .setLabel("So geht's")
-                        .setBalance(new LoyaltyPointsBalance().setString("An der Kasse vorzeigen"))
+                        .setBalance(new LoyaltyPointsBalance().setString(card.getWillkommenHinweis()))
         };
+    }
+
+    /**
+     * Hero-Bild am Objekt.
+     *
+     * null = Feld nicht senden: Karten ohne Willkommens-Historie bleiben
+     * genau wie bisher. Gesperrt mit erreichbarem Bild = das Bild. Sonst ein
+     * explizites JSON-null: beim Patch bliebe ein weggelassenes Feld stehen,
+     * und das Willkommensbild klebte nach dem Freischalten auf der
+     * Stempelkarte. Ohne Objekt-Bild zeigt Google wieder das der Klasse.
+     */
+    static Image willkommenHero(CustomerCard cc, boolean bildErreichbar) {
+        boolean historie = cc.isWillkommenOffen() || cc.getWillkommenEingeloestAt() != null;
+        if (!historie) return null;
+        if (cc.isWillkommenOffen() && bildErreichbar) {
+            return new Image().setSourceUri(new ImageUri().setUri(cc.getCard().getWelcomeImageUrl()));
+        }
+        return Data.nullOf(Image.class);
     }
 
     private boolean isHttps(String url) {

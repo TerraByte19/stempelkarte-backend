@@ -56,18 +56,63 @@ class WillkommenPassTest {
 
         PKField kopf = pass.getHeaderFields().get(0);
         assertThat(kopf.getKey()).isEqualTo("stamps-header");
-        assertThat(kopf.getLabel()).isEqualTo("WILLKOMMEN");
-        assertThat(kopf.getValue()).isEqualTo("🎁");
+        assertThat(kopf.getLabel()).isNull();
+        assertThat(kopf.getValue()).isEqualTo("Willkommen");
 
-        assertThat(pass.getPrimaryFields()).hasSize(1);
-        assertThat(pass.getPrimaryFields().get(0).getKey()).isEqualTo("welcome");
-        assertThat(pass.getPrimaryFields().get(0).getLabel()).isEqualTo("GESCHENK");
-        assertThat(pass.getPrimaryFields().get(0).getValue()).isEqualTo("Erster Kaffee geht auf uns");
-        assertThat(pass.getSecondaryFields().get(0).getValue()).isEqualTo("An der Kasse vorzeigen");
+        // Kein grosses Feld mehr: das Geschenk steht klein in der Zeile darunter.
+        assertThat(pass.getPrimaryFields()).isNullOrEmpty();
+        assertThat(pass.getSecondaryFields()).hasSize(2);
+        assertThat(pass.getSecondaryFields().get(0).getKey()).isEqualTo("welcome");
+        assertThat(pass.getSecondaryFields().get(0).getLabel()).isEqualTo("🎁 GESCHENK");
+        assertThat(pass.getSecondaryFields().get(0).getValue()).isEqualTo("Erster Kaffee geht auf uns");
+        assertThat(pass.getSecondaryFields().get(1).getKey()).isEqualTo("welcome-how");
+        assertThat(pass.getSecondaryFields().get(1).getValue()).isEqualTo("An der Kasse vorzeigen");
         assertThat(pass.getAuxiliaryFields().get(0).getValue()).isEqualTo("Ana");
         // Nichts, was nach Stempeln aussieht.
         assertThat(pass.getHeaderFields()).extracting(f -> String.valueOf(f.getValue()))
                 .noneMatch(v -> v.contains("/10"));
+    }
+
+    @Test
+    void gesperrt_eigenerTitelUndHinweis() {
+        Card card = karte();
+        card.updateWillkommenDesign("Hallo!", "Gilt bis Monatsende", null, null, null, null);
+        var pass = dienst().baueFelder(card, gesperrt(card), false);
+
+        assertThat(pass.getHeaderFields().get(0).getValue()).isEqualTo("Hallo!");
+        assertThat(pass.getSecondaryFields().get(1).getValue()).isEqualTo("Gilt bis Monatsende");
+    }
+
+    @Test
+    void farben_nurImGesperrtenZustand() {
+        when(shop.getColorBackground()).thenReturn("#000000");
+        Card card = karte();
+        card.updateColors("#3C3489", "#FFFFFF", "#FAC875");
+        card.updateWillkommenDesign(null, null, null, "#112233", null, "#AABBCC");
+
+        CustomerCard gesperrtKarte = gesperrt(card);
+        assertThat(PassTemplateGenerator.passFarben(card, shop, gesperrtKarte))
+                .containsExactly("#112233", "#FFFFFF", "#AABBCC");
+
+        gesperrtKarte.willkommenEinloesen(Instant.now());
+        assertThat(PassTemplateGenerator.passFarben(card, shop, gesperrtKarte))
+                .containsExactly("#3C3489", "#FFFFFF", "#FAC875");
+        assertThat(PassTemplateGenerator.passFarben(card, shop, kundenkarte(card)))
+                .containsExactly("#3C3489", "#FFFFFF", "#FAC875");
+    }
+
+    @Test
+    void willkommensBild_nurGesperrtUndMitBild() {
+        Card card = karte();
+        assertThat(PassTemplateGenerator.brauchtWillkommensBild(gesperrt(card))).isFalse();
+
+        card.updateWillkommenDesign(null, null, "https://res.cloudinary.com/x/w.png", null, null, null);
+        CustomerCard cc = gesperrt(card);
+        assertThat(PassTemplateGenerator.brauchtWillkommensBild(cc)).isTrue();
+        assertThat(PassTemplateGenerator.brauchtWillkommensBild(kundenkarte(card))).isFalse();
+
+        cc.willkommenEinloesen(Instant.now());
+        assertThat(PassTemplateGenerator.brauchtWillkommensBild(cc)).isFalse();
     }
 
     @Test

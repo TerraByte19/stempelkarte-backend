@@ -90,6 +90,33 @@ public class PassTemplateGenerator {
         return istStreifenStil(walletStyle) && !cc.isWillkommenOffen();
     }
 
+    /**
+     * Eigenes Willkommensbild als Streifen - nur solange die Karte gesperrt
+     * ist. Beim Freischalten faellt es weg und der normale Streifen (oder
+     * keiner) kommt.
+     */
+    static boolean brauchtWillkommensBild(CustomerCard cc) {
+        return cc.isWillkommenOffen() && notBlank(cc.getCard().getWelcomeImageUrl());
+    }
+
+    /**
+     * Hintergrund, Text, Beschriftung. Karte vor Laden; gesperrt gewinnt die
+     * eigene Willkommensfarbe, jede einzeln. Steht hier und nicht im
+     * ApplePassService, weil das Logo-Bild mit derselben Hintergrundfarbe
+     * gezeichnet wird - zwei Stellen, die sich nie widersprechen duerfen.
+     */
+    static String[] passFarben(Card card, Shop shop, CustomerCard cc) {
+        String bg = notBlank(card.getColorBackground()) ? card.getColorBackground() : shop.getColorBackground();
+        String fg = notBlank(card.getColorForeground()) ? card.getColorForeground() : shop.getColorForeground();
+        String label = notBlank(card.getColorLabel()) ? card.getColorLabel() : shop.getColorLabel();
+        if (cc.isWillkommenOffen()) {
+            if (notBlank(card.getWelcomeColorBackground())) bg = card.getWelcomeColorBackground();
+            if (notBlank(card.getWelcomeColorForeground())) fg = card.getWelcomeColorForeground();
+            if (notBlank(card.getWelcomeColorLabel())) label = card.getWelcomeColorLabel();
+        }
+        return new String[] { bg, fg, label };
+    }
+
     // Apple erwartet icon.png / @2x / @3x - dieselbe Reihenfolge in beiden Feldern.
     // 38 Punkte laut aktuellen Design-Richtlinien (frueher 29), also 38/76/114 Pixel.
     private static final int[] ICON_GROESSEN = {38, 76, 114};
@@ -114,9 +141,10 @@ public class PassTemplateGenerator {
         int stamps = Math.min(cc.getStamps(), threshold);
 
         // Karten-Design hat Vorrang, Fallback auf Shop
-        String bgColor = notBlank(card.getColorBackground()) ? card.getColorBackground() : shop.getColorBackground();
-        String fgColor = notBlank(card.getColorForeground()) ? card.getColorForeground() : shop.getColorForeground();
-        String labelColor = notBlank(card.getColorLabel()) ? card.getColorLabel() : shop.getColorLabel();
+        String[] farben = passFarben(card, shop, cc);
+        String bgColor = farben[0];
+        String fgColor = farben[1];
+        String labelColor = farben[2];
         String logoUrl = notBlank(card.getLogoUrl()) ? card.getLogoUrl() : shop.getLogoUrl();
         String walletStyle = card.getWalletStyle();
         String stampColor = card.getStampColor();
@@ -141,7 +169,9 @@ public class PassTemplateGenerator {
         generateIconImages(logoUrl, bgColor, templatePath);
 
         deleteStripImages(templatePath);
-        if (brauchtStreifen(walletStyle, cc)) {
+        if (brauchtWillkommensBild(cc)) {
+            generateWillkommensStreifen(card.getWelcomeImageUrl(), templatePath);
+        } else if (brauchtStreifen(walletStyle, cc)) {
             if ("grid".equalsIgnoreCase(walletStyle)) {
                 generateStripImages(stamps, threshold, walletStyle, stampColor,
                         stampIconType, stampPreset, stampIconUrl, emptyStampStyle, templatePath);
@@ -589,6 +619,27 @@ public class PassTemplateGenerator {
         return Math.min(1.0, (double) stand / ziel);
     }
 
+    /**
+     * Willkommensbild als Streifen. Laesst es sich nicht laden, bleibt der
+     * Streifen weg - genau wie eine gesperrte Karte ohne Bild. Ein Platzhalter
+     * waere schlechter als nichts.
+     */
+    private void generateWillkommensStreifen(String bildUrl, Path templatePath) throws IOException {
+        BufferedImage foto;
+        try {
+            foto = ladeBild("willkommen-bild", bildUrl);
+        } catch (Exception e) {
+            log.warn("[WALLET] BILD-FALLBACK zweck=willkommen-bild -> kein Streifen", e);
+            return;
+        }
+        int[][] masse = {{375, 144}, {750, 288}, {1125, 432}};
+        String[] namen = {"strip.png", "strip@2x.png", "strip@3x.png"};
+        for (int i = 0; i < masse.length; i++) {
+            ImageIO.write(renderFoto(foto, masse[i][0], masse[i][1]), "PNG",
+                    templatePath.resolve(namen[i]).toFile());
+        }
+    }
+
     private void generateFortschrittStreifen(String stil, double anteil, String akzentFarbe,
                                              String stripImageUrl, Path templatePath) throws IOException {
         BufferedImage foto = null;
@@ -780,7 +831,7 @@ public class PassTemplateGenerator {
 
     // ── Hilfsmethoden ─────────────────────────────────────────────────────────
 
-    private boolean notBlank(String s) {
+    private static boolean notBlank(String s) {
         return s != null && !s.isBlank();
     }
 

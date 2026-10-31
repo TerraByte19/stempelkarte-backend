@@ -113,8 +113,36 @@ public class Card {
     @Column(name = "welcome_text", length = WILLKOMMEN_MAX)
     private String welcomeText;
 
+    // Aussehen der gesperrten Karte. Live gelesen beim Pass-Bau (nicht pro
+    // Kunde eingefroren wie der Geschenktext), damit eine Aenderung auch bei
+    // schon gesperrten Kunden ankommt. Alles nullable: leer = Standard.
+    @Column(name = "welcome_title", length = WILLKOMMEN_TITEL_MAX)
+    private String welcomeTitle;
+
+    @Column(name = "welcome_hint", length = WILLKOMMEN_HINWEIS_MAX)
+    private String welcomeHint;
+
+    @Column(name = "welcome_image_url", length = 500)
+    private String welcomeImageUrl;
+
+    // Nur Apple: Google kennt Farben nur an der Klasse, und die teilen sich
+    // alle Karten eines Ladens.
+    @Column(name = "welcome_color_bg", length = 7)
+    private String welcomeColorBackground;
+
+    @Column(name = "welcome_color_fg", length = 7)
+    private String welcomeColorForeground;
+
+    @Column(name = "welcome_color_label", length = 7)
+    private String welcomeColorLabel;
+
     public static final String WILLKOMMEN_STANDARD = "Erster Kaffee geht auf uns";
     public static final int WILLKOMMEN_MAX = 60;
+    public static final String WILLKOMMEN_TITEL_STANDARD = "Willkommen";
+    public static final String WILLKOMMEN_HINWEIS_STANDARD = "An der Kasse vorzeigen";
+    // Der Titel steht rechts oben im Kopf - viel Platz ist da nicht.
+    public static final int WILLKOMMEN_TITEL_MAX = 18;
+    public static final int WILLKOMMEN_HINWEIS_MAX = 40;
 
     protected Card() {}
 
@@ -189,6 +217,41 @@ public class Card {
         this.welcomeEnabled = enabled;
         this.welcomeText = (text == null || text.isBlank()) ? null : text.trim();
     }
+
+    /** Nie null: ohne eigenen Titel gilt "Willkommen". */
+    public String getWillkommenTitel() {
+        return welcomeTitle != null ? welcomeTitle : WILLKOMMEN_TITEL_STANDARD;
+    }
+
+    /** Nie null: ohne eigenen Hinweis gilt "An der Kasse vorzeigen". */
+    public String getWillkommenHinweis() {
+        return welcomeHint != null ? welcomeHint : WILLKOMMEN_HINWEIS_STANDARD;
+    }
+
+    /**
+     * null = unveraendert (aelterer Client schickt das Feld nicht),
+     * leer = zuruecksetzen auf Standard. Laenge und Format prueft der Controller.
+     */
+    public void updateWillkommenDesign(String titel, String hinweis, String bildUrl,
+                                       String bg, String fg, String label) {
+        if (titel != null) this.welcomeTitle = leerZuNull(titel);
+        if (hinweis != null) this.welcomeHint = leerZuNull(hinweis);
+        if (bildUrl != null) this.welcomeImageUrl = leerZuNull(bildUrl);
+        if (bg != null) this.welcomeColorBackground = leerZuNull(bg);
+        if (fg != null) this.welcomeColorForeground = leerZuNull(fg);
+        if (label != null) this.welcomeColorLabel = leerZuNull(label);
+    }
+
+    private static String leerZuNull(String s) {
+        return s.isBlank() ? null : s.trim();
+    }
+
+    public String getWelcomeTitle() { return welcomeTitle; }
+    public String getWelcomeHint() { return welcomeHint; }
+    public String getWelcomeImageUrl() { return welcomeImageUrl; }
+    public String getWelcomeColorBackground() { return welcomeColorBackground; }
+    public String getWelcomeColorForeground() { return welcomeColorForeground; }
+    public String getWelcomeColorLabel() { return welcomeColorLabel; }
 
     public void updateDesign(String walletStyle, String stampIconType, String stampPreset,
                              String stampColor, String emptyStampStyle) {

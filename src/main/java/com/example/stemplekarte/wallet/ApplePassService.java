@@ -155,9 +155,11 @@ public class ApplePassService {
                 ? card.getWalletStyle() : shop.getWalletStyle();
         boolean grid = "grid".equalsIgnoreCase(walletStyle);
 
-        String bgColor = (card.getColorBackground() != null && !card.getColorBackground().isBlank()) ? card.getColorBackground() : shop.getColorBackground();
-        String fgColor = (card.getColorForeground() != null && !card.getColorForeground().isBlank()) ? card.getColorForeground() : shop.getColorForeground();
-        String labelColor = (card.getColorLabel() != null && !card.getColorLabel().isBlank()) ? card.getColorLabel() : shop.getColorLabel();
+        // Gesperrt mit eigenen Willkommensfarben, sonst wie bisher Karte vor Laden.
+        String[] farben = PassTemplateGenerator.passFarben(card, shop, cc);
+        String bgColor = farben[0];
+        String fgColor = farben[1];
+        String labelColor = farben[2];
 
         // Konstanter QR-Inhalt: nur cid + cardId. Kein Zeitstempel mehr, damit
         // sich das QR-Bild nicht bei jedem Scan aendert (der Scanner liest nur
@@ -278,7 +280,7 @@ public class ApplePassService {
         // bleibt unberuehrt. Kommt nur bei Karten vor, die nach dem Einschalten
         // des Angebots neu angemeldet wurden.
         if (cc.isWillkommenOffen()) {
-            var gesperrt = baueFelderGesperrt(cc, grid);
+            var gesperrt = baueFelderGesperrt(card, cc, grid);
             nachrichtFeld(gesperrt, card.getShop(), cc);
             return gesperrt.build();
         }
@@ -343,20 +345,24 @@ public class ApplePassService {
      * Der Kopf traegt denselben Key wie im freigeschalteten Pass ("stamps"
      * im Raster-Stil, sonst "stamps-header"). Das ist der Trick: iOS meldet
      * nur Aenderungen an einem Feld, das es schon kennt. Beim Freischalten
-     * springt genau dieses Feld von 🎁 auf "0/10", und das changeMessage
+     * springt genau dieses Feld vom Titel auf "0/10", und das changeMessage
      * des neuen Passes ("Karte freigeschaltet") erscheint als Mitteilung.
+     *
+     * Kein Primary-Feld: es stand gross ueber dem Streifen und verdeckte das
+     * Willkommensbild. Das Geschenk steht klein in der Zeile darunter.
+     * Titel und Hinweis kommen live von der Karte, das Geschenk vom Kunden.
      */
-    private PKGenericPassBuilder baueFelderGesperrt(CustomerCard cc, boolean grid) {
+    private PKGenericPassBuilder baueFelderGesperrt(Card card, CustomerCard cc, boolean grid) {
         String geschenk = cc.getWillkommenText() != null ? cc.getWillkommenText() : Card.WILLKOMMEN_STANDARD;
         return PKGenericPass.builder()
                 .passType(PKPassType.PKStoreCard)
                 .headerFieldBuilder(PKField.builder()
-                        .key(grid ? "stamps" : "stamps-header").label("WILLKOMMEN")
-                        .value("🎁"))
-                .primaryFieldBuilder(PKField.builder()
-                        .key("welcome").label("GESCHENK").value(geschenk))
+                        .key(grid ? "stamps" : "stamps-header")
+                        .value(card.getWillkommenTitel()))
                 .secondaryFieldBuilder(PKField.builder()
-                        .key("welcome-how").label("SO GEHT'S").value("An der Kasse vorzeigen"))
+                        .key("welcome").label("🎁 GESCHENK").value(geschenk))
+                .secondaryFieldBuilder(PKField.builder()
+                        .key("welcome-how").label("SO GEHT'S").value(card.getWillkommenHinweis()))
                 .auxiliaryFieldBuilder(PKField.builder()
                         .key("name").label("KUNDE").value(cc.getCustomer().getName()));
     }

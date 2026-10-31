@@ -206,6 +206,22 @@ public class StampDesignController {
         return out;
     }
 
+    // ── Willkommensbild (gesperrte Karte) hochladen ───────────────────────
+    // Speichert NICHT an der Karte: das passiert mit dem Speichern-Knopf
+    // ueber PUT /willkommen, erst dann werden die gesperrten Paesse
+    // aufgefrischt. Eigene Public-ID pro Upload, damit ein verworfener Upload
+    // das gespeicherte Bild nicht ueberschreibt.
+    @PostMapping("/cards/{cardId}/welcome-image")
+    public Map<String, String> uploadWelcomeImage(@PathVariable String cardId,
+                                                  @RequestBody ImageUploadRequest req,
+                                                  Authentication auth) {
+        Card card = cardService.getByIdAndShop(cardId, currentShop(auth));
+        String url = cloudinary.upload(req.base64(),
+                "welcome-" + card.getId() + "-" + System.currentTimeMillis(),
+                CloudinaryService.ImageType.STRIP);
+        return Map.of("welcomeImageUrl", url);
+    }
+
     // ── Stempel-Icon für eine Karte hochladen ─────────────────────────────
     @PostMapping("/cards/{cardId}/stamp-icon")
     public Map<String, String> uploadCardStampIcon(@PathVariable String cardId,

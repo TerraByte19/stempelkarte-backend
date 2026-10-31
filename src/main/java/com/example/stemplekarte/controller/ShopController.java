@@ -6,6 +6,7 @@ import com.example.stemplekarte.repository.SentNewsletterRepository;
 import com.example.stemplekarte.security.JwtAuthFilter;
 import com.example.stemplekarte.service.CardService;
 import com.example.stemplekarte.service.EmailService;
+import com.example.stemplekarte.service.GesperrteKartenAuffrischer;
 import com.example.stemplekarte.service.NewsletterService;
 import com.example.stemplekarte.service.PointsMath;
 import com.example.stemplekarte.service.RewardService;
@@ -47,6 +48,7 @@ public class ShopController {
     private final StatsService statsService;
     private final NewsletterService newsletterService;
     private final RewardService rewardService;
+    private final GesperrteKartenAuffrischer gesperrteKarten;
 
     @Value("${stempelkarte.base-url:http://localhost:8080}")
     private String baseUrl;
@@ -55,7 +57,8 @@ public class ShopController {
                           CustomerCardRepository customerCardRepo, CloudinaryService cloudinaryService,
                           EmailService emailService, SentNewsletterRepository sentNewsletterRepo,
                           StatsService statsService, NewsletterService newsletterService,
-                          RewardService rewardService) {
+                          RewardService rewardService, GesperrteKartenAuffrischer gesperrteKarten) {
+        this.gesperrteKarten = gesperrteKarten;
         this.shopService = shopService;
         this.cardService = cardService;
         this.customerCardRepo = customerCardRepo;
@@ -350,10 +353,25 @@ public class ShopController {
     // Eigene Route statt Felder in CardResponse: die Zaehler kosten je eine
     // Abfrage, und die Kartenliste soll dafuer nicht pro Karte zahlen.
 
-    public record WillkommenRequest(boolean enabled, String text) {}
+    // Design-Felder: null = unveraendert (aelterer Client), leer = Standard.
+    public record WillkommenRequest(boolean enabled, String text,
+                                    String title, String hint, String imageUrl,
+                                    String colorBackground, String colorForeground,
+                                    String colorLabel) {
+        public WillkommenRequest(boolean enabled, String text) {
+            this(enabled, text, null, null, null, null, null, null);
+        }
+    }
 
+    // Design-Felder roh (null = Standard), damit das Panel leere Felder mit
+    // Platzhalter zeigt statt den Standard als eigenen Text.
     public record WillkommenResponse(boolean enabled, String text,
-                                     long offen, long eingeloest) {}
+                                     long offen, long eingeloest,
+                                     String title, String hint, String imageUrl,
+                                     String colorBackground, String colorForeground,
+                                     String colorLabel) {}
+
+    private static final java.util.regex.Pattern FARBE = java.util.regex.Pattern.compile("^#[0-9A-Fa-f]{6}$");
 
     @Operation(summary = "Willkommensgeschenk einer Karte abrufen",
             description = "Schalter, Text und was der Aushang gebracht hat: offene und "
@@ -376,20 +394,59 @@ public class ShopController {
         }
         // Steuerzeichen raus: der Text steht im Wallet-Pass, in einer Mail
         // und auf zwei Webseiten - ein Zeilenumbruch zerlegt mindestens eins davon.
-        String text = req.text() == null ? null : req.text().replaceAll("\\p{Cntrl}", " ").trim();
-        if (text != null && text.length() > Card.WILLKOMMEN_MAX) {
-            throw new IllegalArgumentException(
-                    "Der Text darf höchstens " + Card.WILLKOMMEN_MAX + " Zeichen haben");
-        }
+        String text = sauber(req.text(), Card.WILLKOMMEN_MAX, "Der Text");
+        // Alles pruefen, bevor irgendetwas an der Karte geaendert wird.
+        String titel = sauber(req.title(), Card.WILLKOMMEN_TITEL_MAX, "Die Überschrift");
+        String hinweis = sauber(req.hint(), Card.WILLKOMMEN_HINWEIS_MAX, "Der Hinweis");
+        String bg = farbe(req.colorBackground(), "Hintergrund");
+        String fg = farbe(req.colorForeground(), "Text");
+        String label = farbe(req.colorLabel(), "Beschriftung");
+        com.example.stemplekarte.service.BildUrl.pruefe(req.imageUrl(), "imageUrl");
+
+        List<String> designVorher = designStand(card);
         card.updateWillkommen(req.enabled(), text);
+        card.updateWillkommenDesign(titel, hinweis, req.imageUrl(), bg, fg, label);
         cardService.save(card);
+        // Nur bei echter Design-Aenderung: jeder Push zaehlt bei Apple gegen
+        // das Tageslimit des Passes.
+        if (!designStand(card).equals(designVorher)) {
+            gesperrteKarten.auffrischen(card);
+        }
         return willkommenStand(card);
+    }
+
+    // Steuerzeichen raus: der Text steht im Wallet-Pass, in einer Mail und
+    // auf zwei Webseiten - ein Zeilenumbruch zerlegt mindestens eins davon.
+    private static String sauber(String s, int max, String feld) {
+        if (s == null) return null;
+        String t = s.replaceAll("\\p{Cntrl}", " ").trim();
+        if (t.length() > max) {
+            throw new IllegalArgumentException(feld + " darf höchstens " + max + " Zeichen haben");
+        }
+        return t;
+    }
+
+    private static String farbe(String s, String feld) {
+        if (s == null || s.isBlank()) return s;
+        if (!FARBE.matcher(s.trim()).matches()) {
+            throw new IllegalArgumentException("Ungültige Farbe (" + feld + "), erwartet #RRGGBB");
+        }
+        return s.trim();
+    }
+
+    private static List<String> designStand(Card card) {
+        return java.util.Arrays.asList(card.getWelcomeTitle(), card.getWelcomeHint(),
+                card.getWelcomeImageUrl(), card.getWelcomeColorBackground(),
+                card.getWelcomeColorForeground(), card.getWelcomeColorLabel());
     }
 
     private WillkommenResponse willkommenStand(Card card) {
         return new WillkommenResponse(card.isWillkommenAktiv(), card.getWillkommenText(),
                 customerCardRepo.countByCardAndWelcomePendingTrue(card),
-                customerCardRepo.countByCardAndWelcomeRedeemedAtIsNotNull(card));
+                customerCardRepo.countByCardAndWelcomeRedeemedAtIsNotNull(card),
+                card.getWelcomeTitle(), card.getWelcomeHint(), card.getWelcomeImageUrl(),
+                card.getWelcomeColorBackground(), card.getWelcomeColorForeground(),
+                card.getWelcomeColorLabel());
     }
 
     @Operation(summary = "Praemien einer Karte auflisten")
