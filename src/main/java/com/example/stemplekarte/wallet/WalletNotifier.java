@@ -39,10 +39,18 @@ public class WalletNotifier {
 
     /** Nach jeder Stempelaenderung (Scan, Einloesen, Reset). */
     public void nachStempelAenderung(CustomerCard cc) {
+        nachStempelAenderung(cc, GoogleWalletService.Meldung.KEINE);
+    }
+
+    /**
+     * Wie oben, dazu eine eigene Google-Mitteilung (Apple meldet ueber das
+     * changeMessage im Pass von selbst).
+     */
+    public void nachStempelAenderung(CustomerCard cc, GoogleWalletService.Meldung meldung) {
         sicher("SSE-Push", () -> cardEventHub.publishStamps(
                 cc.getId(), cc.getStamps(), cc.getTotalRewards(),
                 cc.getCard().getRewardThreshold()));
-        walletWege(cc.getId());
+        walletWege(cc.getId(), meldung);
     }
 
     /**
@@ -57,12 +65,16 @@ public class WalletNotifier {
                                     String zielName, long fehlendX100) {
         sicher("SSE-Push", () -> cardEventHub.publishPoints(
                 customerCardId, pointsX100, zielName, fehlendX100));
-        walletWege(customerCardId);
+        walletWege(customerCardId, GoogleWalletService.Meldung.PUNKTE);
     }
 
-    private void walletWege(String customerCardId) {
+    private void walletWege(String customerCardId, GoogleWalletService.Meldung meldung) {
         sicher("APNs Push", () -> apnsPushService.notifyUpdate(customerCardId));
-        sicher("Google Wallet Update", () -> googleWalletService.notifyUpdate(customerCardId));
+        if (meldung == GoogleWalletService.Meldung.KEINE) {
+            sicher("Google Wallet Update", () -> googleWalletService.notifyUpdate(customerCardId));
+        } else {
+            sicher("Google Wallet Update", () -> googleWalletService.notifyUpdate(customerCardId, meldung));
+        }
     }
 
     /**

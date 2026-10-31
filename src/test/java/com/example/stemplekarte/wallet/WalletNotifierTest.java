@@ -11,6 +11,7 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -81,6 +82,20 @@ class WalletNotifierTest {
 
         verify(hub).publishPoints("CC-1", 34_000, "Kuchen", 16_000);
         verify(apns).notifyUpdate("CC-1");
-        verify(google).notifyUpdate("CC-1");
+        verify(google).notifyUpdate("CC-1", GoogleWalletService.Meldung.PUNKTE);
+    }
+
+    @Test
+    void stempelMitMeldungGehtAnGoogle() {
+        CardEventHub hub = mock(CardEventHub.class);
+        ApnsPushService apns = mock(ApnsPushService.class);
+        GoogleWalletService google = mock(GoogleWalletService.class);
+
+        new WalletNotifier(hub, apns, google)
+                .nachStempelAenderung(karte(), GoogleWalletService.Meldung.STEMPEL);
+
+        verify(apns).notifyUpdate("CC-1");
+        verify(google).notifyUpdate("CC-1", GoogleWalletService.Meldung.STEMPEL);
+        verify(google, never()).notifyUpdate("CC-1");
     }
 }

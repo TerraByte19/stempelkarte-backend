@@ -5,6 +5,7 @@ import com.example.stemplekarte.model.Shop;
 import com.example.stemplekarte.security.StaffTokenFilter;
 import com.example.stemplekarte.service.CustomerService;
 import com.example.stemplekarte.service.PointsService;
+import com.example.stemplekarte.wallet.GoogleWalletService;
 import com.example.stemplekarte.wallet.WalletNotifier;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -137,17 +138,17 @@ public class ScanController {
         // SSE an die offene Kartenseite, stiller APNs-Push, Google-Update.
         // Alle drei abgesichert: ein toter Weg darf den Scan nicht abbrechen,
         // der Stempel ist hier laengst gesetzt.
-        notifier.nachStempelAenderung(cc);
-
         boolean rewardEarned = result.rewardsEarnedThisScan() > 0;
 
-        // ── Google Wallet: zusätzliche "Karte voll!"-Benachrichtigung ────
-        // Apple bekommt diese extra Nachricht automatisch über das
-        // changeMessage am "reward-milestone"-Feld im Pass (siehe
-        // ApplePassService) — Google braucht dafür einen expliziten Aufruf.
-        if (rewardEarned) {
-            notifier.googleKarteVoll(cc.getId(), cc.getCard().getRewardText());
-        }
+        // Google-Mitteilung mit eigenem Text: "Karte voll" schlaegt "Neuer
+        // Stempel". Reines Einloesen meldet nichts - der Kunde steht ja an
+        // der Kasse. Apple bekommt beides ueber die changeMessages im Pass.
+        GoogleWalletService.Meldung meldung = rewardEarned
+                ? GoogleWalletService.Meldung.VOLL
+                : result instanceof ScanResult.Stamped
+                        ? GoogleWalletService.Meldung.STEMPEL
+                        : GoogleWalletService.Meldung.KEINE;
+        notifier.nachStempelAenderung(cc, meldung);
 
         String action = switch (result) {
             case ScanResult.Stamped s -> "stamped";
