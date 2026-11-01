@@ -357,9 +357,10 @@ public class ShopController {
     public record WillkommenRequest(boolean enabled, String text,
                                     String title, String hint, String imageUrl,
                                     String colorBackground, String colorForeground,
-                                    String colorLabel) {
+                                    String colorLabel,
+                                    Boolean showTitle, Boolean showGift, Boolean showHint) {
         public WillkommenRequest(boolean enabled, String text) {
-            this(enabled, text, null, null, null, null, null, null);
+            this(enabled, text, null, null, null, null, null, null, null, null, null);
         }
     }
 
@@ -369,7 +370,8 @@ public class ShopController {
                                      long offen, long eingeloest,
                                      String title, String hint, String imageUrl,
                                      String colorBackground, String colorForeground,
-                                     String colorLabel) {}
+                                     String colorLabel,
+                                     boolean showTitle, boolean showGift, boolean showHint) {}
 
     private static final java.util.regex.Pattern FARBE = java.util.regex.Pattern.compile("^#[0-9A-Fa-f]{6}$");
 
@@ -403,9 +405,10 @@ public class ShopController {
         String label = farbe(req.colorLabel(), "Beschriftung");
         com.example.stemplekarte.service.BildUrl.pruefe(req.imageUrl(), "imageUrl");
 
-        List<String> designVorher = designStand(card);
+        List<Object> designVorher = designStand(card);
         card.updateWillkommen(req.enabled(), text);
         card.updateWillkommenDesign(titel, hinweis, req.imageUrl(), bg, fg, label);
+        card.updateWillkommenSichtbar(req.showTitle(), req.showGift(), req.showHint());
         cardService.save(card);
         // Nur bei echter Design-Aenderung: jeder Push zaehlt bei Apple gegen
         // das Tageslimit des Passes.
@@ -434,10 +437,12 @@ public class ShopController {
         return s.trim();
     }
 
-    private static List<String> designStand(Card card) {
+    private static List<Object> designStand(Card card) {
         return java.util.Arrays.asList(card.getWelcomeTitle(), card.getWelcomeHint(),
                 card.getWelcomeImageUrl(), card.getWelcomeColorBackground(),
-                card.getWelcomeColorForeground(), card.getWelcomeColorLabel());
+                card.getWelcomeColorForeground(), card.getWelcomeColorLabel(),
+                card.zeigtWillkommenTitel(), card.zeigtWillkommenGeschenk(),
+                card.zeigtWillkommenHinweis());
     }
 
     private WillkommenResponse willkommenStand(Card card) {
@@ -446,7 +451,8 @@ public class ShopController {
                 customerCardRepo.countByCardAndWelcomeRedeemedAtIsNotNull(card),
                 card.getWelcomeTitle(), card.getWelcomeHint(), card.getWelcomeImageUrl(),
                 card.getWelcomeColorBackground(), card.getWelcomeColorForeground(),
-                card.getWelcomeColorLabel());
+                card.getWelcomeColorLabel(), card.zeigtWillkommenTitel(),
+                card.zeigtWillkommenGeschenk(), card.zeigtWillkommenHinweis());
     }
 
     @Operation(summary = "Praemien einer Karte auflisten")

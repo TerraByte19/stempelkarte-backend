@@ -23,7 +23,36 @@ class WillkommenGoogleTest {
         CustomerCard cc = CustomerCard.create(null,
                 Card.create(mock(Shop.class), "Kaffee", "x", 10, "Gratis Kaffee"));
         cc.willkommenVormerken(text);
+        cc.getCard().updateWillkommenSichtbar(true, true, true);
         return cc;
+    }
+
+    @Test
+    void allesAus_felderWerdenGeloescht() {
+        // Explizites null, sonst bliebe beim Patch der alte Text stehen.
+        CustomerCard cc = karte(null);
+        cc.getCard().updateWillkommenSichtbar(false, false, false);
+        var felder = GoogleWalletService.willkommenFelder(cc);
+        assertThat(Data.isNull(felder[0])).isTrue();
+        assertThat(Data.isNull(felder[1])).isTrue();
+    }
+
+    @Test
+    void ohneTitel_geschenkOhneLabel() {
+        CustomerCard cc = karte("Erster Tee gratis");
+        cc.getCard().updateWillkommenSichtbar(false, true, false);
+        var felder = GoogleWalletService.willkommenFelder(cc);
+        assertThat(Data.isNull(felder[0].getLabel())).isTrue();
+        assertThat(felder[0].getBalance().getString()).isEqualTo("Erster Tee gratis");
+    }
+
+    @Test
+    void nurTitel_stehtImHauptfeld() {
+        CustomerCard cc = karte(null);
+        cc.getCard().updateWillkommenSichtbar(true, false, false);
+        var felder = GoogleWalletService.willkommenFelder(cc);
+        assertThat(felder[0].getBalance().getString()).isEqualTo("Willkommen");
+        assertThat(Data.isNull(felder[0].getLabel())).isTrue();
     }
 
     @Test

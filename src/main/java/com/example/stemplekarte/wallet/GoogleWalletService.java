@@ -516,18 +516,36 @@ public class GoogleWalletService {
         }
     }
 
-    /** Haupt- und Nebenfeld einer gesperrten Karte. Paketsichtbar fuer den Test. */
+    /**
+     * Haupt- und Nebenfeld einer gesperrten Karte. Paketsichtbar fuer den Test.
+     *
+     * Abgeschaltetes wird explizit null gesetzt statt weggelassen: beim Patch
+     * bliebe ein weggelassenes Feld mit seinem alten Text stehen.
+     */
     static LoyaltyPoints[] willkommenFelder(CustomerCard cc) {
         String geschenk = cc.getWillkommenText() != null ? cc.getWillkommenText() : Card.WILLKOMMEN_STANDARD;
         Card card = cc.getCard();
-        return new LoyaltyPoints[] {
-                new LoyaltyPoints()
-                        .setLabel(card.getWillkommenTitel())
-                        .setBalance(new LoyaltyPointsBalance().setString(geschenk)),
-                new LoyaltyPoints()
+        String titel = card.zeigtWillkommenTitel() ? card.getWillkommenTitel() : null;
+
+        LoyaltyPoints haupt;
+        if (card.zeigtWillkommenGeschenk()) {
+            haupt = new LoyaltyPoints()
+                    .setLabel(titel != null ? titel : Data.NULL_STRING)
+                    .setBalance(new LoyaltyPointsBalance().setString(geschenk));
+        } else if (titel != null) {
+            haupt = new LoyaltyPoints()
+                    .setLabel(Data.NULL_STRING)
+                    .setBalance(new LoyaltyPointsBalance().setString(titel));
+        } else {
+            haupt = Data.nullOf(LoyaltyPoints.class);
+        }
+
+        LoyaltyPoints neben = card.zeigtWillkommenHinweis()
+                ? new LoyaltyPoints()
                         .setLabel("So geht's")
                         .setBalance(new LoyaltyPointsBalance().setString(card.getWillkommenHinweis()))
-        };
+                : Data.nullOf(LoyaltyPoints.class);
+        return new LoyaltyPoints[] { haupt, neben };
     }
 
     /**

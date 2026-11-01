@@ -351,20 +351,27 @@ public class ApplePassService {
      * Kein Primary-Feld: es stand gross ueber dem Streifen und verdeckte das
      * Willkommensbild. Das Geschenk steht klein in der Zeile darunter.
      * Titel und Hinweis kommen live von der Karte, das Geschenk vom Kunden.
+     *
+     * Jeder Text ist abschaltbar. Der Kopf bleibt dann mit leerem Wert stehen:
+     * ohne ihn gaebe es beim Freischalten keinen alten Wert und keine Mitteilung.
      */
     private PKGenericPassBuilder baueFelderGesperrt(Card card, CustomerCard cc, boolean grid) {
         String geschenk = cc.getWillkommenText() != null ? cc.getWillkommenText() : Card.WILLKOMMEN_STANDARD;
-        return PKGenericPass.builder()
+        var pass = PKGenericPass.builder()
                 .passType(PKPassType.PKStoreCard)
                 .headerFieldBuilder(PKField.builder()
                         .key(grid ? "stamps" : "stamps-header")
-                        .value(card.getWillkommenTitel()))
-                .secondaryFieldBuilder(PKField.builder()
-                        .key("welcome").label("🎁 GESCHENK").value(geschenk))
-                .secondaryFieldBuilder(PKField.builder()
-                        .key("welcome-how").label("SO GEHT'S").value(card.getWillkommenHinweis()))
-                .auxiliaryFieldBuilder(PKField.builder()
-                        .key("name").label("KUNDE").value(cc.getCustomer().getName()));
+                        .value(card.zeigtWillkommenTitel() ? card.getWillkommenTitel() : ""));
+        if (card.zeigtWillkommenGeschenk()) {
+            pass.secondaryFieldBuilder(PKField.builder()
+                    .key("welcome").label("🎁 GESCHENK").value(geschenk));
+        }
+        if (card.zeigtWillkommenHinweis()) {
+            pass.secondaryFieldBuilder(PKField.builder()
+                    .key("welcome-how").label("SO GEHT'S").value(card.getWillkommenHinweis()));
+        }
+        return pass.auxiliaryFieldBuilder(PKField.builder()
+                .key("name").label("KUNDE").value(cc.getCustomer().getName()));
     }
 
     /**

@@ -136,6 +136,17 @@ public class Card {
     @Column(name = "welcome_color_label", length = 7)
     private String welcomeColorLabel;
 
+    // Welche Texte die gesperrte Karte zeigt. Nullable = aus: ohne Haken
+    // zeigt die Karte nur Bild, Logo und Namen.
+    @Column(name = "welcome_show_title")
+    private Boolean welcomeShowTitle;
+
+    @Column(name = "welcome_show_gift")
+    private Boolean welcomeShowGift;
+
+    @Column(name = "welcome_show_hint")
+    private Boolean welcomeShowHint;
+
     public static final String WILLKOMMEN_STANDARD = "Erster Kaffee geht auf uns";
     public static final int WILLKOMMEN_MAX = 60;
     public static final String WILLKOMMEN_TITEL_STANDARD = "Willkommen";
@@ -241,6 +252,17 @@ public class Card {
         if (fg != null) this.welcomeColorForeground = leerZuNull(fg);
         if (label != null) this.welcomeColorLabel = leerZuNull(label);
     }
+
+    /** null = unveraendert (aelterer Client schickt das Feld nicht). */
+    public void updateWillkommenSichtbar(Boolean titel, Boolean geschenk, Boolean hinweis) {
+        if (titel != null) this.welcomeShowTitle = titel;
+        if (geschenk != null) this.welcomeShowGift = geschenk;
+        if (hinweis != null) this.welcomeShowHint = hinweis;
+    }
+
+    public boolean zeigtWillkommenTitel() { return Boolean.TRUE.equals(welcomeShowTitle); }
+    public boolean zeigtWillkommenGeschenk() { return Boolean.TRUE.equals(welcomeShowGift); }
+    public boolean zeigtWillkommenHinweis() { return Boolean.TRUE.equals(welcomeShowHint); }
 
     private static String leerZuNull(String s) {
         return s.isBlank() ? null : s.trim();

@@ -127,7 +127,8 @@ class WillkommenEinstellungTest {
 
     private ShopController.WillkommenRequest design(String titel, String hinweis, String bild,
                                                     String bg, String fg, String label) {
-        return new ShopController.WillkommenRequest(true, null, titel, hinweis, bild, bg, fg, label);
+        return new ShopController.WillkommenRequest(true, null, titel, hinweis, bild, bg, fg, label,
+                null, null, null);
     }
 
     @Test
@@ -152,6 +153,23 @@ class WillkommenEinstellungTest {
         controller.updateWillkommen(card.getId(),
                 new ShopController.WillkommenRequest(true, "Erster Tee gratis"), auth);
         verify(auffrischer, never()).auffrischen(any());
+    }
+
+    @Test
+    void sichtbarkeit_aendern_frischtAuf_nullLaesstStehen() {
+        Card card = stempelkarte();
+        var antwort = controller.updateWillkommen(card.getId(),
+                new ShopController.WillkommenRequest(true, null, null, null, null, null, null, null,
+                        true, false, true), auth);
+        assertThat(antwort.showTitle()).isTrue();
+        assertThat(antwort.showGift()).isFalse();
+        assertThat(antwort.showHint()).isTrue();
+        verify(auffrischer).auffrischen(card);
+
+        antwort = controller.updateWillkommen(card.getId(),
+                new ShopController.WillkommenRequest(true, "x"), auth);
+        assertThat(antwort.showTitle()).isTrue();
+        assertThat(antwort.showHint()).isTrue();
     }
 
     @Test

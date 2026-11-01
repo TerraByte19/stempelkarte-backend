@@ -50,8 +50,34 @@ class WillkommenPassTest {
     }
 
     @Test
+    void gesperrt_standard_keineTexte() {
+        // Ohne Haken nur Bild, Logo und Name. Der Kopf bleibt leer stehen,
+        // damit das Freischalten eine Mitteilung bringt.
+        Card card = karte();
+        var pass = dienst().baueFelder(card, gesperrt(card), false);
+
+        PKField kopf = pass.getHeaderFields().get(0);
+        assertThat(kopf.getKey()).isEqualTo("stamps-header");
+        assertThat(kopf.getValue()).isEqualTo("");
+        assertThat(pass.getPrimaryFields()).isNullOrEmpty();
+        assertThat(pass.getSecondaryFields()).isNullOrEmpty();
+        assertThat(pass.getAuxiliaryFields().get(0).getValue()).isEqualTo("Ana");
+    }
+
+    @Test
+    void gesperrt_nurHinweis() {
+        Card card = karte();
+        card.updateWillkommenSichtbar(false, false, true);
+        var pass = dienst().baueFelder(card, gesperrt(card), false);
+
+        assertThat(pass.getHeaderFields().get(0).getValue()).isEqualTo("");
+        assertThat(pass.getSecondaryFields()).extracting(PKField::getKey).containsExactly("welcome-how");
+    }
+
+    @Test
     void gesperrt_zeigtGeschenk_keineStempel() {
         Card card = karte();
+        card.updateWillkommenSichtbar(true, true, true);
         var pass = dienst().baueFelder(card, gesperrt(card), false);
 
         PKField kopf = pass.getHeaderFields().get(0);
@@ -77,6 +103,7 @@ class WillkommenPassTest {
     void gesperrt_eigenerTitelUndHinweis() {
         Card card = karte();
         card.updateWillkommenDesign("Hallo!", "Gilt bis Monatsende", null, null, null, null);
+        card.updateWillkommenSichtbar(true, true, true);
         var pass = dienst().baueFelder(card, gesperrt(card), false);
 
         assertThat(pass.getHeaderFields().get(0).getValue()).isEqualTo("Hallo!");
