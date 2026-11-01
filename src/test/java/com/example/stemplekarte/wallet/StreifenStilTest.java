@@ -191,6 +191,18 @@ class StreifenStilTest {
         assertThat(rechts).isGreaterThan(200);
     }
 
+    /**
+     * Das Willkommensbild hat keinen Text darueber (gesperrte Karte ohne
+     * Hauptfeld). Abdunkeln wuerde das Bild nur verfaelschen.
+     */
+    @Test
+    void willkommensBildBleibtUnverfaelscht() {
+        BufferedImage img = PassTemplateGenerator.renderFoto(foto(2000, 800), 1125, 432, false);
+
+        assertThat(new Color(img.getRGB(40, 216)).getRed()).isEqualTo(255);
+        assertThat(new Color(img.getRGB(1080, 216)).getRed()).isEqualTo(255);
+    }
+
     // ── Fortschritt aus der Karte ─────────────────────────────────────────
 
     @Test

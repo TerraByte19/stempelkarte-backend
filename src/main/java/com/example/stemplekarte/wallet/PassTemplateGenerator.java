@@ -635,7 +635,7 @@ public class PassTemplateGenerator {
         int[][] masse = {{375, 144}, {750, 288}, {1125, 432}};
         String[] namen = {"strip.png", "strip@2x.png", "strip@3x.png"};
         for (int i = 0; i < masse.length; i++) {
-            ImageIO.write(renderFoto(foto, masse[i][0], masse[i][1]), "PNG",
+            ImageIO.write(renderFoto(foto, masse[i][0], masse[i][1], false), "PNG",
                     templatePath.resolve(namen[i]).toFile());
         }
     }
@@ -763,6 +763,11 @@ public class PassTemplateGenerator {
      * Seite verschwindet weisse Schrift auf hellen Stellen des Fotos.
      */
     static BufferedImage renderFoto(BufferedImage foto, int w, int h) {
+        return renderFoto(foto, w, h, true);
+    }
+
+    /** abdunkeln=false fuer Streifen ohne Text darueber (Willkommensbild). */
+    static BufferedImage renderFoto(BufferedImage foto, int w, int h, boolean abdunkeln) {
         BufferedImage img = new BufferedImage(w, h, BufferedImage.TYPE_INT_ARGB);
         Graphics2D g = leinwand(img);
 
@@ -771,9 +776,11 @@ public class PassTemplateGenerator {
         int bh = Math.max(1, (int) Math.round(foto.getHeight() * faktor));
         g.drawImage(foto, (w - bw) / 2, (h - bh) / 2, bw, bh, null);
 
-        g.setPaint(new java.awt.GradientPaint(0, 0, new Color(0, 0, 0, 170),
-                w * 0.7f, 0, new Color(0, 0, 0, 0)));
-        g.fillRect(0, 0, w, h);
+        if (abdunkeln) {
+            g.setPaint(new java.awt.GradientPaint(0, 0, new Color(0, 0, 0, 170),
+                    w * 0.7f, 0, new Color(0, 0, 0, 0)));
+            g.fillRect(0, 0, w, h);
+        }
         g.dispose();
         return img;
     }
