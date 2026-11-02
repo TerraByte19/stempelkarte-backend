@@ -6,6 +6,8 @@ import com.example.stemplekarte.model.ScanLog;
 import com.example.stemplekarte.model.Shop;
 import com.example.stemplekarte.repository.CardRepository;
 import com.example.stemplekarte.repository.CustomerCardRepository;
+import com.example.stemplekarte.repository.CustomerRepository;
+import com.example.stemplekarte.model.Customer;
 import com.example.stemplekarte.model.BookingKind;
 import com.example.stemplekarte.model.PointsBooking;
 import com.example.stemplekarte.repository.PointsBookingRepository;
@@ -42,16 +44,18 @@ public class StatsService {
     private final CardService cardService;
     private final CardRepository cardRepo;
     private final CustomerCardRepository customerCardRepo;
+    private final CustomerRepository customerRepo;
     private final ScanLogRepository scanLogRepo;
     private final PointsBookingRepository pointsBookingRepo;
 
     public StatsService(CardService cardService, CardRepository cardRepo,
-                        CustomerCardRepository customerCardRepo, ScanLogRepository scanLogRepo,
-                        PointsBookingRepository pointsBookingRepo) {
+                        CustomerCardRepository customerCardRepo, CustomerRepository customerRepo,
+                        ScanLogRepository scanLogRepo, PointsBookingRepository pointsBookingRepo) {
         this.pointsBookingRepo = pointsBookingRepo;
         this.cardService = cardService;
         this.cardRepo = cardRepo;
         this.customerCardRepo = customerCardRepo;
+        this.customerRepo = customerRepo;
         this.scanLogRepo = scanLogRepo;
     }
 
@@ -82,6 +86,8 @@ public class StatsService {
         Instant sampleWindowAgo = now.minus(SAMPLE_DAYS, java.time.temporal.ChronoUnit.DAYS);
         Instant sevenDaysAgo  = now.minus(7,  java.time.temporal.ChronoUnit.DAYS);
         Instant fourteenDaysAgo = now.minus(14, java.time.temporal.ChronoUnit.DAYS);
+        // Vormonat (Tag 31-60) nur fuer den Vergleich "diesen Monat vs. letzten".
+        Instant prevMonthAgo = now.minus(2L * SAMPLE_DAYS, java.time.temporal.ChronoUnit.DAYS);
 
         // Tages-Fenster fuer die Verlaufs-Diagramme (Stempel + Neukunden).
         LocalDate von = now.minus(HISTORY_DAYS - 1L, java.time.temporal.ChronoUnit.DAYS).atZone(ZONE).toLocalDate();
@@ -169,20 +175,34 @@ public class StatsService {
         // Sample (30 Tage) aus dem ScanLog - fuer Wochentag/Stunden-Auswertung
         // und Monats-Summen. Bewusst groesser als das 2-Wochen-Verlaufsfenster,
         // damit "staerkster Tag" nicht auf zu wenig Daten steht.
+        // Geholt werden 60 Tage: die zweite Haelfte dient nur dem Vergleich
+        // zum Vormonat und bleibt aus Wochentag/Stunde/Verlauf draussen.
         List<ScanLog> recent = scanLogRepo
-                .findByShopIdAndScannedAtAfterOrderByScannedAtAsc(shop.getId(), sampleWindowAgo);
+                .findByShopIdAndScannedAtAfterOrderByScannedAtAsc(shop.getId(), prevMonthAgo);
 
         int stampsThisWeek = 0, stampsThisMonth = 0;
         int rewardsThisWeek = 0, rewardsThisMonth = 0;
+        // Vorzeitraeume: Tag 8-14 und Tag 31-60. Daraus macht das Dashboard
+        // "+12 % gegenueber letzter Woche".
+        int stampsLastWeek = 0, stampsPrevMonth = 0;
+        int rewardsLastWeek = 0, rewardsPrevMonth = 0;
         int[] byWeekday = new int[8];   // Index 1-7
         int[] byHour = new int[24];
 
         for (ScanLog sl : recent) {
+            if (!sl.getScannedAt().isAfter(sampleWindowAgo)) {
+                stampsPrevMonth += sl.getStampsAdded();
+                rewardsPrevMonth += sl.getRewardsEarned();
+                continue;
+            }
             stampsThisMonth += sl.getStampsAdded();
             rewardsThisMonth += sl.getRewardsEarned();
             if (sl.getScannedAt().isAfter(sevenDaysAgo)) {
                 stampsThisWeek += sl.getStampsAdded();
                 rewardsThisWeek += sl.getRewardsEarned();
+            } else if (sl.getScannedAt().isAfter(fourteenDaysAgo)) {
+                stampsLastWeek += sl.getStampsAdded();
+                rewardsLastWeek += sl.getRewardsEarned();
             }
             var zdt = sl.getScannedAt().atZone(ZONE);
             byWeekday[zdt.getDayOfWeek().getValue()] += sl.getStampsAdded();
@@ -266,6 +286,10 @@ public class StatsService {
         summary.put("stampsThisMonth", stampsThisMonth);
         summary.put("rewardsThisWeek", rewardsThisWeek);
         summary.put("rewardsThisMonth", rewardsThisMonth);
+        summary.put("stampsLastWeek", stampsLastWeek);      // Tag 8-14
+        summary.put("rewardsLastWeek", rewardsLastWeek);
+        summary.put("stampsPrevMonth", stampsPrevMonth);    // Tag 31-60
+        summary.put("rewardsPrevMonth", rewardsPrevMonth);
         summary.put("bestDay", bestDay);
         summary.put("bestHour", bestHour);
         summary.put("newCustomersThisWeek", newThisWeek);
@@ -315,6 +339,51 @@ public class StatsService {
             perCard.add(m);
         }
         return ausstehend;
+    }
+
+    /**
+     * Letzte Aktivitaeten fuers Dashboard: die juengsten Scans mit Namen und
+     * die neuesten Kundenkarten. ScanLog traegt nur IDs (Loeschen darf nicht
+     * am Protokoll scheitern), die Namen kommen hier dazu. Ein Kunde, der
+     * sich inzwischen geloescht hat, bleibt als leerer Name stehen.
+     */
+    public Map<String, Object> aktivitaet(Shop shop) {
+        List<ScanLog> scans = scanLogRepo.findTop15ByShopIdOrderByScannedAtDesc(shop.getId());
+
+        Map<String, String> kundenNamen = new HashMap<>();
+        customerRepo.findAllById(scans.stream().map(ScanLog::getCustomerId)
+                        .filter(id -> id != null).distinct().toList())
+                .forEach(c -> kundenNamen.put(c.getId(), c.getName()));
+        Map<String, String> kartenNamen = new HashMap<>();
+        cardRepo.findAllById(scans.stream().map(ScanLog::getCardId).distinct().toList())
+                .forEach(c -> kartenNamen.put(c.getId(), c.getName()));
+
+        List<Map<String, Object>> letzte = new ArrayList<>();
+        for (ScanLog sl : scans) {
+            Map<String, Object> m = new HashMap<>();
+            m.put("zeit", sl.getScannedAt().toString());
+            m.put("kunde", kundenNamen.getOrDefault(sl.getCustomerId(), ""));
+            m.put("karte", kartenNamen.getOrDefault(sl.getCardId(), ""));
+            m.put("stempel", sl.getStampsAdded());
+            m.put("praemien", sl.getRewardsEarned());
+            letzte.add(m);
+        }
+
+        List<Map<String, Object>> neue = new ArrayList<>();
+        for (CustomerCard cc : customerCardRepo.findTop5ByCard_ShopOrderByCreatedAtDesc(shop)) {
+            Customer k = cc.getCustomer();
+            Map<String, Object> m = new HashMap<>();
+            m.put("name", k != null ? k.getName() : "");
+            m.put("karte", cc.getCard().getName());
+            m.put("seit", cc.getCreatedAt() != null ? cc.getCreatedAt().toString() : null);
+            m.put("gesperrt", cc.isWillkommenOffen());
+            neue.add(m);
+        }
+
+        Map<String, Object> out = new HashMap<>();
+        out.put("scans", letzte);
+        out.put("neueKunden", neue);
+        return out;
     }
 
     /** Was die Kunden noch einloesen duerfen. Bewusst statisch und ohne

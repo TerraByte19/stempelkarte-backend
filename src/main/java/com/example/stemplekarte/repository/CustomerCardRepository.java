@@ -64,6 +64,10 @@ public interface CustomerCardRepository extends JpaRepository<CustomerCard, Stri
     List<CustomerCard> findRueckholKandidaten(Shop shop, java.time.Instant grenze,
                                               org.springframework.data.domain.Pageable seite);
 
+    // Dashboard "Neu dabei": die juengsten Kundenkarten mit Name und Karte.
+    @EntityGraph(attributePaths = {"card", "customer"})
+    List<CustomerCard> findTop5ByCard_ShopOrderByCreatedAtDesc(Shop shop);
+
     // Kundenliste: aktive Karten eines Ladens, Suche in Name und E-Mail
     // (q = "%suchwort%" in Kleinbuchstaben, "%" = alles), zuletzt gesehene
     // zuerst. Immer ein Muster uebergeben statt ":q is null" - Postgres

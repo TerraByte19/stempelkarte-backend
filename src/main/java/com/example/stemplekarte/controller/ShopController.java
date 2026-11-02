@@ -528,6 +528,12 @@ public class ShopController {
         return statsService.summary(currentShop(auth));
     }
 
+    @Operation(summary = "Letzte Aktivitaeten: juengste Scans und neueste Kunden (Dashboard)")
+    @GetMapping("/stats/aktivitaet")
+    public Map<String, Object> statsAktivitaet(Authentication auth) {
+        return statsService.aktivitaet(currentShop(auth));
+    }
+
     // Tages-Detail: Stunden-Verteilung der Stempel fuer EINEN Tag. Wird
     // aufgerufen, wenn im Verlaufs-Diagramm ein Balken angetippt wird.
     @Operation(summary = "Stempel eines einzelnen Tages nach Stunde")
