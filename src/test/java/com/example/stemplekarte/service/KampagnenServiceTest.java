@@ -209,7 +209,7 @@ class KampagnenServiceTest {
 
     @Test
     void unbekannteGruppe_abgelehnt() {
-        assertThatThrownBy(() -> dienst.starte(shop, "Hallo", "geburtstag"))
+        assertThatThrownBy(() -> dienst.starte(shop, "Hallo", "sternzeichen"))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("Zielgruppe");
         verify(kampagneRepo, never()).save(any());

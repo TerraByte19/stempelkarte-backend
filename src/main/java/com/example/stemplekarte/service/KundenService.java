@@ -47,7 +47,8 @@ public class KundenService {
                         int stamps, int rewardThreshold, long pointsX100, String pointsText,
                         int totalRewards, String lastVisitAt, String createdAt,
                         boolean marketingConsent, boolean emailConfirmed,
-                        boolean welcomePending, boolean apple) {}
+                        boolean welcomePending, boolean apple,
+                        String birthday, String phone) {}
 
     public record Seite(List<Kunde> items, int page, int totalPages, long totalItems) {}
 
@@ -79,7 +80,9 @@ public class KundenService {
                 cc.getCreatedAt() != null ? cc.getCreatedAt().toString() : null,
                 cc.isMarketingConsent(), cc.getCustomer().isEmailConfirmed(),
                 cc.isWillkommenOffen(),
-                !deviceRepo.findBySerialNumber(cc.getId()).isEmpty());
+                !deviceRepo.findBySerialNumber(cc.getId()).isEmpty(),
+                cc.getBirthday() != null ? cc.getBirthday().toString() : null,
+                cc.getPhone());
     }
 
     /**

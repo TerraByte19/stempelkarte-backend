@@ -156,6 +156,14 @@ public class Shop {
     @Column(name = "google_review_url", length = 500)
     private String googleReviewUrl;
 
+    // Anmeldeformular: welche Zusatzfelder abgefragt werden. OFF / OPTIONAL /
+    // REQUIRED, null = OFF. Name und E-Mail sind immer Pflicht.
+    @Column(name = "signup_birthday", length = 10)
+    private String signupBirthday;
+
+    @Column(name = "signup_phone", length = 10)
+    private String signupPhone;
+
     // Vom Admin befreit: kein Ladenort noetig, keine Geo-Pruefung beim Scan.
     // Null = nicht befreit, also Pflicht wie fuer alle.
     @Column(name = "geo_befreit")
@@ -398,6 +406,22 @@ public class Shop {
     /** Null oder leer = kein Link. Geprueft wird im ShopService. */
     public void updateGoogleReviewUrl(String url) {
         this.googleReviewUrl = (url == null || url.isBlank()) ? null : url.trim();
+        this.updatedAt = Instant.now();
+    }
+
+    // ── Anmeldefelder ───────────────────────────────────────────────────
+
+    public static final String FELD_AUS = "OFF";
+    public static final String FELD_OPTIONAL = "OPTIONAL";
+    public static final String FELD_PFLICHT = "REQUIRED";
+
+    public String getSignupBirthday() { return signupBirthday != null ? signupBirthday : FELD_AUS; }
+    public String getSignupPhone() { return signupPhone != null ? signupPhone : FELD_AUS; }
+
+    /** Werte geprueft im ShopService. */
+    public void updateAnmeldefelder(String birthday, String phone) {
+        this.signupBirthday = birthday;
+        this.signupPhone = phone;
         this.updatedAt = Instant.now();
     }
 

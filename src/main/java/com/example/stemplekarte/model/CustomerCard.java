@@ -71,6 +71,16 @@ public class CustomerCard {
     @Column(name = "winback_text", length = 300)
     private String winbackText;
 
+    // ── Anmeldefelder (Shop.signup*) ─────────────────────────────────────
+    // Pro Kundenkarte, nicht am Customer: die Angaben gelten gegenueber
+    // DIESEM Laden. Ein anderer Laden, bei dem derselbe Kunde ohne diese
+    // Felder eine Karte holt, bekommt sie nicht zu sehen.
+    @Column(name = "birthday")
+    private java.time.LocalDate birthday;
+
+    @Column(name = "phone", length = 30)
+    private String phone;
+
     // ── Kampagne (KampagnenService) ──────────────────────────────────────
     // Die letzte Kampagne, die diese Karte bekommen hat. Bleibt stehen, bis
     // die naechste kommt - der Kunde soll das Angebot auch noch nach dem
@@ -290,6 +300,22 @@ public class CustomerCard {
 
     public String getKampagneText() { return kampagneText; }
     public Instant getKampagneAm() { return kampagneAm; }
+
+    // ── Anmeldefelder ────────────────────────────────────────────────────
+
+    /**
+     * Nur leere Felder fuellen. Das Anmeldeformular ist offen (keine
+     * Anmeldung noetig) - wer eine fremde E-Mail eintippt, darf damit nicht
+     * die Nummer eines bestehenden Kunden umschreiben. Und wer sich selbst
+     * ein zweites Mal anmeldet und das Feld leer laesst, verliert nichts.
+     */
+    public void anmeldedatenErgaenzen(java.time.LocalDate birthday, String phone) {
+        if (this.birthday == null && birthday != null) this.birthday = birthday;
+        if (this.phone == null && phone != null) this.phone = phone;
+    }
+
+    public java.time.LocalDate getBirthday() { return birthday; }
+    public String getPhone() { return phone; }
 
     // ── Willkommensgeschenk ──────────────────────────────────────────────
 

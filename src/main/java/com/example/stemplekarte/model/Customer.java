@@ -36,6 +36,10 @@ public class Customer {
     @Column(name = "delete_token", length = 64)
     private String deleteToken;
 
+    // Geburtstag und Handynummer liegen bewusst NICHT hier, sondern an der
+    // CustomerCard: der Kunde ist ladenuebergreifend (eine E-Mail, ein
+    // Datensatz), die Angaben macht er aber gegenueber EINEM Laden.
+
     protected Customer() {}
 
     public static Customer create(String name, String email) {
@@ -83,6 +87,7 @@ public class Customer {
         this.deleteToken = newToken();
         return this.deleteToken;
     }
+
 
     public String getId() { return id; }
     public String getName() { return name; }

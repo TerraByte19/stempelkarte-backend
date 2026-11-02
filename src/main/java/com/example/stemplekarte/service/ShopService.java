@@ -150,6 +150,23 @@ public class ShopService {
         return shopRepo.save(shop);
     }
 
+    /** Anmeldefelder: OFF, OPTIONAL oder REQUIRED je Feld. Leer = OFF. */
+    @Transactional
+    public Shop updateAnmeldefelder(String shopId, String birthday, String phone) {
+        Shop shop = getById(shopId);
+        shop.updateAnmeldefelder(feldWert(birthday, "Geburtstag"), feldWert(phone, "Handynummer"));
+        return shopRepo.save(shop);
+    }
+
+    private static String feldWert(String wert, String feld) {
+        if (wert == null || wert.isBlank()) return Shop.FELD_AUS;
+        String w = wert.trim().toUpperCase(java.util.Locale.ROOT);
+        if (!Shop.FELD_AUS.equals(w) && !Shop.FELD_OPTIONAL.equals(w) && !Shop.FELD_PFLICHT.equals(w)) {
+            throw new IllegalArgumentException(feld + ": erlaubt sind OFF, OPTIONAL oder REQUIRED");
+        }
+        return w;
+    }
+
     /** Rueckhol-Nachricht. Tage nur aus der Auswahl im Profil. */
     @Transactional
     public Shop updateRueckhol(String shopId, boolean enabled, int days, String text) {

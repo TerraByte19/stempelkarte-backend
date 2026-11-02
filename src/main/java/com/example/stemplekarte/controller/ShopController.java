@@ -194,7 +194,23 @@ public class ShopController {
         rueckholFelder(map, shop);
         map.put("nameColor", shop.getNameColor());
         map.put("googleReviewUrl", shop.getGoogleReviewUrl() != null ? shop.getGoogleReviewUrl() : "");
+        map.put("signupBirthday", shop.getSignupBirthday());
+        map.put("signupPhone", shop.getSignupPhone());
         return map;
+    }
+
+    public record AnmeldefelderRequest(String birthday, String phone) {}
+
+    @Operation(summary = "Anmeldefelder einstellen",
+            description = "Je Feld OFF, OPTIONAL oder REQUIRED. Wirkt auf neue Anmeldungen ueber "
+                    + "/karte-neu/{cardId}. Name und E-Mail bleiben immer Pflicht.")
+    @PutMapping("/me/anmeldefelder")
+    public Map<String, Object> updateAnmeldefelder(@RequestBody AnmeldefelderRequest req, Authentication auth) {
+        Shop updated = shopService.updateAnmeldefelder(currentShop(auth).getId(), req.birthday(), req.phone());
+        Map<String, Object> out = new HashMap<>();
+        out.put("signupBirthday", updated.getSignupBirthday());
+        out.put("signupPhone", updated.getSignupPhone());
+        return out;
     }
 
     public record GoogleReviewRequest(String url) {}

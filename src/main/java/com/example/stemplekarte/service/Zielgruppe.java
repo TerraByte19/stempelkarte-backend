@@ -23,6 +23,8 @@ public enum Zielgruppe {
     ALLE,
     /** Karte in den letzten 14 Tagen angelegt. */
     NEU,
+    /** Geburtstag im laufenden Monat. Nur, wenn der Laden ihn bei der Anmeldung abfragt. */
+    GEBURTSTAG,
     INAKTIV_30,
     INAKTIV_60,
     INAKTIV_90,
@@ -35,6 +37,7 @@ public enum Zielgruppe {
     /** Noch 1 oder 2 Stempel bis zur Praemie. Nur Stempelkarten. */
     FAST_VOLL;
 
+    private static final java.time.ZoneId ZONE = java.time.ZoneId.of("Europe/Berlin");
     static final int NEU_TAGE = 14;
     static final int EINMAL_TAGE = 14;
     static final int STAMM_RUHIG_TAGE = 21;
@@ -60,6 +63,11 @@ public enum Zielgruppe {
             case ALLE -> true;
             case NEU -> cc.getCreatedAt() != null
                     && cc.getCreatedAt().isAfter(jetzt.minus(Duration.ofDays(NEU_TAGE)));
+            case GEBURTSTAG -> {
+                // Von der Karte, nicht vom Kunden: nur, was er DIESEM Laden gesagt hat.
+                java.time.LocalDate g = cc.getBirthday();
+                yield g != null && g.getMonth() == jetzt.atZone(ZONE).getMonth();
+            }
             case INAKTIV_30 -> pauseSeit(cc, jetzt, 30);
             case INAKTIV_60 -> pauseSeit(cc, jetzt, 60);
             case INAKTIV_90 -> pauseSeit(cc, jetzt, 90);

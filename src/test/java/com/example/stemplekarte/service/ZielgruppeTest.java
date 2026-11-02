@@ -45,7 +45,8 @@ class ZielgruppeTest {
         assertThat(Zielgruppe.von(null)).isEqualTo(Zielgruppe.ALLE);
         assertThat(Zielgruppe.von(" ")).isEqualTo(Zielgruppe.ALLE);
         assertThat(Zielgruppe.von("inaktiv_30")).isEqualTo(Zielgruppe.INAKTIV_30);
-        assertThatThrownBy(() -> Zielgruppe.von("geburtstag"))
+        assertThat(Zielgruppe.von("geburtstag")).isEqualTo(Zielgruppe.GEBURTSTAG);
+        assertThatThrownBy(() -> Zielgruppe.von("sternzeichen"))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 
@@ -59,6 +60,20 @@ class ZielgruppeTest {
         CustomerCard cc = karte(1);
         assertThat(passt(Zielgruppe.NEU, cc, in(1))).isTrue();
         assertThat(passt(Zielgruppe.NEU, cc, in(20))).isFalse();
+    }
+
+    @Test
+    void geburtstag_imLaufendenMonat() {
+        java.time.ZoneId zone = java.time.ZoneId.of("Europe/Berlin");
+        java.time.LocalDate heute = jetzt.atZone(zone).toLocalDate();
+        CustomerCard mit = karte(1);
+        mit.anmeldedatenErgaenzen(heute.minusYears(30).withDayOfMonth(1), null);
+        CustomerCard anderer = karte(1);
+        anderer.anmeldedatenErgaenzen(heute.minusYears(30).plusMonths(1), null);
+        assertThat(passt(Zielgruppe.GEBURTSTAG, mit, jetzt)).isTrue();
+        assertThat(passt(Zielgruppe.GEBURTSTAG, anderer, jetzt)).isFalse();
+        // Ohne Angabe nie - der Laden fragt den Geburtstag vielleicht gar nicht ab.
+        assertThat(passt(Zielgruppe.GEBURTSTAG, karte(1), jetzt)).isFalse();
     }
 
     @Test

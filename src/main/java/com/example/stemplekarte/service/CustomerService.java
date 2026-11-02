@@ -55,6 +55,14 @@ public class CustomerService {
     @Transactional
     public CustomerCard registerForCard(String name, String email, String cardId,
                                         boolean marketingConsent) {
+        return registerForCard(name, email, cardId, marketingConsent, null, null);
+    }
+
+    /** birthday und phone: optionale Anmeldefelder (Shop.signup*), geprueft im Controller. */
+    @Transactional
+    public CustomerCard registerForCard(String name, String email, String cardId,
+                                        boolean marketingConsent,
+                                        java.time.LocalDate birthday, String phone) {
         Card card = cardRepo.findById(cardId)
                 .orElseThrow(() -> new NoSuchElementException("Karte nicht gefunden: " + cardId));
 
@@ -74,6 +82,11 @@ public class CustomerService {
         // Einwilligung speichern (nur wenn neu, nicht ungewollt zurücksetzen)
         if (marketingConsent && !cc.isMarketingConsent()) {
             cc.giveMarketingConsent();
+            customerCardRepo.save(cc);
+        }
+        // Geburtstag/Nummer an der Karte dieses Ladens, nur leere Felder.
+        if (birthday != null || phone != null) {
+            cc.anmeldedatenErgaenzen(birthday, phone);
             customerCardRepo.save(cc);
         }
 

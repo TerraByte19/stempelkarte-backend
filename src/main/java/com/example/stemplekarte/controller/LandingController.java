@@ -57,13 +57,27 @@ public class LandingController {
     // - die Karte direkt verknüpfen
     // - die Marketing-Einwilligung pro Karte speichern
     // - die Bestätigungs-Mail (Double-Opt-In) auslösen.
+    // birthday (JJJJ-MM-TT) und phone sind optional; ob sie Pflicht sind,
+    // sagt der Laden (Shop.signup*). Ein aelteres Formular schickt sie nicht.
     public record RegisterRequest(String name, String email, String cardId,
-                                  boolean marketingConsent) {}
+                                  boolean marketingConsent, String birthday, String phone) {}
 
     @PostMapping("/karte-neu/register")
     public Map<String, Object> registerForCard(@RequestBody RegisterRequest req) {
+        com.example.stemplekarte.model.Shop shop = cardService.getById(req.cardId()).getShop();
+        // Ausgeschaltete Felder werden ignoriert, auch wenn ein alter Tab sie schickt.
+        java.time.LocalDate geburtstag = com.example.stemplekarte.model.Shop.FELD_AUS.equals(shop.getSignupBirthday())
+                ? null : com.example.stemplekarte.service.Anmeldedaten.geburtstag(req.birthday());
+        String telefon = com.example.stemplekarte.model.Shop.FELD_AUS.equals(shop.getSignupPhone())
+                ? null : com.example.stemplekarte.service.Anmeldedaten.telefon(req.phone());
+        if (com.example.stemplekarte.model.Shop.FELD_PFLICHT.equals(shop.getSignupBirthday()) && geburtstag == null) {
+            throw new IllegalArgumentException("Bitte Geburtstag angeben");
+        }
+        if (com.example.stemplekarte.model.Shop.FELD_PFLICHT.equals(shop.getSignupPhone()) && telefon == null) {
+            throw new IllegalArgumentException("Bitte Handynummer angeben");
+        }
         customerService.registerForCard(
-                req.name(), req.email(), req.cardId(), req.marketingConsent());
+                req.name(), req.email(), req.cardId(), req.marketingConsent(), geburtstag, telefon);
         // Jede Anmeldung verlangt jetzt IMMER eine Mail-Bestätigung.
         // Das Frontend zeigt daher immer den "Check deine Mails"-Screen;
         // die Weiterleitung zur Karte passiert erst über den Link in der Mail.
@@ -767,14 +781,19 @@ public class LandingController {
                             .info-title { font-size: 16px; font-weight: 600; margin-bottom: 6px; }
                             .info-text { font-size: 13px; opacity: 0.85; line-height: 1.5; }
                             .form { display: flex; flex-direction: column; gap: 12px; }
-                            input[type=text], input[type=email] {
+                            input[type=text], input[type=email], input[type=date], input[type=tel] {
                                 padding: 12px 16px;
                                 border-radius: 10px;
                                 border: 1px solid rgba(var(--ink),0.25);
                                 font-size: 15px;
                                 outline: none;
                                 width: 100%%;
+                                color: inherit;
+                                background: rgba(255,255,255,0.9);
+                                color: #1a1a1a;
                             }
+                            /* Zusatzfeld mit Beschriftung (ein date-Feld hat keinen Platzhalter) */
+                            .feld { display: flex; flex-direction: column; gap: 6px; font-size: 13px; opacity: 0.95; }
                             /* Werbe-Checkbox: gut sicht- und bedienbar, aber unaufdringlich */
                             .consent {
                                 display: flex;
@@ -831,6 +850,7 @@ public class LandingController {
                             <div class="form" id="form">
                                 <input type="text" id="name" placeholder="Dein Name" required />
                                 <input type="email" id="email" placeholder="Deine E-Mail" required />
+                                %s
                                 <label class="consent">
                                     <input type="checkbox" id="consent" />
                                     <span>Ich möchte Angebote von %s per E-Mail erhalten.
@@ -857,10 +877,25 @@ public class LandingController {
                                 const email = document.getElementById('email').value.trim()
                                 const consent = document.getElementById('consent').checked
                                 const errorEl = document.getElementById('error')
+                                // Zusatzfelder nur, wenn der Laden sie abfragt (dann sind sie im Formular).
+                                const bEl = document.getElementById('birthday')
+                                const pEl = document.getElementById('phone')
+                                const birthday = bEl ? bEl.value : null
+                                const phone = pEl ? pEl.value.trim() : null
 
                                 if (!name || !email) {
                                     errorEl.style.display = 'block'
                                     errorEl.textContent = 'Bitte Name und E-Mail eingeben'
+                                    return
+                                }
+                                if (bEl && bEl.dataset.required === '1' && !birthday) {
+                                    errorEl.style.display = 'block'
+                                    errorEl.textContent = 'Bitte Geburtstag angeben'
+                                    return
+                                }
+                                if (pEl && pEl.dataset.required === '1' && !phone) {
+                                    errorEl.style.display = 'block'
+                                    errorEl.textContent = 'Bitte Handynummer angeben'
                                     return
                                 }
 
@@ -871,10 +906,16 @@ public class LandingController {
                                         body: JSON.stringify({
                                             name, email,
                                             cardId: %s,
-                                            marketingConsent: consent
+                                            marketingConsent: consent,
+                                            birthday, phone
                                         })
                                     })
-                                    if (!res.ok) throw new Error('register failed')
+                                    if (!res.ok) {
+                                        // Der Server sagt, was fehlt (Geburtstag, Nummer) - das anzeigen.
+                                        let msg = 'Fehler - bitte nochmal versuchen'
+                                        try { const j = await res.json(); if (j && j.error) msg = j.error } catch (e2) {}
+                                        throw new Error(msg)
+                                    }
 
                                     // Jede Anmeldung verlangt jetzt eine Mail-Bestätigung.
                                     // Immer den "Check deine Mails"-Screen zeigen — die
@@ -883,7 +924,7 @@ public class LandingController {
                                     document.getElementById('success').style.display = 'block'
                                 } catch(e) {
                                     errorEl.style.display = 'block'
-                                    errorEl.textContent = 'Fehler — bitte nochmal versuchen'
+                                    errorEl.textContent = (e && e.message) ? e.message : 'Fehler - bitte nochmal versuchen'
                                 }
                             }
                         </script>
@@ -896,6 +937,7 @@ public class LandingController {
                     escapeHtml(shopName),
                     anmeldeTitel(card),
                     anmeldeText(card),
+                    anmeldeFelder(card.getShop()),
                     escapeHtml(shopName),
                     bewertungsLink(card.getShop()),
                     // cardId steht in einer JS-Zeichenkette - toJsString
@@ -923,6 +965,32 @@ public class LandingController {
                 + "style='display:block;margin-top:14px;text-align:center;font-size:14px;"
                 + "color:inherit;opacity:.85;text-decoration:underline'>"
                 + "⭐ Bewerte uns bei Google</a>";
+    }
+
+    /**
+     * Zusatzfelder des Anmeldeformulars, je nach Ladeneinstellung. Aus = kein
+     * Markup, das Formular bleibt wie bisher. data-required liest das JS der
+     * Seite; der Server prueft es trotzdem noch einmal.
+     */
+    public static String anmeldeFelder(com.example.stemplekarte.model.Shop shop) {
+        if (shop == null) return "";
+        StringBuilder sb = new StringBuilder();
+        String geb = shop.getSignupBirthday();
+        if (!com.example.stemplekarte.model.Shop.FELD_AUS.equals(geb)) {
+            boolean pflicht = com.example.stemplekarte.model.Shop.FELD_PFLICHT.equals(geb);
+            sb.append("<label class='feld'><span>Geburtstag").append(pflicht ? "" : " (optional)").append("</span>")
+              .append("<input type='date' id='birthday' max='")
+              .append(java.time.LocalDate.now(java.time.ZoneId.of("Europe/Berlin")))
+              .append("' data-required='").append(pflicht ? "1" : "0").append("' /></label>");
+        }
+        String tel = shop.getSignupPhone();
+        if (!com.example.stemplekarte.model.Shop.FELD_AUS.equals(tel)) {
+            boolean pflicht = com.example.stemplekarte.model.Shop.FELD_PFLICHT.equals(tel);
+            sb.append("<input type='tel' id='phone' maxlength='30' placeholder='Handynummer")
+              .append(pflicht ? "" : " (optional)")
+              .append("' data-required='").append(pflicht ? "1" : "0").append("' />");
+        }
+        return sb.toString();
     }
 
     /** Ohne Angebot steht hier wortgleich der bisherige Text. */
