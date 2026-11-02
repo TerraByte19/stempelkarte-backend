@@ -185,19 +185,55 @@ public class KampagnenService {
     }
 
     public static final int PLANUNG_MAX_TAGE = 90;
+    /** Unter so vielen Empfaengern sagt eine Kontrollgruppe nichts aus. */
+    public static final int KONTROLLE_MIN = 10;
 
     public Kampagne starte(Shop shop, String roh, String gruppeKey) {
-        return starte(shop, roh, gruppeKey, null);
+        return starte(shop, roh, gruppeKey, null, false);
+    }
+
+    public Kampagne starte(Shop shop, String roh, String gruppeKey, Instant geplantAm) {
+        return starte(shop, roh, gruppeKey, geplantAm, false);
+    }
+
+    // ── Kontrollgruppe ───────────────────────────────────────────────────
+
+    record Aufteilung(List<CustomerCard> nachricht, List<CustomerCard> kontrolle) {}
+
+    /**
+     * Ein Zehntel zufaellig in die Kontrollgruppe, mindestens eine Karte -
+     * aber erst ab KONTROLLE_MIN Empfaengern, sonst misst man Rauschen.
+     * Zufall von aussen, damit der Test ihn festhalten kann.
+     */
+    static Aufteilung aufteilen(List<CustomerCard> empf, boolean kontrollgruppe, java.util.Random zufall) {
+        if (!kontrollgruppe || empf.size() < KONTROLLE_MIN) return new Aufteilung(empf, List.of());
+        List<CustomerCard> gemischt = new ArrayList<>(empf);
+        java.util.Collections.shuffle(gemischt, zufall);
+        int n = Math.max(1, gemischt.size() / 10);
+        return new Aufteilung(List.copyOf(gemischt.subList(n, gemischt.size())),
+                List.copyOf(gemischt.subList(0, n)));
+    }
+
+    /** Zeilen fuer beide Gruppen schreiben, Zahlen am Eintrag setzen. */
+    private void empfaengerFestschreiben(Kampagne k, List<CustomerCard> empf, boolean kontrollgruppe) {
+        Aufteilung a = aufteilen(empf, kontrollgruppe, new java.util.Random());
+        List<KampagneEmpfaenger> zeilen = new ArrayList<>();
+        for (CustomerCard cc : a.nachricht()) zeilen.add(KampagneEmpfaenger.neu(k.getId(), cc.getId()));
+        for (CustomerCard cc : a.kontrolle()) zeilen.add(KampagneEmpfaenger.kontrolle(k.getId(), cc.getId()));
+        empfaengerRepo.saveAll(zeilen);
+        k.aktivieren(a.nachricht().size());
+        k.kontrollgruppe(a.kontrolle().size());
     }
 
     /**
      * geplantAm == null: sofort, Empfaenger werden jetzt festgeschrieben.
      * Sonst wartet die Kampagne als GEPLANT; der Laeufer bestimmt die
      * Empfaenger erst zum Zeitpunkt (aktiviere). Die Zahl im Eintrag ist bis
-     * dahin eine Schaetzung von jetzt.
+     * dahin eine Schaetzung von jetzt. kontrollgruppe: ein Zehntel bekommt
+     * nichts und dient dem Vergleich.
      */
     @Transactional
-    public Kampagne starte(Shop shop, String roh, String gruppeKey, Instant geplantAm) {
+    public Kampagne starte(Shop shop, String roh, String gruppeKey, Instant geplantAm, boolean kontrollgruppe) {
         String text = sauber(roh);
         if (text.isEmpty()) {
             throw new IllegalArgumentException("Der Text darf nicht leer sein");
@@ -227,7 +263,10 @@ public class KampagnenService {
         shopRepo.save(laden);
         List<CustomerCard> empf = empfaenger(laden, gruppe, jetzt);
         if (geplantAm != null) {
-            Kampagne k = kampagneRepo.save(Kampagne.starte(laden, text, gruppe, empf.size(), jetzt, geplantAm));
+            Kampagne k = Kampagne.starte(laden, text, gruppe, empf.size(), jetzt, geplantAm);
+            // Merker, dass beim Aktivieren aufgeteilt werden soll: -1 = gewuenscht.
+            if (kontrollgruppe) k.kontrollgruppe(-1);
+            k = kampagneRepo.save(k);
             log.info("[KAMPAGNE] {} geplant fuer {}, Laden {}, Gruppe {}, ~{} Empfaenger",
                     k.getId(), geplantAm, laden.getId(), gruppe, empf.size());
             return k;
@@ -237,10 +276,10 @@ public class KampagnenService {
                     "In dieser Gruppe ist gerade niemand, der heute noch keine Nachricht bekommen hat.");
         }
         Kampagne k = kampagneRepo.save(Kampagne.starte(laden, text, gruppe, empf.size(), jetzt));
-        empfaengerRepo.saveAll(empf.stream()
-                .map(cc -> KampagneEmpfaenger.neu(k.getId(), cc.getId())).toList());
-        log.info("[KAMPAGNE] {} gestartet, Laden {}, Gruppe {}, {} Empfaenger",
-                k.getId(), laden.getId(), gruppe, empf.size());
+        empfaengerFestschreiben(k, empf, kontrollgruppe);
+        kampagneRepo.save(k);
+        log.info("[KAMPAGNE] {} gestartet, Laden {}, Gruppe {}, {} Empfaenger, {} Kontrolle",
+                k.getId(), laden.getId(), gruppe, k.getEmpfaenger(), k.getKontrolleEmpfaenger());
         return k;
     }
 
@@ -263,13 +302,14 @@ public class KampagnenService {
     void aktiviere(Kampagne k, Instant jetzt) {
         List<CustomerCard> empf = tx.execute(status -> {
             List<CustomerCard> e = empfaenger(k.getShop(), Zielgruppe.von(k.getGruppe()), jetzt);
+            // -1 war der Merker "Kontrollgruppe gewuenscht" beim Planen.
+            boolean kontrollgruppe = k.getKontrolleEmpfaenger() < 0;
             if (e.isEmpty()) {
                 k.aktivieren(0);
+                k.kontrollgruppe(0);
                 k.beenden(jetzt);
             } else {
-                k.aktivieren(e.size());
-                empfaengerRepo.saveAll(e.stream()
-                        .map(cc -> KampagneEmpfaenger.neu(k.getId(), cc.getId())).toList());
+                empfaengerFestschreiben(k, e, kontrollgruppe);
             }
             kampagneRepo.save(k);
             return e;
@@ -289,22 +329,35 @@ public class KampagnenService {
      * shopId kommt extra, weil die Kampagnen aus dem Verlauf den Laden nur
      * als Lazy-Proxy tragen.
      */
-    public int wiedergekommen(Kampagne k, String shopId, Instant jetzt) {
+    /** mitNachricht = Benachrichtigte, die kamen; kontrolle = Kontrollgruppe, die kam. */
+    public record Ergebnis(int mitNachricht, int kontrolle) {}
+
+    public Ergebnis wiedergekommen(Kampagne k, String shopId, Instant jetzt) {
         List<KampagneEmpfaenger> zeilen = empfaengerRepo.findByKampagneId(k.getId());
-        if (zeilen.isEmpty() || k.startAm() == null) return 0;
-        Set<String> kunden = new HashSet<>();
+        if (zeilen.isEmpty() || k.startAm() == null) return new Ergebnis(0, 0);
+        // Karten-ID -> Personen-ID, dann je Gruppe die Personen.
+        Map<String, String> kundeVonKarte = new HashMap<>();
         for (Object[] z : customerCardRepo.kundenIdsVon(
                 zeilen.stream().map(KampagneEmpfaenger::getCustomerCardId).toList())) {
-            if (z[1] != null) kunden.add(z[1].toString());
+            if (z[0] != null && z[1] != null) kundeVonKarte.put(z[0].toString(), z[1].toString());
+        }
+        Set<String> benachrichtigt = new HashSet<>(), kontrolle = new HashSet<>();
+        for (KampagneEmpfaenger e : zeilen) {
+            String kunde = kundeVonKarte.get(e.getCustomerCardId());
+            if (kunde == null) continue;
+            (e.istKontrolle() ? kontrolle : benachrichtigt).add(kunde);
         }
         Instant von = k.startAm();
         Instant bis = von.plus(java.time.Duration.ofDays(ERGEBNIS_TAGE));
         if (jetzt.isBefore(bis)) bis = jetzt;
-        Set<String> da = new HashSet<>();
+        Set<String> daMit = new HashSet<>(), daOhne = new HashSet<>();
         for (ScanLog sl : scanLogRepo.findByShopIdAndScannedAtBetweenOrderByScannedAtAsc(shopId, von, bis)) {
-            if (sl.getCustomerId() != null && kunden.contains(sl.getCustomerId())) da.add(sl.getCustomerId());
+            String kunde = sl.getCustomerId();
+            if (kunde == null) continue;
+            if (benachrichtigt.contains(kunde)) daMit.add(kunde);
+            if (kontrolle.contains(kunde)) daOhne.add(kunde);
         }
-        return da.size();
+        return new Ergebnis(daMit.size(), daOhne.size());
     }
 
     // ── Laeufer ──────────────────────────────────────────────────────────
@@ -326,7 +379,8 @@ public class KampagnenService {
             Instant grenze = jetzt.minus(java.time.Duration.ofDays(ERGEBNIS_TAGE));
             for (Kampagne k : kampagneRepo.findByStatusAndErgebnisAmIsNullAndFertigAmBefore(Kampagne.FERTIG, grenze)) {
                 try {
-                    k.ergebnis(wiedergekommen(k, k.getShop().getId(), jetzt), jetzt);
+                    Ergebnis e = wiedergekommen(k, k.getShop().getId(), jetzt);
+                    k.ergebnis(e.mitNachricht(), e.kontrolle(), jetzt);
                     kampagneRepo.save(k);
                 } catch (Exception e) {
                     log.warn("[KAMPAGNE] {} Ergebnis nicht festgeschrieben: {}", k.getId(), e.getMessage());

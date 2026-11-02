@@ -62,11 +62,23 @@ public class ApplePassService {
     private static final int PASS_CACHE_MAX = 1000;
     private final Map<String, PassCacheEntry> passCache = new ConcurrentHashMap<>();
 
+    // Weitere Orte (ShopOrt). Null in den Tests, die den Dienst von Hand
+    // bauen - dann gibt es nur den Hauptort.
+    private final com.example.stemplekarte.repository.ShopOrtRepository ortRepo;
+
     public ApplePassService(AppProperties props, PassTemplateGenerator templateGenerator,
                             RewardService rewardService) {
+        this(props, templateGenerator, rewardService, null);
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public ApplePassService(AppProperties props, PassTemplateGenerator templateGenerator,
+                            RewardService rewardService,
+                            com.example.stemplekarte.repository.ShopOrtRepository ortRepo) {
         this.props = props;
         this.templateGenerator = templateGenerator;
         this.rewardService = rewardService;
+        this.ortRepo = ortRepo;
         this.signingInfo = loadSigningInfo();
     }
 
@@ -273,6 +285,7 @@ public class ApplePassService {
         if (card.isPoints()) {
             var punkte = baueFelderPunkte(card, cc);
             nachrichtFeld(punkte, card.getShop(), cc);
+            rueckmeldungFeld(punkte, card, cc);
             return punkte.build();
         }
 
@@ -282,6 +295,7 @@ public class ApplePassService {
         if (cc.isWillkommenOffen()) {
             var gesperrt = baueFelderGesperrt(card, cc, grid);
             nachrichtFeld(gesperrt, card.getShop(), cc);
+            rueckmeldungFeld(gesperrt, card, cc);
             return gesperrt.build();
         }
 
@@ -336,7 +350,24 @@ public class ApplePassService {
         }
 
         nachrichtFeld(genericPass, card.getShop(), cc);
+        rueckmeldungFeld(genericPass, card, cc);
         return genericPass.build();
+    }
+
+    /**
+     * Link zur privaten Rueckmeldung auf der Rueckseite - nur wenn der Laden
+     * sie eingeschaltet hat. Ohne changeMessage: das Feld soll nie klingeln,
+     * es erscheint still beim naechsten Kartenupdate. Apple macht aus der
+     * URL im Wert von selbst einen Link.
+     */
+    private void rueckmeldungFeld(PKGenericPassBuilder pass, Card card, CustomerCard cc) {
+        Shop shop = card.getShop();
+        if (shop == null || !shop.isRueckmeldungAktiv()) return;
+        if (cc.getCustomer() == null || cc.getCustomer().getId() == null) return;
+        pass.backFieldBuilder(PKField.builder()
+                .key("feedback").label("RÜCKMELDUNG")
+                .value("Wie war dein Besuch? Sag es uns: "
+                        + props.baseUrl() + "/bewertung/" + cc.getCustomer().getId() + "/" + card.getId()));
     }
 
     /**
@@ -500,11 +531,7 @@ public class ApplePassService {
         if (cc.isWillkommenOffen()) {
             String geschenk = cc.getWillkommenText() != null
                     ? cc.getWillkommenText() : Card.WILLKOMMEN_STANDARD;
-            return List.of(PKLocation.builder()
-                    .latitude(shop.getLatitude())
-                    .longitude(shop.getLongitude())
-                    .relevantText(geschenk + " - wartet auf dich")
-                    .build());
+            return orte(shop, geschenk + " - wartet auf dich");
         }
 
         KartenFortschritt f = KartenFortschritt.von(card, cc, rewardService);
@@ -525,11 +552,38 @@ public class ApplePassService {
                     : "Noch " + f.offen() + " " + f.einheit() + " bis: " + f.belohnung();
         }
 
-        return List.of(PKLocation.builder()
+        return orte(shop, hinweis);
+    }
+
+    /** Apple nimmt hoechstens zehn Orte pro Pass. */
+    static final int MAX_ORTE = 10;
+
+    /**
+     * Hauptort plus weitere Orte (ShopOrt), alle mit demselben Text. Mehr als
+     * zehn verwirft iOS - dann lieber die ersten zehn als gar keinen.
+     */
+    private List<PKLocation> orte(Shop shop, String text) {
+        List<PKLocation> orte = new java.util.ArrayList<>();
+        orte.add(PKLocation.builder()
                 .latitude(shop.getLatitude())
                 .longitude(shop.getLongitude())
-                .relevantText(hinweis)
+                .relevantText(text)
                 .build());
+        if (ortRepo != null) {
+            // Nur so viele, wie der Tarif erlaubt: senkt der Admin die Zahl,
+            // verschwinden die hinteren Orte aus dem Pass, ohne dass jemand
+            // sie loeschen muss.
+            int erlaubt = Math.min(MAX_ORTE - 1, shop.getMaxOrte());
+            for (com.example.stemplekarte.model.ShopOrt o : ortRepo.findByShopOrderByCreatedAtAsc(shop)) {
+                if (orte.size() >= MAX_ORTE || orte.size() > erlaubt) break;
+                orte.add(PKLocation.builder()
+                        .latitude(o.getLatitude())
+                        .longitude(o.getLongitude())
+                        .relevantText(text)
+                        .build());
+            }
+        }
+        return orte;
     }
 
     private String rewardText(int stamps, int threshold, String rewardText) {

@@ -52,11 +52,15 @@ class KampagnenControllerTest {
         when(repo.findTop20ByShopOrderByErstelltAmDesc(shop)).thenReturn(List.of(k));
         // Fertig, Fenster offen: Zwischenstand live vom Service.
         when(shop.getId()).thenReturn("SHOP-1");
-        when(service.wiedergekommen(eq(k), eq("SHOP-1"), any())).thenReturn(4);
+        k.kontrollgruppe(2);
+        when(service.wiedergekommen(eq(k), eq("SHOP-1"), any()))
+                .thenReturn(new KampagnenService.Ergebnis(4, 1));
 
         var stand = controller.stand(auth);
         assertThat(stand.items().get(0).wiedergekommen()).isEqualTo(4);
         assertThat(stand.items().get(0).ergebnisFest()).isFalse();
+        assertThat(stand.items().get(0).kontrolleEmpfaenger()).isEqualTo(2);
+        assertThat(stand.items().get(0).kontrolleWiedergekommen()).isEqualTo(1);
         assertThat(stand.textMax()).isEqualTo(160);
         assertThat(stand.gruppen()).hasSize(2);
         assertThat(stand.gruppen().get(0).gruppe()).isEqualTo("ALLE");
@@ -74,8 +78,8 @@ class KampagnenControllerTest {
     @Test
     void starten_gibtDenNeuenEintrag() {
         Kampagne k = Kampagne.starte(shop, "Hallo", Zielgruppe.NEU, 3, Instant.now());
-        when(service.starte(shop, "Hallo", "neu", null)).thenReturn(k);
-        var item = controller.starte(new KampagnenController.KampagneRequest("Hallo", "neu", ""), auth);
+        when(service.starte(shop, "Hallo", "neu", null, false)).thenReturn(k);
+        var item = controller.starte(new KampagnenController.KampagneRequest("Hallo", "neu", "", null), auth);
         assertThat(item.id()).startsWith("KP-");
         assertThat(item.gruppe()).isEqualTo("NEU");
         assertThat(item.status()).isEqualTo("RUNNING");
@@ -87,13 +91,13 @@ class KampagnenControllerTest {
     void planen_parstDenZeitpunkt() {
         Instant wann = Instant.parse("2026-12-24T15:00:00Z");
         Kampagne k = Kampagne.starte(shop, "Frohe Weihnachten", Zielgruppe.ALLE, 3, Instant.now(), wann);
-        when(service.starte(shop, "Frohe Weihnachten", "alle", wann)).thenReturn(k);
+        when(service.starte(shop, "Frohe Weihnachten", "alle", wann, true)).thenReturn(k);
         var item = controller.starte(
-                new KampagnenController.KampagneRequest("Frohe Weihnachten", "alle", "2026-12-24T15:00:00Z"), auth);
+                new KampagnenController.KampagneRequest("Frohe Weihnachten", "alle", "2026-12-24T15:00:00Z", true), auth);
         assertThat(item.status()).isEqualTo("SCHEDULED");
         assertThat(item.geplantAm()).isEqualTo("2026-12-24T15:00:00Z");
         assertThatThrownBy(() -> controller.starte(
-                new KampagnenController.KampagneRequest("x", "alle", "morgen"), auth))
+                new KampagnenController.KampagneRequest("x", "alle", "morgen", null), auth))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 }

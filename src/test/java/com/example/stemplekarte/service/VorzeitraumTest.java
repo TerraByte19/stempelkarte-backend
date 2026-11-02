@@ -21,6 +21,7 @@ import java.util.Map;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -123,6 +124,38 @@ class VorzeitraumTest {
         assertThat(neue).hasSize(1);
         assertThat(neue.get(0).get("name")).isEqualTo("Adham");
         assertThat(neue.get(0).get("gesperrt")).isEqualTo(false);
+    }
+
+    @Test
+    void praemienRangliste_ueberBeideKartentypen() {
+        Card kaffee = Card.create(shop, "Kaffeekarte", "x", 10, "Gratis Kaffee");
+        Card tee = Card.create(shop, "Teekarte", "x", 5, "Gratis Tee");
+        when(cardRepo.findByShop(shop)).thenReturn(List.of(kaffee, tee));
+        when(ccRepo.findByCard(any())).thenReturn(List.of());
+        List<ScanLog> scans = List.of(scan(1, 1, 1), scan(2, 1, 1), scan(3, 1, 1), scan(40, 1, 9));
+        for (ScanLog sl : scans) when(sl.getCardId()).thenReturn(kaffee.getId());
+        when(sl(scans.get(2)).getCardId()).thenReturn(tee.getId());
+        when(scanLogRepo.findByShopIdAndScannedAtAfterOrderByScannedAtAsc(anyString(), any())).thenReturn(scans);
+
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> top = (List<Map<String, Object>>) dienst.summary(shop).get("topRewardsAll");
+        // Kaffee 2 (der Vormonat-Scan zaehlt nicht), Tee 1.
+        assertThat(top).hasSize(2);
+        assertThat(top.get(0).get("name")).isEqualTo("Gratis Kaffee");
+        assertThat(top.get(0).get("card")).isEqualTo("Kaffeekarte");
+        assertThat(top.get(0).get("count")).isEqualTo(2L);
+        assertThat(top.get(1).get("name")).isEqualTo("Gratis Tee");
+    }
+
+    private static ScanLog sl(ScanLog s) { return s; }
+
+    @Test
+    void scanZaehler_heuteUndSiebenTage() {
+        Card card = Card.create(shop, "Kaffee", "x", 10, "Gratis Kaffee");
+        when(scanLogRepo.countByCardIdAndScannedAtAfter(eq(card.getId()), any())).thenReturn(3L, 21L);
+        Map<String, Object> z = dienst.scanZaehler(card);
+        assertThat(z.get("scansToday")).isEqualTo(3L);
+        assertThat(z.get("scans7d")).isEqualTo(21L);
     }
 
     @Test

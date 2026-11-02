@@ -134,6 +134,12 @@ public class ShopService {
     @Transactional
     public Shop updateGoogleReviewUrl(String shopId, String url) {
         String u = (url == null) ? "" : url.trim();
+        // Nur die Place-ID eingefuegt (aus Googles "Place ID Finder", z.B.
+        // ChIJN1t_tDeuEmsRUsoyG83frY4): daraus den Link bauen, der direkt
+        // das Bewertungsfenster oeffnet.
+        if (!u.isEmpty() && u.matches("[A-Za-z0-9_-]{15,}")) {
+            u = PLACE_ID_LINK + u;
+        }
         if (!u.isEmpty()) {
             if (!u.startsWith("https://")) {
                 throw new IllegalArgumentException("Der Link muss mit https:// beginnen");
@@ -147,6 +153,25 @@ public class ShopService {
         }
         Shop shop = getById(shopId);
         shop.updateGoogleReviewUrl(u);
+        // Ohne Link gibt es nichts zu erinnern.
+        if (u.isEmpty()) shop.updateBewertungErinnerung(0);
+        return shopRepo.save(shop);
+    }
+
+    public static final String PLACE_ID_LINK = "https://search.google.com/local/writereview?placeid=";
+    public static final int BEWERTUNG_ERINNERUNG_MAX = 20;
+
+    /** Bewertungs-Erinnerung: 0 = aus, sonst ab dem wievielten Besuch. Braucht den Google-Link. */
+    @Transactional
+    public Shop updateBewertungErinnerung(String shopId, int ab) {
+        if (ab < 0 || ab > BEWERTUNG_ERINNERUNG_MAX) {
+            throw new IllegalArgumentException("Besuche zwischen 0 und " + BEWERTUNG_ERINNERUNG_MAX);
+        }
+        Shop shop = getById(shopId);
+        if (ab > 0 && (shop.getGoogleReviewUrl() == null || shop.getGoogleReviewUrl().isBlank())) {
+            throw new IllegalArgumentException("Erst den Google-Link eintragen");
+        }
+        shop.updateBewertungErinnerung(ab);
         return shopRepo.save(shop);
     }
 

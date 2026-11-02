@@ -25,6 +25,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -66,10 +67,41 @@ class RueckholTest {
                 mock(RewardService.class), apns, google, tx);
     }
 
+    private int kunden = 0;
+
+    private Customer kunde() {
+        Customer c = mock(Customer.class);
+        when(c.getId()).thenReturn("CUST-" + (++kunden));
+        return c;
+    }
+
     private CustomerCard kundenkarte(int stempel) {
-        CustomerCard cc = CustomerCard.create(mock(Customer.class), card);
+        return kundenkarte(kunde(), stempel);
+    }
+
+    private CustomerCard kundenkarte(Customer kunde, int stempel) {
+        CustomerCard cc = CustomerCard.create(kunde, card);
         for (int i = 0; i < stempel; i++) cc.addStamp();
         return cc;
+    }
+
+    @Test
+    void zweiKartenEinerPerson_nurEineNachricht() throws Exception {
+        Customer person = kunde();
+        CustomerCard alt = kundenkarte(person, 3);
+        Thread.sleep(5);
+        CustomerCard neu = kundenkarte(person, 5);   // zuletzt benutzt
+        kandidaten(alt, neu);
+        dienst.verschicke(shop, spaeter);
+        verify(google, times(1)).sendeNachricht(eq(neu.getId()), anyString(), anyString());
+        verify(google, never()).sendeNachricht(eq(alt.getId()), anyString(), anyString());
+        assertThat(neu.rueckholSichtbar()).isTrue();
+        // Die andere Karte: erledigt ohne Text, kein Feld, kein Push - und
+        // erst nach dem naechsten Besuch wieder faellig.
+        assertThat(alt.rueckholSichtbar()).isFalse();
+        assertThat(alt.getWinbackText()).isNull();
+        assertThat(alt.rueckholFaellig(spaeter.plus(Duration.ofDays(30)))).isFalse();
+        assertThat(alt.getUpdatedAt()).isBefore(spaeter);
     }
 
     private void kandidaten(CustomerCard... karten) {

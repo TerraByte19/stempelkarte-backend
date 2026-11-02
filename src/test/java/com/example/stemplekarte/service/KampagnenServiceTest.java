@@ -107,14 +107,75 @@ class KampagnenServiceTest {
                 scanVon("CUST-C", jetzt.plusSeconds(300)));
         when(scanLogRepo.findByShopIdAndScannedAtBetweenOrderByScannedAtAsc(eq("SHOP-1"), any(), any()))
                 .thenReturn(scans);
-        assertThat(dienst.wiedergekommen(k, "SHOP-1", jetzt.plus(Duration.ofDays(1)))).isEqualTo(1);
+        assertThat(dienst.wiedergekommen(k, "SHOP-1", jetzt.plus(Duration.ofDays(1))).mitNachricht()).isEqualTo(1);
+    }
+
+    @Test
+    void wiedergekommen_trenntKontrollgruppe() {
+        Kampagne k = kampagne();
+        when(empfaengerRepo.findByKampagneId(k.getId())).thenReturn(List.of(
+                KampagneEmpfaenger.neu(k.getId(), "CC-A"),
+                KampagneEmpfaenger.kontrolle(k.getId(), "CC-B")));
+        when(ccRepo.kundenIdsVon(any())).thenReturn(List.<Object[]>of(
+                new Object[]{"CC-A", "CUST-A"}, new Object[]{"CC-B", "CUST-B"}));
+        List<ScanLog> scans = List.of(scanVon("CUST-A", jetzt.plusSeconds(100)), scanVon("CUST-B", jetzt.plusSeconds(200)));
+        when(scanLogRepo.findByShopIdAndScannedAtBetweenOrderByScannedAtAsc(eq("SHOP-1"), any(), any()))
+                .thenReturn(scans);
+        KampagnenService.Ergebnis e = dienst.wiedergekommen(k, "SHOP-1", jetzt.plus(Duration.ofDays(1)));
+        assertThat(e.mitNachricht()).isEqualTo(1);
+        assertThat(e.kontrolle()).isEqualTo(1);
+    }
+
+    @Test
+    void aufteilen_einZehntelAbZehn() {
+        List<CustomerCard> zwanzig = new java.util.ArrayList<>();
+        for (int i = 0; i < 20; i++) zwanzig.add(kundenkarte());
+        var a = KampagnenService.aufteilen(zwanzig, true, new java.util.Random(1));
+        assertThat(a.kontrolle()).hasSize(2);
+        assertThat(a.nachricht()).hasSize(18);
+        assertThat(a.nachricht()).doesNotContainAnyElementsOf(a.kontrolle());
+        // Unter zehn: keine Kontrollgruppe, auch wenn gewuenscht.
+        var klein = KampagnenService.aufteilen(zwanzig.subList(0, 9), true, new java.util.Random(1));
+        assertThat(klein.kontrolle()).isEmpty();
+        assertThat(klein.nachricht()).hasSize(9);
+        // Nicht gewuenscht: alle bekommen die Nachricht.
+        assertThat(KampagnenService.aufteilen(zwanzig, false, new java.util.Random(1)).kontrolle()).isEmpty();
+    }
+
+    @Test
+    void start_mitKontrollgruppe_schreibtBeideGruppen() {
+        CustomerCard[] karten = new CustomerCard[10];
+        for (int i = 0; i < 10; i++) karten[i] = kundenkarte();
+        basis(karten);
+        Kampagne k = dienst.starte(shop, "Heute 20%", "alle", null, true);
+        assertThat(k.getEmpfaenger()).isEqualTo(9);
+        assertThat(k.getKontrolleEmpfaenger()).isEqualTo(1);
+        ArgumentCaptor<List<KampagneEmpfaenger>> rows = ArgumentCaptor.captor();
+        verify(empfaengerRepo).saveAll(rows.capture());
+        assertThat(rows.getValue()).hasSize(10);
+        assertThat(rows.getValue().stream().filter(KampagneEmpfaenger::istKontrolle).count()).isEqualTo(1);
+        // Kontrollzeile ist von Anfang an erledigt - der Laeufer fasst sie nie an.
+        assertThat(rows.getValue().stream().filter(KampagneEmpfaenger::istKontrolle).allMatch(KampagneEmpfaenger::isErledigt)).isTrue();
+    }
+
+    @Test
+    void geplantMitKontrollgruppe_teiltBeimAktivieren() {
+        CustomerCard[] karten = new CustomerCard[10];
+        for (int i = 0; i < 10; i++) karten[i] = kundenkarte();
+        basis(karten);
+        Kampagne k = dienst.starte(shop, "x", "alle", jetzt.plus(Duration.ofHours(1)), true);
+        assertThat(k.getKontrolleEmpfaenger()).isEqualTo(-1);   // Merker
+        dienst.aktiviere(k, jetzt.plus(Duration.ofHours(1)));
+        assertThat(k.laeuft()).isTrue();
+        assertThat(k.getEmpfaenger()).isEqualTo(9);
+        assertThat(k.getKontrolleEmpfaenger()).isEqualTo(1);
     }
 
     @Test
     void wiedergekommen_ohneEmpfaenger_null() {
         Kampagne k = kampagne();
         when(empfaengerRepo.findByKampagneId(k.getId())).thenReturn(List.of());
-        assertThat(dienst.wiedergekommen(k, "SHOP-1", jetzt)).isZero();
+        assertThat(dienst.wiedergekommen(k, "SHOP-1", jetzt).mitNachricht()).isZero();
         verify(scanLogRepo, never()).findByShopIdAndScannedAtBetweenOrderByScannedAtAsc(anyString(), any(), any());
     }
 

@@ -85,6 +85,12 @@ public class KundenService {
                 cc.getPhone());
     }
 
+    // Bewusst KEIN CSV-Export: die Liste in der App deckt den Alltag ab
+    // (Nachsehen, Korrigieren, Auskunft). Eine Datei auf dem Laptop des
+    // Ladens ist eine Datenpanne in Wartestellung und umgeht die Regel, dass
+    // Werbung nur an Kunden mit Einwilligung geht. Falls ein Laden ihn
+    // wirklich braucht: Admin-Freischaltung pro Laden plus Protokoll.
+
     /**
      * Stand einer Stempelkarte von Hand setzen, 0 bis Schwelle. Fremde
      * Karten gelten als nicht vorhanden (404), damit sich ueber den Fehler

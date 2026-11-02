@@ -194,6 +194,7 @@ public class ShopController {
         rueckholFelder(map, shop);
         map.put("nameColor", shop.getNameColor());
         map.put("googleReviewUrl", shop.getGoogleReviewUrl() != null ? shop.getGoogleReviewUrl() : "");
+        map.put("reviewReminderVisits", shop.getBewertungErinnerungAb());
         map.put("signupBirthday", shop.getSignupBirthday());
         map.put("signupPhone", shop.getSignupPhone());
         map.put("birthdayGreetingEnabled", shop.isGeburtstagsgrussAktiv());
@@ -241,7 +242,21 @@ public class ShopController {
         Shop updated = shopService.updateGoogleReviewUrl(currentShop(auth).getId(), req.url());
         Map<String, Object> out = new HashMap<>();
         out.put("googleReviewUrl", updated.getGoogleReviewUrl() != null ? updated.getGoogleReviewUrl() : "");
+        out.put("reviewReminderVisits", updated.getBewertungErinnerungAb());
         return out;
+    }
+
+    public record BewertungsErinnerungRequest(int visits) {}
+
+    @Operation(summary = "Bewertungs-Erinnerung einstellen",
+            description = "0 = aus. Sonst bekommt jede Karte ab dem so-vielten Besuch einmalig am "
+                    + "naechsten Vormittag \"Magst du uns bei Google bewerten?\" mit dem Link "
+                    + "(als Kampagne, erscheint im Verlauf). Braucht den Google-Link.")
+    @PutMapping("/me/bewertungs-erinnerung")
+    public Map<String, Object> updateBewertungsErinnerung(@RequestBody BewertungsErinnerungRequest req,
+                                                          Authentication auth) {
+        Shop updated = shopService.updateBewertungErinnerung(currentShop(auth).getId(), req.visits());
+        return Map.of("reviewReminderVisits", updated.getBewertungErinnerungAb());
     }
 
     public record NameColorRequest(String color) {}
@@ -552,6 +567,8 @@ public class ShopController {
             map.put("customerCount", customerCards.size());
             map.put("totalStamps", totalStamps);
             map.put("totalRewards", totalRewards);
+            // scansToday / scans7d: wird der QR-Code der Karte benutzt?
+            map.putAll(statsService.scanZaehler(card));
             return map;
         }).toList();
     }

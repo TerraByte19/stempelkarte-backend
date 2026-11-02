@@ -38,6 +38,22 @@ class BewertungsLinkTest {
     }
 
     @Test
+    void rueckmeldungsLink_nurWennEingeschaltet_vorDemGoogleLink() {
+        Shop shop = laden();
+        shop.updateGoogleReviewUrl("https://g.page/r/abc");
+        String nurGoogle = LandingController.bewertungsLinks(shop, "CUST-1", "CARD-1");
+        assertThat(nurGoogle).doesNotContain("/bewertung/").contains("Bewerte uns bei Google");
+
+        shop.setRueckmeldungAktiv(true);
+        String beide = LandingController.bewertungsLinks(shop, "CUST-1", "CARD'1");
+        assertThat(beide).contains("href='/bewertung/CUST-1/CARD&#39;1'")
+                .contains("Sag es Café Mokka")
+                .contains("Bewerte uns bei Google");
+        assertThat(beide.indexOf("/bewertung/")).isLessThan(beide.indexOf("g.page"));
+        assertThat(LandingController.bewertungsLinks(null, "a", "b")).isEmpty();
+    }
+
+    @Test
     void mitLink_escapedImAttribut() {
         Shop shop = laden();
         shop.updateGoogleReviewUrl("https://g.page/r/abc'><script>");
@@ -61,6 +77,18 @@ class BewertungsLinkTest {
         assertThatThrownBy(() -> dienst.updateGoogleReviewUrl("SHOP-1", "https://" + "x".repeat(500)))
                 .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("500");
         assertThat(shop.getGoogleReviewUrl()).isNull();
+    }
+
+    @Test
+    void speichern_placeIdWirdZumLink() {
+        Shop shop = laden();
+        ShopService dienst = dienst(shop);
+        dienst.updateGoogleReviewUrl("SHOP-1", " ChIJN1t_tDeuEmsRUsoyG83frY4 ");
+        assertThat(shop.getGoogleReviewUrl())
+                .isEqualTo("https://search.google.com/local/writereview?placeid=ChIJN1t_tDeuEmsRUsoyG83frY4");
+        // Zu kurz fuer eine Place-ID: bleibt ein ungueltiger Link.
+        assertThatThrownBy(() -> dienst.updateGoogleReviewUrl("SHOP-1", "ChIJabc"))
+                .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("https");
     }
 
     @Test

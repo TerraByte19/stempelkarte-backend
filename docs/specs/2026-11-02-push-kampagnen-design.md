@@ -37,6 +37,12 @@ Empfaengerzahl je Gruppe, Verlauf.
   ueber ScanLog. Solange das Fenster laeuft, rechnet `GET` live
   ("bisher n"); danach schreibt der Laeufer den Wert fest. Keine
   Kontrollgruppe - das waere der naechste Schritt.
+- **Kontrollgruppe** (`kontrollgruppe` im Request): ab 10 Empfaengern geht
+  ein zufaelliges Zehntel (mindestens eine Karte) als Kontrollzeile in
+  `kampagne_empfaenger` (`kontrolle = true`, von Anfang an erledigt, also
+  nie gepusht). `Kampagne.kontrolleEmpfaenger` zaehlt sie; beim Planen steht
+  dort -1 als Merker, aufgeteilt wird erst beim Aktivieren. Das Ergebnis
+  zaehlt beide Gruppen getrennt (`wiedergekommen`, `kontrolleWiedergekommen`).
 - **Vorlagen und Entwurf** sind reine Frontend-Sache: vier Texte in der
   Sprache der Oberflaeche (Happy Hour, neues Produkt, Event, Angebot mit
   Laufzeit), der Entwurf liegt im localStorage des Browsers.

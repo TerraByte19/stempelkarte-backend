@@ -60,6 +60,34 @@ class ApplePassPunkteTest {
         return Card.createPoints(mock(Shop.class), "Bistro", "Punkte", 20, PointsRounding.GENAU);
     }
 
+    // ── Rueckmeldung: Rueckseitenfeld nur, wenn der Laden es einschaltet ──
+
+    @Test
+    void rueckmeldungFeld_nurWennEingeschaltet() {
+        Shop shop = mock(Shop.class);
+        Card card = Card.create(shop, "Kaffee", "10 Stempel", 10, "Gratis Kaffee");
+        CustomerCard cc = karte(card, 3, 0);
+        when(cc.getCustomer().getId()).thenReturn("CUST-1");
+        AppProperties props = mock(AppProperties.class);
+        when(props.baseUrl()).thenReturn("https://stampit.test");
+        ApplePassService dienst = new ApplePassService(props, mock(PassTemplateGenerator.class),
+                mock(RewardService.class));
+
+        // Aus (Standard): Pass bleibt wie er ist.
+        assertThat(dienst.baueFelder(card, cc, false).getBackFields()).isNullOrEmpty();
+
+        when(shop.isRueckmeldungAktiv()).thenReturn(true);
+        var pass = dienst.baueFelder(card, cc, false);
+        assertThat(pass.getBackFields()).hasSize(1);
+        assertThat(pass.getBackFields().get(0).getKey()).isEqualTo("feedback");
+        assertThat(pass.getBackFields().get(0).getValue())
+                .isEqualTo("Wie war dein Besuch? Sag es uns: https://stampit.test/bewertung/CUST-1/" + card.getId());
+        // Nie klingeln - das Feld erscheint still.
+        assertThat(pass.getBackFields().get(0).getChangeMessage()).isNull();
+        // Kopf-Feld unveraendert, inklusive Key.
+        assertThat(pass.getHeaderFields().get(0).getKey()).isEqualTo("stamps-header");
+    }
+
     // ── Stempel-Pass: darf sich NICHT bewegen ────────────────────────────
 
     @Test

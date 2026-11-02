@@ -98,6 +98,8 @@ public class SecurityConfig {
                         .requestMatchers("/api/shop/stamp-icons/**").permitAll()
                         .requestMatchers("/wallet/**").permitAll()
                         .requestMatchers("/karte/**", "/karte-neu/**", "/logos/**").permitAll()
+                        // Bewertungsseite fuer Kunden (Rueckmeldung an den Laden)
+                        .requestMatchers("/bewertung/**").permitAll()
                         .requestMatchers("/mail/**").permitAll()
                         // Kontaktformular der Landing-Page
                         .requestMatchers("/api/public/**").permitAll()

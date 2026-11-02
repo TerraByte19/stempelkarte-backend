@@ -42,19 +42,25 @@ public class KampagnenController {
     }
 
     // gruppe: Zielgruppe.name(), leer = ALLE. geplantAm: ISO-Zeitpunkt, leer = sofort.
-    public record KampagneRequest(String text, String gruppe, String geplantAm) {}
+    // kontrollgruppe: ein Zehntel bekommt nichts, fuer den Vergleich.
+    public record KampagneRequest(String text, String gruppe, String geplantAm, Boolean kontrollgruppe) {}
 
     // wiedergekommen: Empfaenger, die in den 7 Tagen danach gescannt haben.
     // Null solange die Kampagne nicht fertig ist; ergebnisFest = Fenster um.
+    // kontrolleEmpfaenger/-Wiedergekommen: dasselbe fuer die Kontrollgruppe
+    // (0 bzw. null, wenn es keine gab).
     public record KampagneItem(String id, String text, String gruppe, String status, int empfaenger,
                                int gesendet, String erstelltAm, String geplantAm, String fertigAm,
-                               Integer wiedergekommen, boolean ergebnisFest) {
-        static KampagneItem von(Kampagne k, Integer wiedergekommen) {
+                               Integer wiedergekommen, boolean ergebnisFest,
+                               int kontrolleEmpfaenger, Integer kontrolleWiedergekommen) {
+        static KampagneItem von(Kampagne k, KampagnenService.Ergebnis ergebnis) {
             return new KampagneItem(k.getId(), k.getText(), k.getGruppe(), k.getStatus(),
                     k.getEmpfaenger(), k.getGesendet(), k.getErstelltAm().toString(),
                     k.getGeplantAm() != null ? k.getGeplantAm().toString() : null,
                     k.getFertigAm() != null ? k.getFertigAm().toString() : null,
-                    wiedergekommen, k.ergebnisFest());
+                    ergebnis != null ? ergebnis.mitNachricht() : null, k.ergebnisFest(),
+                    Math.max(0, k.getKontrolleEmpfaenger()),
+                    ergebnis != null ? ergebnis.kontrolle() : null);
         }
     }
 
@@ -79,8 +85,11 @@ public class KampagnenController {
 
     // Fest = gespeicherter Wert. Fertig, aber Fenster offen = live zaehlen.
     // Geplant oder laufend = noch kein Ergebnis.
-    private Integer ergebnis(Kampagne k, Shop shop, Instant jetzt) {
-        if (k.ergebnisFest()) return k.getWiedergekommen();
+    private KampagnenService.Ergebnis ergebnis(Kampagne k, Shop shop, Instant jetzt) {
+        if (k.ergebnisFest()) {
+            return new KampagnenService.Ergebnis(k.getWiedergekommen() != null ? k.getWiedergekommen() : 0,
+                    k.getKontrolleWiedergekommen() != null ? k.getKontrolleWiedergekommen() : 0);
+        }
         if (!Kampagne.FERTIG.equals(k.getStatus())) return null;
         return kampagnenService.wiedergekommen(k, shop.getId(), jetzt);
     }
@@ -99,7 +108,8 @@ public class KampagnenController {
                 throw new IllegalArgumentException("Ungültiger Zeitpunkt");
             }
         }
-        return KampagneItem.von(kampagnenService.starte(currentShop(auth), req.text(), req.gruppe(), geplant), null);
+        return KampagneItem.von(kampagnenService.starte(currentShop(auth), req.text(), req.gruppe(), geplant,
+                Boolean.TRUE.equals(req.kontrollgruppe())), null);
     }
 
     @Operation(summary = "Geplante Kampagne abbrechen")

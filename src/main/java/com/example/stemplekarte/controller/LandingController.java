@@ -25,7 +25,7 @@ public class LandingController {
     private static final Logger log = LoggerFactory.getLogger(LandingController.class);
 
     /** Baut aus einem Text einen sicheren JS-String-Literal (inkl. Anfuehrungszeichen). */
-    private static String toJsString(String s) {
+    static String toJsString(String s) {
         if (s == null) return "\"\"";
         String escaped = s.replace("\\", "\\\\")
                 .replace("\"", "\\\"")
@@ -329,7 +329,7 @@ public class LandingController {
                 googleSaveUrl.isBlank() ? ""
                         : "<a href='" + escapeHtml(googleSaveUrl) + "' class='btn-google' id='google-btn'>" +
                                 "\uD83E\uDD16 Zu Google Wallet hinzuf\u00fcgen</a>",
-                bewertungsLink(card.getShop()),
+                bewertungsLinks(card.getShop(), customerId, cardId),
                 // Die beiden IDs stehen in JS-Zeichenketten. toJsString
                 // liefert sie inklusive Anfuehrungszeichen - im Vorlagentext
                 // stehen an dieser Stelle deshalb KEINE.
@@ -699,7 +699,7 @@ public class LandingController {
                     googleSaveUrl.isBlank() ? ""
                             : "<a href='" + escapeHtml(googleSaveUrl) + "' class='btn-google' id='google-btn'>" +
                                     "🤖 Zu Google Wallet hinzufügen</a>",
-                    bewertungsLink(card.getShop()),
+                    bewertungsLinks(card.getShop(), customerId, cardId),
                     // Parameter fuer das JS: custId, cId, threshold, rewardText (als JS-String), stamps
                     toJsString(customerId), toJsString(cardId), threshold,
                     toJsString(card.getRewardText()), stamps,
@@ -965,6 +965,22 @@ public class LandingController {
                 + "style='display:block;margin-top:14px;text-align:center;font-size:14px;"
                 + "color:inherit;opacity:.85;text-decoration:underline'>"
                 + "⭐ Bewerte uns bei Google</a>";
+    }
+
+    /**
+     * Fuer die Kartenseiten: Google-Link (falls hinterlegt) plus der Link
+     * zur privaten Rueckmeldung, wenn der Laden sie eingeschaltet hat. Die
+     * IDs sind Server-IDs, stehen aber in einem Attribut - escapeHtml.
+     */
+    static String bewertungsLinks(com.example.stemplekarte.model.Shop shop, String customerId, String cardId) {
+        String google = bewertungsLink(shop);
+        if (shop == null || !shop.isRueckmeldungAktiv()) return google;
+        String rueck = "<a href='/bewertung/" + escapeHtml(customerId) + "/" + escapeHtml(cardId)
+                + "' class='review-link' "
+                + "style='display:block;margin-top:14px;text-align:center;font-size:14px;"
+                + "color:inherit;opacity:.85;text-decoration:underline'>"
+                + "💬 Wie war's? Sag es " + escapeHtml(shop.getName()) + "</a>";
+        return rueck + google;
     }
 
     /**

@@ -15,6 +15,7 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 /**
  * Wer in welche Zielgruppe faellt. "jetzt" wird in die Zukunft geschoben,
@@ -129,5 +130,33 @@ class ZielgruppeTest {
         assertThat(passt(Zielgruppe.FAST_VOLL, karte(9), jetzt)).isTrue();
         assertThat(passt(Zielgruppe.FAST_VOLL, karte(7), jetzt)).isFalse();
         assertThat(passt(Zielgruppe.FAST_VOLL, karte(10), jetzt)).isFalse();
+    }
+
+    @Test
+    void bewertung_nichtWaehlbar_zweiStundenBisDreiTage_genugBesuche_einmal() {
+        assertThat(Zielgruppe.BEWERTUNG.waehlbar()).isFalse();
+        assertThat(Zielgruppe.waehlbare()).doesNotContain(Zielgruppe.BEWERTUNG);
+        Instant spaeter = jetzt.plus(Duration.ofHours(3));
+        // Laden hat nichts eingestellt: nie.
+        assertThat(passt(Zielgruppe.BEWERTUNG, karte(3), spaeter)).isFalse();
+        when(shop.getBewertungErinnerungAb()).thenReturn(3);
+        assertThat(passt(Zielgruppe.BEWERTUNG, karte(3), spaeter)).isTrue();
+        assertThat(passt(Zielgruppe.BEWERTUNG, karte(2), spaeter)).isFalse();
+        // Gerade erst gestempelt: der Stempel-Push ist noch frisch.
+        assertThat(passt(Zielgruppe.BEWERTUNG, karte(3), jetzt.plus(Duration.ofMinutes(30)))).isFalse();
+        // Zu lange her: erst nach dem naechsten Besuch.
+        assertThat(passt(Zielgruppe.BEWERTUNG, karte(3), in(4))).isFalse();
+        // Praemie geholt zaehlt als 10 Besuche mehr.
+        CustomerCard stamm = karte(10);
+        stamm.redeemReward(10);
+        assertThat(passt(Zielgruppe.BEWERTUNG, stamm, spaeter)).isTrue();
+        // Schon erinnert: nie wieder.
+        CustomerCard erinnert = karte(5);
+        erinnert.bewertungErinnert(jetzt);
+        assertThat(passt(Zielgruppe.BEWERTUNG, erinnert, spaeter)).isFalse();
+        // Punktekarte: nur, wer schon eine Praemie geholt hat.
+        CustomerCard p = CustomerCard.create(mock(Customer.class), punkte);
+        p.addPoints(500);
+        assertThat(passt(Zielgruppe.BEWERTUNG, p, spaeter)).isFalse();
     }
 }

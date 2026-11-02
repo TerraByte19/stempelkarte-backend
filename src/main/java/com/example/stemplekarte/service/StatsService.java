@@ -186,6 +186,8 @@ public class StatsService {
         // "+12 % gegenueber letzter Woche".
         int stampsLastWeek = 0, stampsPrevMonth = 0;
         int rewardsLastWeek = 0, rewardsPrevMonth = 0;
+        // Praemien je Stempelkarte in 30 Tagen, fuer die Rangliste ueber alle Karten.
+        Map<String, Integer> rewardsByCard = new HashMap<>();
         int[] byWeekday = new int[8];   // Index 1-7
         int[] byHour = new int[24];
 
@@ -197,6 +199,9 @@ public class StatsService {
             }
             stampsThisMonth += sl.getStampsAdded();
             rewardsThisMonth += sl.getRewardsEarned();
+            if (sl.getRewardsEarned() > 0 && sl.getCardId() != null) {
+                rewardsByCard.merge(sl.getCardId(), sl.getRewardsEarned(), Integer::sum);
+            }
             if (sl.getScannedAt().isAfter(sevenDaysAgo)) {
                 stampsThisWeek += sl.getStampsAdded();
                 rewardsThisWeek += sl.getRewardsEarned();
@@ -266,8 +271,24 @@ public class StatsService {
                 .collect(java.util.stream.Collectors.groupingBy(
                         PointsBooking::getRewardName, java.util.stream.Collectors.counting()));
 
+        // Rangliste ueber BEIDE Kartentypen, 30 Tage: Stempelkarten aus dem
+        // ScanLog (eine Praemie je Karte), Punktekarten aus den Buchungen.
+        // Bisher gab es sie nur fuer Punktekarten - ein Laden mit zwei
+        // Stempelkarten sah nicht, welche besser laeuft.
+        List<Map<String, Object>> topRewardsAll = new ArrayList<>();
+        for (Card card : alleKarten) {
+            if (card.isPoints()) continue;
+            int n = rewardsByCard.getOrDefault(card.getId(), 0);
+            if (n > 0) topRewardsAll.add(praemienZeile(card.getRewardText(), card.getName(), n));
+        }
+        topRewards.forEach((name, n) -> topRewardsAll.add(praemienZeile(name, null, n)));
+        topRewardsAll.sort((a, b) -> Long.compare((long) b.get("count"), (long) a.get("count")));
+        List<Map<String, Object>> topRewardsTop = topRewardsAll.size() > 5
+                ? new ArrayList<>(topRewardsAll.subList(0, 5)) : topRewardsAll;
+
         Map<String, Object> summary = new HashMap<>();
         summary.put("shopName", shop.getName());
+        summary.put("topRewardsAll", topRewardsTop);
         // Einstellung des Ladens, nicht des Betrachters - das Admin-Panel zeigt
         // nur diesen Wert an (kein eigener Schalter dort).
         summary.put("excludeSunday", Boolean.TRUE.equals(shop.getExcludeSundayFromStats()));
@@ -339,6 +360,30 @@ public class StatsService {
             perCard.add(m);
         }
         return ausstehend;
+    }
+
+    private static Map<String, Object> praemienZeile(String name, String karte, long count) {
+        Map<String, Object> m = new HashMap<>();
+        m.put("name", name != null ? name : "");
+        m.put("card", karte);
+        m.put("count", count);
+        return m;
+    }
+
+    /**
+     * Scans einer Karte heute und in den letzten 7 Tagen - fuer die
+     * Kartenkacheln im Dashboard. "Scans" statt "Stempel": ein Scan mit
+     * count 3 ist EIN Besuch am Tresen, und darum geht es hier (wird der
+     * QR-Code benutzt?).
+     */
+    public Map<String, Object> scanZaehler(Card card) {
+        Instant now = Instant.now();
+        Instant tagesbeginn = now.atZone(ZONE).toLocalDate().atStartOfDay(ZONE).toInstant();
+        Map<String, Object> m = new HashMap<>();
+        m.put("scansToday", scanLogRepo.countByCardIdAndScannedAtAfter(card.getId(), tagesbeginn));
+        m.put("scans7d", scanLogRepo.countByCardIdAndScannedAtAfter(card.getId(),
+                now.minus(7, java.time.temporal.ChronoUnit.DAYS)));
+        return m;
     }
 
     /**

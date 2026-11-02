@@ -71,6 +71,15 @@ public class Kampagne {
     @Column(name = "ergebnis_am")
     private Instant ergebnisAm;
 
+    // Kontrollgruppe: ein Zehntel der Empfaenger bekommt die Nachricht NICHT.
+    // Kamen von denen genauso viele wie von den Benachrichtigten, hat die
+    // Nachricht nichts gebracht. Null/0 = keine Kontrollgruppe (alte Zeilen).
+    @Column(name = "kontrolle_empfaenger")
+    private Integer kontrolleEmpfaenger;
+
+    @Column(name = "kontrolle_wiedergekommen")
+    private Integer kontrolleWiedergekommen;
+
     protected Kampagne() {}
 
     public static Kampagne starte(Shop shop, String text, Zielgruppe gruppe, int empfaenger, Instant jetzt) {
@@ -101,10 +110,19 @@ public class Kampagne {
 
     public void gesendet(int weitere) { this.gesendet += weitere; }
 
-    public void ergebnis(int wiedergekommen, Instant jetzt) {
+    public void ergebnis(int wiedergekommen, int kontrolleWiedergekommen, Instant jetzt) {
         this.wiedergekommen = wiedergekommen;
+        this.kontrolleWiedergekommen = kontrolleWiedergekommen;
         this.ergebnisAm = jetzt;
     }
+
+    /** Wie viele Karten in die Kontrollgruppe gingen (bekommen nichts). */
+    public void kontrollgruppe(int kontrolleEmpfaenger) {
+        this.kontrolleEmpfaenger = kontrolleEmpfaenger;
+    }
+
+    public int getKontrolleEmpfaenger() { return kontrolleEmpfaenger != null ? kontrolleEmpfaenger : 0; }
+    public Integer getKontrolleWiedergekommen() { return kontrolleWiedergekommen; }
 
     /** Ab wann die Nachricht draussen war: der geplante Zeitpunkt, sonst das Anlegen. */
     public Instant startAm() {

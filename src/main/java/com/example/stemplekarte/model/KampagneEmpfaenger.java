@@ -37,6 +37,11 @@ public class KampagneEmpfaenger {
     @Column(name = "aufgefrischt_am")
     private Instant aufgefrischtAm;
 
+    // Kontrollgruppe: bekommt die Nachricht nicht, zaehlt nur beim Ergebnis.
+    // Von Anfang an erledigt, damit der Laeufer sie nie anfasst. Null = nein.
+    @Column(name = "kontrolle")
+    private Boolean kontrolle;
+
     protected KampagneEmpfaenger() {}
 
     public static KampagneEmpfaenger neu(String kampagneId, String customerCardId) {
@@ -47,6 +52,15 @@ public class KampagneEmpfaenger {
         e.erledigt = false;
         return e;
     }
+
+    public static KampagneEmpfaenger kontrolle(String kampagneId, String customerCardId) {
+        KampagneEmpfaenger e = neu(kampagneId, customerCardId);
+        e.kontrolle = true;
+        e.erledigt = true;
+        return e;
+    }
+
+    public boolean istKontrolle() { return Boolean.TRUE.equals(kontrolle); }
 
     public void aufgefrischt(Instant jetzt) { this.aufgefrischtAm = jetzt; }
     public boolean istAufgefrischt() { return aufgefrischtAm != null; }

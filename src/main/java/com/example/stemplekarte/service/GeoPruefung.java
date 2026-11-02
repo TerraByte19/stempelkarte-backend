@@ -31,9 +31,18 @@ public class GeoPruefung {
     private static final double ERDRADIUS_METER = 6_371_000;
 
     private final GeoVorfallRepository vorfaelle;
+    // Weitere Orte. Null in Tests, die den Dienst von Hand bauen.
+    private final com.example.stemplekarte.repository.ShopOrtRepository ortRepo;
 
     public GeoPruefung(GeoVorfallRepository vorfaelle) {
+        this(vorfaelle, null);
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public GeoPruefung(GeoVorfallRepository vorfaelle,
+                       com.example.stemplekarte.repository.ShopOrtRepository ortRepo) {
         this.vorfaelle = vorfaelle;
+        this.ortRepo = ortRepo;
     }
 
     /**
@@ -76,13 +85,31 @@ public class GeoPruefung {
     public String sperre(Shop shop, String staffLabel, Double scanLat, Double scanLon) {
         // Vom Admin befreit: weder Ort noetig noch Entfernung geprueft.
         if (shop.isGeoBefreit()) return null;
-        GeoVorfall.Art art = pruefe(shop.getLatitude(), shop.getLongitude(),
-                scanLat, scanLon, RADIUS_METER);
+        // Hauptort plus weitere Orte (ShopOrt): im Laden ist, wer bei
+        // IRGENDEINEM davon steht. Gemeldet wird die Entfernung zum naechsten.
+        GeoVorfall.Art art = null;
+        Long distanz = null;
+        if (shop.getLatitude() != null && shop.getLongitude() != null) {
+            if (scanLat == null || scanLon == null) {
+                art = GeoVorfall.Art.OHNE_ORT;
+            } else {
+                long naechster = distanzMeter(shop.getLatitude(), shop.getLongitude(), scanLat, scanLon);
+                if (ortRepo != null && shop.getMaxOrte() > 0) {
+                    // Nur die vom Tarif erlaubten Orte zaehlen (gleiche Regel wie im Pass).
+                    int erlaubt = shop.getMaxOrte();
+                    int n = 0;
+                    for (com.example.stemplekarte.model.ShopOrt o : ortRepo.findByShopOrderByCreatedAtAsc(shop)) {
+                        if (n++ >= erlaubt) break;
+                        naechster = Math.min(naechster, distanzMeter(o.getLatitude(), o.getLongitude(), scanLat, scanLon));
+                    }
+                }
+                if (naechster > RADIUS_METER) {
+                    art = GeoVorfall.Art.WEIT_WEG;
+                    distanz = naechster;
+                }
+            }
+        }
         if (art == null) return null;
-
-        Long distanz = (art == GeoVorfall.Art.WEIT_WEG)
-                ? distanzMeter(shop.getLatitude(), shop.getLongitude(), scanLat, scanLon)
-                : null;
 
         try {
             vorfaelle.save(GeoVorfall.create(shop.getId(), null, null, staffLabel,

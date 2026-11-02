@@ -91,6 +91,10 @@ public class CustomerCard {
     @Column(name = "kampagne_am")
     private Instant kampagneAm;
 
+    // Bewertungs-Erinnerung schon bekommen (einmal pro Karte). Null = noch nicht.
+    @Column(name = "review_reminded_at")
+    private Instant reviewRemindedAt;
+
     // ── Willkommensgeschenk ──────────────────────────────────────────────
     // true = Karte gesperrt, bis das Personal das Geschenk einloest.
     // Nullable OHNE Default mit Absicht: null heisst "nicht gesperrt", und
@@ -246,6 +250,18 @@ public class CustomerCard {
         this.updatedAt = jetzt;
     }
 
+    /**
+     * Zweite Karte derselben Person im selben Laden: die Nachricht ging auf
+     * die andere Karte, diese hier gilt als erledigt - ohne Text, ohne
+     * Pass-Aenderung, ohne Push. Sonst klingelt dasselbe Handy zweimal.
+     * Faellig wird sie erst wieder nach dem naechsten Besuch.
+     */
+    public void rueckholUebersprungen(Instant jetzt) {
+        if (lastVisitAt == null) lastVisitAt = updatedAt;
+        this.winbackText = null;
+        this.winbackSentAt = jetzt;
+    }
+
     public void rueckholGesendet(String text, Instant jetzt) {
         if (lastVisitAt == null) lastVisitAt = updatedAt;
         // Spalte fasst 300. Der Ladentext hat hoechstens 160, aber die
@@ -266,6 +282,13 @@ public class CustomerCard {
         this.kampagneAm = jetzt;
         this.updatedAt = jetzt;
     }
+
+    // ── Bewertungs-Erinnerung ────────────────────────────────────────────
+
+    public Instant getBewertungErinnertAm() { return reviewRemindedAt; }
+
+    /** Nur der Merker; der Pass aendert sich dadurch nicht, also kein updatedAt. */
+    public void bewertungErinnert(Instant jetzt) { this.reviewRemindedAt = jetzt; }
 
     /**
      * Was im Nachrichtenfeld des Passes steht: die neuere von Rueckhol

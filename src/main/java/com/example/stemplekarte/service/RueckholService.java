@@ -119,8 +119,21 @@ public class RueckholService {
         List<Versand> versand = new ArrayList<>();
         List<CustomerCard> kandidaten = customerCardRepo.findRueckholKandidaten(
                 shop, grenze, PageRequest.of(0, MAX_PRO_LAUF));
+        // Eine Person, zwei Karten (Stempel und Punkte): die Nachricht geht
+        // auf die zuletzt benutzte Karte, die andere gilt als erledigt. Sonst
+        // klingelt dasselbe Handy zweimal in derselben Stunde.
+        java.util.Map<String, CustomerCard> zuletztProKunde = new java.util.HashMap<>();
         for (CustomerCard cc : kandidaten) {
             if (!cc.rueckholFaellig(grenze)) continue;
+            zuletztProKunde.merge(cc.getCustomer().getId(), cc, KampagnenService::zuletztBenutzt);
+        }
+        for (CustomerCard cc : kandidaten) {
+            if (!cc.rueckholFaellig(grenze)) continue;
+            if (zuletztProKunde.get(cc.getCustomer().getId()) != cc) {
+                cc.rueckholUebersprungen(jetzt);
+                customerCardRepo.save(cc);
+                continue;
+            }
             if (hatApple(cc.getId()) && !feldAufDemHandy(shop, cc)) {
                 cc.passAuffrischen(jetzt);
                 versand.add(new Versand(cc.getId(), null, true));

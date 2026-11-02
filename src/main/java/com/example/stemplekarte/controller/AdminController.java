@@ -52,6 +52,8 @@ public class AdminController {
     private final com.example.stemplekarte.repository.KampagneEmpfaengerRepository kampagneEmpfaenger;
     private final com.example.stemplekarte.repository.SentNewsletterRepository sentNewsletters;
     private final com.example.stemplekarte.repository.RewardRepository rewards;
+    private final com.example.stemplekarte.repository.ShopOrtRepository shopOrte;
+    private final com.example.stemplekarte.repository.RueckmeldungRepository rueckmeldungen;
 
     @Value("${stempelkarte.admin-secret:admin-geheim-nur-lokal}")
     private String adminSecret;
@@ -75,7 +77,11 @@ public class AdminController {
                            com.example.stemplekarte.repository.KampagneRepository kampagnen,
                            com.example.stemplekarte.repository.KampagneEmpfaengerRepository kampagneEmpfaenger,
                            com.example.stemplekarte.repository.SentNewsletterRepository sentNewsletters,
-                           com.example.stemplekarte.repository.RewardRepository rewards) {
+                           com.example.stemplekarte.repository.RewardRepository rewards,
+                           com.example.stemplekarte.repository.ShopOrtRepository shopOrte,
+                           com.example.stemplekarte.repository.RueckmeldungRepository rueckmeldungen) {
+        this.shopOrte = shopOrte;
+        this.rueckmeldungen = rueckmeldungen;
         this.kampagnen = kampagnen;
         this.kampagneEmpfaenger = kampagneEmpfaenger;
         this.sentNewsletters = sentNewsletters;
@@ -174,6 +180,7 @@ public class AdminController {
             map.put("geoBefreit", shop.isGeoBefreit());
             map.put("standortGesetzt",
                     com.example.stemplekarte.service.StandortPflicht.hatStandort(shop));
+            map.put("maxOrte", shop.getMaxOrte());
             return map;
         }).toList();
 
@@ -412,6 +419,30 @@ public class AdminController {
         return ResponseEntity.ok(Map.of("id", shop.getId(), "geoBefreit", shop.isGeoBefreit()));
     }
 
+    public record MaxOrteRequest(int max) {}
+
+    /**
+     * Wie viele weitere Orte (Naehe-Erinnerung, Geo-Pruefung) ein Laden
+     * anlegen darf - je nach Tarif. 0 = Funktion aus, hoechstens 9 (Apple
+     * nimmt zehn Orte pro Pass, einer ist der Hauptort).
+     */
+    @PostMapping("/shops/{shopId}/max-orte")
+    public ResponseEntity<Map<String, Object>> setMaxOrte(@PathVariable String shopId,
+                                                          @RequestBody MaxOrteRequest req) {
+        Shop shop = shopRepo.findById(shopId).orElse(null);
+        if (shop == null) {
+            return ResponseEntity.status(404).body(Map.of("error", "Shop nicht gefunden: " + shopId));
+        }
+        if (req.max() < 0 || req.max() > com.example.stemplekarte.service.OrteService.MAX_WEITERE) {
+            return ResponseEntity.badRequest().body(Map.of("error",
+                    "Erlaubt sind 0 bis " + com.example.stemplekarte.service.OrteService.MAX_WEITERE));
+        }
+        shop.setMaxOrte(req.max());
+        shopRepo.save(shop);
+        log.info("[ADMIN] Weitere Orte laden={} max={}", shop.getId(), req.max());
+        return ResponseEntity.ok(Map.of("id", shop.getId(), "maxOrte", shop.getMaxOrte()));
+    }
+
     /**
      * Löscht einen Shop komplett:
      * Apple-Registrierungen → CustomerCards → StaffTokens → Cards → Shop
@@ -451,6 +482,8 @@ public class AdminController {
             kampagneEmpfaenger.deleteByKampagneId(k.getId());
         }
         kampagnen.deleteByShop(shop);
+        shopOrte.deleteByShop(shop);
+        rueckmeldungen.deleteByShop(shop);
 
         // 5. Shop löschen
         shopRepo.delete(shop);

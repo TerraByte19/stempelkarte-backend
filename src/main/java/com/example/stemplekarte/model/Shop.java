@@ -172,6 +172,23 @@ public class Shop {
     @Column(name = "birthday_greeting_text", length = 160)
     private String birthdayGreetingText;
 
+    // Bewertungs-Erinnerung: ab dem wievielten Besuch die Karte einmalig
+    // "Magst du uns bei Google bewerten?" bekommt (BewertungsErinnerungService).
+    // Null oder 0 = aus.
+    @Column(name = "review_reminder_visits")
+    private Integer reviewReminderVisits;
+
+    // Wie viele weitere Orte (ShopOrt) der Laden anlegen darf - vom Admin je
+    // nach Tarif gesetzt. Null = 0 = Funktion nicht freigeschaltet.
+    @Column(name = "max_orte")
+    private Integer maxOrte;
+
+    // Private Rueckmeldung (Sterne + Satz) vom Kunden an den Laden. Vom
+    // Laden selbst eingeschaltet. Null = aus: kein Link auf Kartenseite
+    // und Wallet-Karte, die Seite nimmt nichts an.
+    @Column(name = "rueckmeldung_aktiv")
+    private Boolean rueckmeldungAktiv;
+
     // Vom Admin befreit: kein Ladenort noetig, keine Geo-Pruefung beim Scan.
     // Null = nicht befreit, also Pflicht wie fuer alle.
     @Column(name = "geo_befreit")
@@ -450,6 +467,38 @@ public class Shop {
     public void updateGeburtstagsgruss(boolean enabled, String text) {
         this.birthdayGreetingEnabled = enabled;
         this.birthdayGreetingText = (text == null || text.isBlank()) ? null : text.trim();
+        this.updatedAt = Instant.now();
+    }
+
+    // ── Bewertungs-Erinnerung ───────────────────────────────────────────
+
+    /** 0 = aus, sonst ab dem wievielten Besuch. */
+    public int getBewertungErinnerungAb() {
+        return reviewReminderVisits != null ? Math.max(0, reviewReminderVisits) : 0;
+    }
+
+    /** Bereich prueft der ShopService. */
+    public void updateBewertungErinnerung(int ab) {
+        this.reviewReminderVisits = ab;
+        this.updatedAt = Instant.now();
+    }
+
+    // ── Weitere Orte (Tarif) ────────────────────────────────────────────
+
+    public int getMaxOrte() { return maxOrte != null ? Math.max(0, maxOrte) : 0; }
+
+    /** Vom Admin. Bereich prueft der Aufrufer. */
+    public void setMaxOrte(int maxOrte) {
+        this.maxOrte = maxOrte;
+        this.updatedAt = Instant.now();
+    }
+
+    // ── Rueckmeldung ────────────────────────────────────────────────────
+
+    public boolean isRueckmeldungAktiv() { return Boolean.TRUE.equals(rueckmeldungAktiv); }
+
+    public void setRueckmeldungAktiv(boolean aktiv) {
+        this.rueckmeldungAktiv = aktiv;
         this.updatedAt = Instant.now();
     }
 

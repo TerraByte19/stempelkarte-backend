@@ -126,7 +126,7 @@ class KampagnenAbfragenTest {
         kampagnen.save(k);
         assertThat(kampagnen.findByStatusAndErgebnisAmIsNullAndFertigAmBefore(
                 Kampagne.FERTIG, jetzt.minus(Duration.ofDays(7)))).extracting(Kampagne::getId).containsExactly(k.getId());
-        k.ergebnis(1, jetzt);
+        k.ergebnis(1, 0, jetzt);
         kampagnen.save(k);
         assertThat(kampagnen.findByStatusAndErgebnisAmIsNullAndFertigAmBefore(
                 Kampagne.FERTIG, jetzt.minus(Duration.ofDays(7)))).isEmpty();
