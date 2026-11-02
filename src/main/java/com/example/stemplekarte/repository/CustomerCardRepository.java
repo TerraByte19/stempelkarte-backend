@@ -64,6 +64,18 @@ public interface CustomerCardRepository extends JpaRepository<CustomerCard, Stri
     List<CustomerCard> findRueckholKandidaten(Shop shop, java.time.Instant grenze,
                                               org.springframework.data.domain.Pageable seite);
 
+    // Kundenliste: aktive Karten eines Ladens, Suche in Name und E-Mail
+    // (q = "%suchwort%" in Kleinbuchstaben, "%" = alles), zuletzt gesehene
+    // zuerst. Immer ein Muster uebergeben statt ":q is null" - Postgres
+    // kann den Typ eines Parameters, der nur mit null verglichen wird,
+    // nicht bestimmen.
+    @EntityGraph(attributePaths = {"card", "customer"})
+    @Query("select cc from CustomerCard cc where cc.card.shop = :shop and cc.card.active = true "
+            + "and (lower(cc.customer.name) like :q or lower(cc.customer.email) like :q) "
+            + "order by coalesce(cc.lastVisitAt, cc.updatedAt) desc")
+    org.springframework.data.domain.Page<CustomerCard> findKunden(
+            Shop shop, String q, org.springframework.data.domain.Pageable seite);
+
     // Kampagne: die Grundmenge, aus der die Zielgruppe in Java gefiltert wird
     // (service.Zielgruppe). Aktive Karten, Geschenk nicht offen - eine
     // gesperrte Karte hat noch nichts gesammelt, "Praemie wartet" oder

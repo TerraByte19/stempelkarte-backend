@@ -133,6 +133,16 @@ public class CustomerCard {
     }
 
     /**
+     * Stand von Hand setzen (Kundenliste im Dashboard). Kein Besuch:
+     * lastVisitAt bleibt, nur updatedAt bewegt sich, damit der Pass-Cache
+     * den neuen Stand ausliefert. Bereich prueft der KundenService.
+     */
+    public void korrigiereStempel(int neu) {
+        this.stamps = neu;
+        this.updatedAt = Instant.now();
+    }
+
+    /**
      * Setzt die Karte komplett zurück wie eine neue Karte:
      * Stempel UND Belohnungszähler auf 0. Wird vom Reset-Button im Scanner
      * genutzt. Marketing-Einwilligung bleibt unangetastet.
