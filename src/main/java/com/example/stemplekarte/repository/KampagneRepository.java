@@ -27,6 +27,9 @@ public interface KampagneRepository extends JpaRepository<Kampagne, String> {
     // Abbrechen: nur die eigene.
     java.util.Optional<Kampagne> findByIdAndShop(String id, Shop shop);
 
+    // Geburtstagsgruss: gab es heute schon einen fuer diesen Laden?
+    boolean existsByShopAndGruppeAndErstelltAmGreaterThanEqual(Shop shop, String gruppe, java.time.Instant seit);
+
     // Beim Loeschen eines Ladens (AdminController#deleteShop).
     List<Kampagne> findByShop(Shop shop);
     void deleteByShop(Shop shop);

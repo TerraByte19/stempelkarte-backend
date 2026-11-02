@@ -51,7 +51,16 @@ Profil > "Anmeldeformular": je Feld drei Knoepfe. Kundenliste zeigt
 Geburtstag und Nummer (als tel-Link), wenn vorhanden. Kampagnen: Gruppe
 GEBURTSTAG (Monat des Geburtstags = laufender Monat, Europe/Berlin).
 
-## Nicht enthalten
+## Automatischer Geburtstagsgruss
 
-Automatischer Geburtstagsgruss (Punkt "Geburtstag" in der Ausbauliste).
-Braucht einen eigenen Laeufer, der am Tag eine Nachricht schickt.
+`Shop.birthday_greeting_enabled` / `birthday_greeting_text` (160, leer =
+Standardtext), `PUT /api/shop/me/geburtstag`. `GeburtstagsService` prueft
+alle 15 Minuten: ab 9 Uhr (Europe/Berlin) startet er pro Laden einmal am
+Tag eine normale Kampagne mit der internen Zielgruppe `GEBURTSTAG_HEUTE`
+(Tag und Monat gleich, 29. Februar in Nicht-Schaltjahren am 28.). Damit
+laufen Versand, iPhone-Auffrischen, Tageslimit pro Person und Verlauf ueber
+denselben Weg wie beim Laden selbst; im Verlauf steht "Geburtstagsgruss
+(automatisch)". Kein Cron um Punkt 9: schlaeft die Instanz da, holt der
+naechste Lauf es nach. Doppelt geht nichts: "heute schon" steht als
+Kampagne in der Datenbank, der Merker im Speicher spart nur die Abfrage.
+`GEBURTSTAG_HEUTE` ist im Dashboard nicht waehlbar (`Zielgruppe.waehlbar`).

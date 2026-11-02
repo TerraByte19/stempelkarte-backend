@@ -25,6 +25,8 @@ public enum Zielgruppe {
     NEU,
     /** Geburtstag im laufenden Monat. Nur, wenn der Laden ihn bei der Anmeldung abfragt. */
     GEBURTSTAG,
+    /** Geburtstag genau heute. Nur fuer den automatischen Gruss (GeburtstagsService), nicht waehlbar. */
+    GEBURTSTAG_HEUTE,
     INAKTIV_30,
     INAKTIV_60,
     INAKTIV_90,
@@ -41,6 +43,15 @@ public enum Zielgruppe {
     static final int NEU_TAGE = 14;
     static final int EINMAL_TAGE = 14;
     static final int STAMM_RUHIG_TAGE = 21;
+
+    /** Im Dashboard anbietbar; GEBURTSTAG_HEUTE gehoert dem Automaten. */
+    public boolean waehlbar() {
+        return this != GEBURTSTAG_HEUTE;
+    }
+
+    public static List<Zielgruppe> waehlbare() {
+        return java.util.Arrays.stream(values()).filter(Zielgruppe::waehlbar).toList();
+    }
 
     /** Leer = ALLE. Unbekannt = IllegalArgumentException (400). */
     public static Zielgruppe von(String key) {
@@ -67,6 +78,14 @@ public enum Zielgruppe {
                 // Von der Karte, nicht vom Kunden: nur, was er DIESEM Laden gesagt hat.
                 java.time.LocalDate g = cc.getBirthday();
                 yield g != null && g.getMonth() == jetzt.atZone(ZONE).getMonth();
+            }
+            case GEBURTSTAG_HEUTE -> {
+                java.time.LocalDate g = cc.getBirthday();
+                java.time.LocalDate heute = jetzt.atZone(ZONE).toLocalDate();
+                // 29. Februar: in Nicht-Schaltjahren am 28. gratulieren.
+                yield g != null && g.getMonth() == heute.getMonth()
+                        && (g.getDayOfMonth() == heute.getDayOfMonth()
+                            || (g.getDayOfMonth() == 29 && heute.getDayOfMonth() == 28 && !heute.isLeapYear()));
             }
             case INAKTIV_30 -> pauseSeit(cc, jetzt, 30);
             case INAKTIV_60 -> pauseSeit(cc, jetzt, 60);

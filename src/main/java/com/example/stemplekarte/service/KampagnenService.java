@@ -107,7 +107,7 @@ public class KampagnenService {
         List<CustomerCard> basis = customerCardRepo.findKampagnenBasis(shop);
         Set<String> heute = heuteBenachrichtigt(basis, tagesbeginn(jetzt));
         List<GruppenZahl> out = new ArrayList<>();
-        for (Zielgruppe g : Zielgruppe.values()) {
+        for (Zielgruppe g : Zielgruppe.waehlbare()) {
             Set<String> passend = new HashSet<>(), uebersprungen = new HashSet<>();
             for (CustomerCard cc : basis) {
                 if (!g.passt(cc, jetzt, katalog)) continue;

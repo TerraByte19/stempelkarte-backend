@@ -366,7 +366,10 @@ class KampagnenServiceTest {
                 .filter(z -> z.gruppe() == Zielgruppe.ALLE).findFirst().orElseThrow();
         assertThat(alle.empfaenger()).isEqualTo(1);
         assertThat(alle.heuteSchon()).isEqualTo(1);
-        assertThat(dienst.zaehle(shop)).hasSize(Zielgruppe.values().length);
+        // Nur die waehlbaren Gruppen; GEBURTSTAG_HEUTE gehoert dem Automaten.
+        assertThat(dienst.zaehle(shop)).hasSize(Zielgruppe.waehlbare().size());
+        assertThat(dienst.zaehle(shop)).extracting(KampagnenService.GruppenZahl::gruppe)
+                .doesNotContain(Zielgruppe.GEBURTSTAG_HEUTE);
     }
 
     @Test

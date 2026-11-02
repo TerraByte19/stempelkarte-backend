@@ -196,7 +196,25 @@ public class ShopController {
         map.put("googleReviewUrl", shop.getGoogleReviewUrl() != null ? shop.getGoogleReviewUrl() : "");
         map.put("signupBirthday", shop.getSignupBirthday());
         map.put("signupPhone", shop.getSignupPhone());
+        map.put("birthdayGreetingEnabled", shop.isGeburtstagsgrussAktiv());
+        map.put("birthdayGreetingText", shop.getBirthdayGreetingText());
+        map.put("birthdayGreetingDefault", Shop.GEBURTSTAG_STANDARD);
         return map;
+    }
+
+    public record GeburtstagRequest(boolean enabled, String text) {}
+
+    @Operation(summary = "Geburtstagsgruss einstellen",
+            description = "Ab 9 Uhr bekommt jeder, der heute Geburtstag hat, eine Nachricht auf "
+                    + "die Wallet-Karte (als Kampagne, erscheint im Verlauf). Braucht den "
+                    + "Geburtstag im Anmeldeformular. Text leer = Standardtext.")
+    @PutMapping("/me/geburtstag")
+    public Map<String, Object> updateGeburtstag(@RequestBody GeburtstagRequest req, Authentication auth) {
+        Shop updated = shopService.updateGeburtstagsgruss(currentShop(auth).getId(), req.enabled(), req.text());
+        Map<String, Object> out = new HashMap<>();
+        out.put("birthdayGreetingEnabled", updated.isGeburtstagsgrussAktiv());
+        out.put("birthdayGreetingText", updated.getBirthdayGreetingText());
+        return out;
     }
 
     public record AnmeldefelderRequest(String birthday, String phone) {}

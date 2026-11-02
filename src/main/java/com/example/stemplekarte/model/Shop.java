@@ -164,6 +164,14 @@ public class Shop {
     @Column(name = "signup_phone", length = 10)
     private String signupPhone;
 
+    // Automatischer Geburtstagsgruss: am Geburtstag eine Kampagne an alle
+    // Karten, die heute Geburtstag haben (GeburtstagsService). Null = aus.
+    @Column(name = "birthday_greeting_enabled")
+    private Boolean birthdayGreetingEnabled;
+
+    @Column(name = "birthday_greeting_text", length = 160)
+    private String birthdayGreetingText;
+
     // Vom Admin befreit: kein Ladenort noetig, keine Geo-Pruefung beim Scan.
     // Null = nicht befreit, also Pflicht wie fuer alle.
     @Column(name = "geo_befreit")
@@ -422,6 +430,26 @@ public class Shop {
     public void updateAnmeldefelder(String birthday, String phone) {
         this.signupBirthday = birthday;
         this.signupPhone = phone;
+        this.updatedAt = Instant.now();
+    }
+
+    // ── Geburtstagsgruss ────────────────────────────────────────────────
+
+    public static final String GEBURTSTAG_STANDARD =
+            "Alles Gute zum Geburtstag! Schau heute bei uns vorbei, es wartet eine kleine Überraschung auf dich.";
+
+    public boolean isGeburtstagsgrussAktiv() { return Boolean.TRUE.equals(birthdayGreetingEnabled); }
+    public String getBirthdayGreetingText() { return birthdayGreetingText; }
+
+    /** Text des Grusses, eigener oder Standard. */
+    public String geburtstagsText() {
+        return (birthdayGreetingText != null && !birthdayGreetingText.isBlank())
+                ? birthdayGreetingText : GEBURTSTAG_STANDARD;
+    }
+
+    public void updateGeburtstagsgruss(boolean enabled, String text) {
+        this.birthdayGreetingEnabled = enabled;
+        this.birthdayGreetingText = (text == null || text.isBlank()) ? null : text.trim();
         this.updatedAt = Instant.now();
     }
 

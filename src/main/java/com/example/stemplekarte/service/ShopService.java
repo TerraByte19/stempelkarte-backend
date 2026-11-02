@@ -150,6 +150,18 @@ public class ShopService {
         return shopRepo.save(shop);
     }
 
+    /** Geburtstagsgruss ein/aus, eigener Text bis 160 Zeichen, leer = Standard. */
+    @Transactional
+    public Shop updateGeburtstagsgruss(String shopId, boolean enabled, String text) {
+        String t = (text == null) ? "" : text.replaceAll("\\p{Cntrl}", " ").trim();
+        if (t.length() > 160) {
+            throw new IllegalArgumentException("Text darf hoechstens 160 Zeichen haben");
+        }
+        Shop shop = getById(shopId);
+        shop.updateGeburtstagsgruss(enabled, t);
+        return shopRepo.save(shop);
+    }
+
     /** Anmeldefelder: OFF, OPTIONAL oder REQUIRED je Feld. Leer = OFF. */
     @Transactional
     public Shop updateAnmeldefelder(String shopId, String birthday, String phone) {
