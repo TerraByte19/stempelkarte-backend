@@ -64,6 +64,16 @@ public interface CustomerCardRepository extends JpaRepository<CustomerCard, Stri
     List<CustomerCard> findRueckholKandidaten(Shop shop, java.time.Instant grenze,
                                               org.springframework.data.domain.Pageable seite);
 
+    // Kampagne: die Grundmenge, aus der die Zielgruppe in Java gefiltert wird
+    // (service.Zielgruppe). Aktive Karten, Geschenk nicht offen - eine
+    // gesperrte Karte hat noch nichts gesammelt, "Praemie wartet" oder
+    // "30 Tage nicht da" ergeben dort keinen Sinn.
+    @EntityGraph(attributePaths = {"card", "card.shop", "customer"})
+    @Query("select cc from CustomerCard cc where cc.card.shop = :shop and cc.card.active = true "
+            + "and (cc.welcomePending is null or cc.welcomePending = false) "
+            + "order by cc.createdAt")
+    List<CustomerCard> findKampagnenBasis(Shop shop);
+
     // Willkommensgeschenk einloesen. Gesperrt, damit zwei Kassen, die
     // dieselbe Karte im selben Moment scannen, nicht beide den Gratis-Artikel
     // freigeben: die zweite wartet und sieht danach "schon eingeloest".

@@ -204,6 +204,7 @@ public class LandingController {
                                 \uD83C\uDF4E Zu Apple Wallet hinzuf\u00fcgen
                             </a>
                             %s
+                            %s
                         </div>
                     </div>
                     <script>
@@ -314,6 +315,7 @@ public class LandingController {
                 googleSaveUrl.isBlank() ? ""
                         : "<a href='" + escapeHtml(googleSaveUrl) + "' class='btn-google' id='google-btn'>" +
                                 "\uD83E\uDD16 Zu Google Wallet hinzuf\u00fcgen</a>",
+                bewertungsLink(card.getShop()),
                 // Die beiden IDs stehen in JS-Zeichenketten. toJsString
                 // liefert sie inklusive Anfuehrungszeichen - im Vorlagentext
                 // stehen an dieser Stelle deshalb KEINE.
@@ -573,6 +575,7 @@ public class LandingController {
                                     🍎 Zu Apple Wallet hinzufügen
                                 </a>
                                 %s
+                                %s
                             </div>
                         </div>
                         <script>
@@ -682,6 +685,7 @@ public class LandingController {
                     googleSaveUrl.isBlank() ? ""
                             : "<a href='" + escapeHtml(googleSaveUrl) + "' class='btn-google' id='google-btn'>" +
                                     "🤖 Zu Google Wallet hinzufügen</a>",
+                    bewertungsLink(card.getShop()),
                     // Parameter fuer das JS: custId, cId, threshold, rewardText (als JS-String), stamps
                     toJsString(customerId), toJsString(cardId), threshold,
                     toJsString(card.getRewardText()), stamps,
@@ -845,6 +849,7 @@ public class LandingController {
                                     direkt aufs Handy zu bekommen.
                                 </div>
                             </div>
+                            %s
                         </div>
                         <script>
                             async function getCard() {
@@ -892,6 +897,7 @@ public class LandingController {
                     anmeldeTitel(card),
                     anmeldeText(card),
                     escapeHtml(shopName),
+                    bewertungsLink(card.getShop()),
                     // cardId steht in einer JS-Zeichenkette - toJsString
                     // liefert die Anfuehrungszeichen mit.
                     toJsString(cardId)
@@ -901,6 +907,22 @@ public class LandingController {
         } catch (Exception e) {
             return ResponseEntity.ok("<html><body style='font-family:sans-serif;padding:40px;text-align:center'><h2>Karte nicht gefunden</h2></body></html>");
         }
+    }
+
+    /**
+     * "Bewerte uns bei Google", wenn der Laden einen Link hinterlegt hat,
+     * sonst leer. Der Link kommt vom Laden und steht in einem Attribut -
+     * deshalb escapeHtml; dass er mit https:// beginnt, prueft der
+     * ShopService beim Speichern. Inline-Stil, damit die drei Seiten mit
+     * ihren eigenen CSS-Bloecken nichts Neues lernen muessen.
+     */
+    static String bewertungsLink(com.example.stemplekarte.model.Shop shop) {
+        String url = shop != null ? shop.getGoogleReviewUrl() : null;
+        if (url == null || url.isBlank()) return "";
+        return "<a href='" + escapeHtml(url) + "' target='_blank' rel='noopener' class='review-link' "
+                + "style='display:block;margin-top:14px;text-align:center;font-size:14px;"
+                + "color:inherit;opacity:.85;text-decoration:underline'>"
+                + "⭐ Bewerte uns bei Google</a>";
     }
 
     /** Ohne Angebot steht hier wortgleich der bisherige Text. */

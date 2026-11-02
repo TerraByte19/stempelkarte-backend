@@ -177,7 +177,7 @@ class RueckholTest {
     void apple_alterPass_wirdErstStillAufgefrischt() {
         CustomerCard cc = kundenkarte(7);
         // Funktion erst nach der letzten Aenderung der Karte eingeschaltet.
-        when(shop.getWinbackEnabledAt()).thenReturn(Instant.now().plusSeconds(1));
+        when(shop.nachrichtenFeldSeit()).thenReturn(Instant.now().plusSeconds(1));
         mitApple(cc);
         kandidaten(cc);
 
@@ -194,7 +194,7 @@ class RueckholTest {
 
     @Test
     void apple_passMitFeld_bekommtNachricht() {
-        when(shop.getWinbackEnabledAt()).thenReturn(jetzt.minus(Duration.ofDays(30)));
+        when(shop.nachrichtenFeldSeit()).thenReturn(jetzt.minus(Duration.ofDays(30)));
         CustomerCard cc = kundenkarte(7);
         mitApple(cc);
         kandidaten(cc);

@@ -137,12 +137,13 @@ class ApplePassPunkteTest {
         // Stand 50: noch nichts bezahlbar
         var leer = dienst(katalog(card)).baueFelder(card, karte(card, 0, 5_000), false);
         assertThat(leer.getHeaderFields().get(0).getChangeMessage())
-                .doesNotContain("einloesen");
+                .doesNotContain("einlösen");
 
-        // Stand 150: Kaffee ist drin
+        // Stand 150: Kaffee ist drin. Mit Umlaut: der Text steht so auf dem
+        // iPhone des Kunden, "einloesen" war ein Tippfehler in der Oberflaeche.
         var voll = dienst(katalog(card)).baueFelder(card, karte(card, 0, 15_000), false);
         assertThat(voll.getHeaderFields().get(0).getChangeMessage())
-                .contains("einloesen");
+                .contains("einlösen");
     }
 
     @Test

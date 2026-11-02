@@ -304,6 +304,13 @@ public class GoogleWalletService {
     @Async
     @Transactional
     public void sendeNachricht(String customerCardId, String titel, String text) {
+        sendeNachricht(customerCardId, titel, text, "winback");
+    }
+
+    /** kennung: Praefix der Message-ID, damit sich im Log Rueckhol und Kampagne unterscheiden lassen. */
+    @Async
+    @Transactional
+    public void sendeNachricht(String customerCardId, String titel, String text, String kennung) {
         if (credentials == null || walletClient == null) return;
         try {
             CustomerCard cc = customerCardRepo.findById(customerCardId)
@@ -314,7 +321,7 @@ public class GoogleWalletService {
                     .setHeader(titel)
                     .setBody(text)
                     .setMessageType("TEXT_AND_NOTIFY")
-                    .setId("winback-" + customerCardId + "-" + System.currentTimeMillis());
+                    .setId(kennung + "-" + customerCardId + "-" + System.currentTimeMillis());
 
             walletClient.loyaltyobject()
                     .addmessage(objectId, new AddMessageRequest().setMessage(message))

@@ -24,6 +24,7 @@ class RueckholFeldTest {
         Shop shop = mock(Shop.class);
         when(shop.getName()).thenReturn("Café Mokka");
         when(shop.isRueckholAktiv()).thenReturn(aktiv);
+        when(shop.hatNachrichtenFeld()).thenReturn(aktiv);
         Card card = Card.create(shop, "Kaffee", "10 Stempel", 10, "Gratis Kaffee");
 
         Customer customer = mock(Customer.class);
@@ -34,6 +35,8 @@ class RueckholFeldTest {
         when(cc.getStamps()).thenReturn(3);
         when(cc.rueckholSichtbar()).thenReturn(sichtbar);
         when(cc.getWinbackText()).thenReturn("Wir vermissen dich!");
+        when(cc.nachrichtText()).thenReturn(sichtbar ? "Wir vermissen dich!" : null);
+        when(cc.nachrichtFrisch()).thenReturn(sichtbar);
 
         var pass = new ApplePassService(mock(AppProperties.class),
                 mock(PassTemplateGenerator.class), mock(RewardService.class))

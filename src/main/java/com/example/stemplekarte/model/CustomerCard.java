@@ -71,6 +71,16 @@ public class CustomerCard {
     @Column(name = "winback_text", length = 300)
     private String winbackText;
 
+    // ── Kampagne (KampagnenService) ──────────────────────────────────────
+    // Die letzte Kampagne, die diese Karte bekommen hat. Bleibt stehen, bis
+    // die naechste kommt - der Kunde soll das Angebot auch noch nach dem
+    // Besuch auf der Rueckseite nachlesen koennen.
+    @Column(name = "kampagne_text", length = 300)
+    private String kampagneText;
+
+    @Column(name = "kampagne_am")
+    private Instant kampagneAm;
+
     // ── Willkommensgeschenk ──────────────────────────────────────────────
     // true = Karte gesperrt, bis das Personal das Geschenk einloest.
     // Nullable OHNE Default mit Absicht: null heisst "nicht gesperrt", und
@@ -226,6 +236,50 @@ public class CustomerCard {
         // updatedAt bewegen, damit iOS den Pass mit der Nachricht abholt.
         this.updatedAt = jetzt;
     }
+
+    // ── Kampagne ─────────────────────────────────────────────────────────
+
+    /** Wie rueckholGesendet: zaehlt nicht als Besuch, bewegt aber updatedAt. */
+    public void kampagneErhalten(String text, Instant jetzt) {
+        if (lastVisitAt == null) lastVisitAt = updatedAt;
+        this.kampagneText = (text != null && text.length() > 300) ? text.substring(0, 299) + "…" : text;
+        this.kampagneAm = jetzt;
+        this.updatedAt = jetzt;
+    }
+
+    /**
+     * Was im Nachrichtenfeld des Passes steht: die neuere von Rueckhol
+     * (solange sichtbar) und Kampagne. Null = keine Nachricht, Ruhetext.
+     */
+    public String nachrichtText() {
+        Nachricht n = nachricht();
+        return n != null ? n.text() : null;
+    }
+
+    /**
+     * Darf der Pass das changeMessage tragen? Nur solange der Kunde seit der
+     * Nachricht nicht da war. Danach bleibt der Text zwar stehen, aber ohne
+     * Mitteilung - sonst meldete iOS beim naechsten Stempel die alte Nachricht
+     * noch einmal, wenn das Feld von Rueckhol auf Kampagne zurueckfaellt.
+     */
+    public boolean nachrichtFrisch() {
+        Nachricht n = nachricht();
+        return n != null && (lastVisitAt == null || n.am().isAfter(lastVisitAt));
+    }
+
+    private record Nachricht(String text, Instant am) {}
+
+    private Nachricht nachricht() {
+        Nachricht rueckhol = rueckholSichtbar() ? new Nachricht(winbackText, winbackSentAt) : null;
+        Nachricht kampagne = (kampagneText != null && kampagneAm != null)
+                ? new Nachricht(kampagneText, kampagneAm) : null;
+        if (rueckhol == null) return kampagne;
+        if (kampagne == null) return rueckhol;
+        return rueckhol.am().isAfter(kampagne.am()) ? rueckhol : kampagne;
+    }
+
+    public String getKampagneText() { return kampagneText; }
+    public Instant getKampagneAm() { return kampagneAm; }
 
     // ── Willkommensgeschenk ──────────────────────────────────────────────
 

@@ -193,7 +193,21 @@ public class ShopController {
                 com.example.stemplekarte.wallet.ApplePassService.radiusFuer(shop));
         rueckholFelder(map, shop);
         map.put("nameColor", shop.getNameColor());
+        map.put("googleReviewUrl", shop.getGoogleReviewUrl() != null ? shop.getGoogleReviewUrl() : "");
         return map;
+    }
+
+    public record GoogleReviewRequest(String url) {}
+
+    @Operation(summary = "Link zur Google-Bewertung setzen",
+            description = "Erscheint als \"Bewerte uns bei Google\" auf der Anmeldeseite und der "
+                    + "Kartenseite der Kunden. Leer = Link entfernen. Nur https.")
+    @PutMapping("/me/google-review")
+    public Map<String, Object> updateGoogleReview(@RequestBody GoogleReviewRequest req, Authentication auth) {
+        Shop updated = shopService.updateGoogleReviewUrl(currentShop(auth).getId(), req.url());
+        Map<String, Object> out = new HashMap<>();
+        out.put("googleReviewUrl", updated.getGoogleReviewUrl() != null ? updated.getGoogleReviewUrl() : "");
+        return out;
     }
 
     public record NameColorRequest(String color) {}

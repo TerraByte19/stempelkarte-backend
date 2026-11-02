@@ -14,4 +14,8 @@ public interface RewardRepository extends JpaRepository<Reward, String> {
     List<Reward> findByCardAndActiveTrueOrderBySortOrderAscCostPointsX100Asc(Card card);
 
     long countByCardAndActiveTrue(Card card);
+
+    // Beim Loeschen eines Ladens (AdminController#deleteShop): der Katalog
+    // haengt per Fremdschluessel an der Karte.
+    void deleteByCard(Card card);
 }

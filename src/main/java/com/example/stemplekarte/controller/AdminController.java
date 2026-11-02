@@ -48,6 +48,10 @@ public class AdminController {
     private final PasswordEncoder passwordEncoder;
     private final com.example.stemplekarte.repository.GeoVorfallRepository geoVorfaelle;
     private final com.example.stemplekarte.repository.KontaktanfrageRepository kontaktanfragen;
+    private final com.example.stemplekarte.repository.KampagneRepository kampagnen;
+    private final com.example.stemplekarte.repository.KampagneEmpfaengerRepository kampagneEmpfaenger;
+    private final com.example.stemplekarte.repository.SentNewsletterRepository sentNewsletters;
+    private final com.example.stemplekarte.repository.RewardRepository rewards;
 
     @Value("${stempelkarte.admin-secret:admin-geheim-nur-lokal}")
     private String adminSecret;
@@ -67,7 +71,15 @@ public class AdminController {
                            StatsService statsService,
                            PasswordEncoder passwordEncoder,
                            com.example.stemplekarte.repository.GeoVorfallRepository geoVorfaelle,
-                           com.example.stemplekarte.repository.KontaktanfrageRepository kontaktanfragen) {
+                           com.example.stemplekarte.repository.KontaktanfrageRepository kontaktanfragen,
+                           com.example.stemplekarte.repository.KampagneRepository kampagnen,
+                           com.example.stemplekarte.repository.KampagneEmpfaengerRepository kampagneEmpfaenger,
+                           com.example.stemplekarte.repository.SentNewsletterRepository sentNewsletters,
+                           com.example.stemplekarte.repository.RewardRepository rewards) {
+        this.kampagnen = kampagnen;
+        this.kampagneEmpfaenger = kampagneEmpfaenger;
+        this.sentNewsletters = sentNewsletters;
+        this.rewards = rewards;
         this.googleWalletSetup = googleWalletSetup;
         this.shopRepo = shopRepo;
         this.cardRepo = cardRepo;
@@ -420,6 +432,8 @@ public class AdminController {
                 appleDeviceRepo.deleteBySerialNumber(cc.getId());
             }
             customerCardRepo.deleteAll(customerCards);
+            // Praemien-Katalog haengt per Fremdschluessel an der Karte.
+            rewards.deleteByCard(card);
         }
 
         // 3. Karten löschen
@@ -428,6 +442,15 @@ public class AdminController {
         // 4. Staff-Tokens löschen
         List<StaffToken> tokens = staffTokenRepo.findByShop(shop);
         staffTokenRepo.deleteAll(tokens);
+
+        // 4b. Newsletter-Verlauf und Kampagnen haengen per Fremdschluessel am
+        // Shop. Ohne das brach das Loeschen bei jedem Laden ab, der je einen
+        // Newsletter verschickt hatte.
+        sentNewsletters.deleteByShop(shop);
+        for (com.example.stemplekarte.model.Kampagne k : kampagnen.findByShop(shop)) {
+            kampagneEmpfaenger.deleteByKampagneId(k.getId());
+        }
+        kampagnen.deleteByShop(shop);
 
         // 5. Shop löschen
         shopRepo.delete(shop);

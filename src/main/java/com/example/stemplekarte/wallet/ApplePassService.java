@@ -388,10 +388,17 @@ public class ApplePassService {
      * changeMessage - sonst gaebe es beim Stempeln eine zweite Meldung.
      */
     private void nachrichtFeld(PKGenericPassBuilder pass, Shop shop, CustomerCard cc) {
-        if (shop == null || !shop.isRueckholAktiv()) return;
+        // Rueckhol an ODER schon einmal eine Kampagne verschickt: dann traegt
+        // jeder Pass das Feld, dauerhaft (Shop#hatNachrichtenFeld).
+        if (shop == null || !shop.hatNachrichtenFeld()) return;
         var feld = PKField.builder().key("nachricht").label("NACHRICHT");
-        if (cc.rueckholSichtbar()) {
-            feld.value(cc.getWinbackText()).changeMessage("%@");
+        String text = cc.nachrichtText();
+        if (text != null) {
+            feld.value(text);
+            // Nur solange der Kunde seit der Nachricht nicht da war. Danach
+            // steht der Text zwar noch, aber ohne changeMessage - sonst gaebe
+            // es beim naechsten Stempel eine zweite Meldung.
+            if (cc.nachrichtFrisch()) feld.changeMessage("%@");
         } else {
             feld.value("Hier erscheinen Nachrichten von " + shop.getName() + ".");
         }
@@ -421,7 +428,7 @@ public class ApplePassService {
 
         // %@ ersetzt Apple durch den neuen Wert des Feldes.
         String changeMsg = etwasErreichbar
-                ? "\uD83C\uDF89 Du kannst einloesen! Punktestand: %@"
+                ? "\uD83C\uDF89 Du kannst einl\u00F6sen! Punktestand: %@"
                 : "Update! Dein Punktestand: %@";
 
         var genericPass = PKGenericPass.builder()

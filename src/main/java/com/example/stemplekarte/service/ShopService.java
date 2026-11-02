@@ -126,6 +126,30 @@ public class ShopService {
         return shopRepo.save(shop);
     }
 
+    /**
+     * Link zur Google-Bewertung. Leer = Link entfernen. Nur https und ohne
+     * Leer- oder Steuerzeichen: der Link landet als href auf Seiten, die
+     * fremde Kunden oeffnen - "javascript:" darf dort nie stehen.
+     */
+    @Transactional
+    public Shop updateGoogleReviewUrl(String shopId, String url) {
+        String u = (url == null) ? "" : url.trim();
+        if (!u.isEmpty()) {
+            if (!u.startsWith("https://")) {
+                throw new IllegalArgumentException("Der Link muss mit https:// beginnen");
+            }
+            if (u.length() > 500) {
+                throw new IllegalArgumentException("Der Link darf höchstens 500 Zeichen haben");
+            }
+            if (u.chars().anyMatch(c -> Character.isWhitespace(c) || Character.isISOControl(c))) {
+                throw new IllegalArgumentException("Der Link darf keine Leerzeichen enthalten");
+            }
+        }
+        Shop shop = getById(shopId);
+        shop.updateGoogleReviewUrl(u);
+        return shopRepo.save(shop);
+    }
+
     /** Rueckhol-Nachricht. Tage nur aus der Auswahl im Profil. */
     @Transactional
     public Shop updateRueckhol(String shopId, boolean enabled, int days, String text) {

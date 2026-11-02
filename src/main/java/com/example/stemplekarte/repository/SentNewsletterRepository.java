@@ -13,4 +13,8 @@ public interface SentNewsletterRepository extends JpaRepository<SentNewsletter, 
 
     // Beim Start: Versände, die ein Neustart mittendrin erwischt hat.
     java.util.List<SentNewsletter> findByStatus(String status);
+
+    // Beim Loeschen eines Ladens (AdminController#deleteShop): der Verlauf
+    // haengt per Fremdschluessel am Shop.
+    void deleteByShop(Shop shop);
 }

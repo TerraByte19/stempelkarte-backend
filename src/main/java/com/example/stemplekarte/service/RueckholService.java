@@ -140,7 +140,9 @@ public class RueckholService {
      * iOS holt den Pass daraufhin ab.
      */
     static boolean feldAufDemHandy(Shop shop, CustomerCard cc) {
-        Instant seit = shop.getWinbackEnabledAt();
+        // Nicht winbackEnabledAt: seit den Kampagnen tragen Paesse das Feld
+        // auch, wenn Rueckhol erst spaeter (oder erneut) eingeschaltet wurde.
+        Instant seit = shop.nachrichtenFeldSeit();
         return seit != null && cc.getUpdatedAt() != null && cc.getUpdatedAt().isAfter(seit);
     }
 

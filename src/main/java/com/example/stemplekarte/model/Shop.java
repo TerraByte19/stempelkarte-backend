@@ -132,6 +132,13 @@ public class Shop {
     @Column(name = "winback_text", length = 160)
     private String winbackText;
 
+    // Seit wann jeder neu gebaute Pass das Nachrichtenfeld traegt (Rueckhol
+    // UND Kampagnen). Einmal gesetzt, bleibt es: schaltet der Laden Rueckhol
+    // wieder aus, verlieren die Paesse das Feld nicht - sonst muesste die
+    // naechste Kampagne alle iPhones erst wieder still auffrischen.
+    @Column(name = "nachrichten_seit")
+    private Instant nachrichtenSeit;
+
     // Sonntag aus der Statistik ausrechnen (Ø/Tag, staerkster/ruhigster Tag) -
     // viele Laeden haben sonntags zu, dann ist Sonntag trivial immer "ruhigster
     // Tag". Pro Laden vom Laden selbst umschaltbar; das Admin-Panel zeigt nur
@@ -143,6 +150,11 @@ public class Shop {
     // Kundenseite die Kontrastfarbe, im Apple-Pass die Textfarbe der Karte.
     @Column(name = "name_color", length = 7)
     private String nameColor;
+
+    // Link zur Google-Bewertung ("Bewerte uns"). Steht auf der Anmeldeseite
+    // und der Kartenseite des Kunden. Null = kein Link.
+    @Column(name = "google_review_url", length = 500)
+    private String googleReviewUrl;
 
     // Vom Admin befreit: kein Ladenort noetig, keine Geo-Pruefung beim Scan.
     // Null = nicht befreit, also Pflicht wie fuer alle.
@@ -323,11 +335,41 @@ public class Shop {
     public String getWinbackText() { return winbackText; }
 
     public void updateRueckhol(boolean enabled, int days, String text) {
-        if (enabled && !isRueckholAktiv()) this.winbackEnabledAt = Instant.now();
+        if (enabled && !isRueckholAktiv()) {
+            this.winbackEnabledAt = Instant.now();
+            nachrichtenEinschalten(this.winbackEnabledAt);
+        }
         this.winbackEnabled = enabled;
         this.winbackDays = days;
         this.winbackText = (text == null || text.isBlank()) ? null : text.trim();
         this.updatedAt = Instant.now();
+    }
+
+    // ── Nachrichtenfeld (Rueckhol + Kampagnen) ──────────────────────────
+
+    public Instant getNachrichtenSeit() { return nachrichtenSeit; }
+
+    /** Nur das erste Mal zaehlt: davor gebaute Paesse haben das Feld nicht. */
+    public void nachrichtenEinschalten(Instant jetzt) {
+        if (this.nachrichtenSeit == null) this.nachrichtenSeit = jetzt;
+    }
+
+    /** Traegt ein jetzt gebauter Pass dieses Ladens das Feld "nachricht"? */
+    public boolean hatNachrichtenFeld() {
+        return isRueckholAktiv() || getNachrichtenSeit() != null;
+    }
+
+    /**
+     * Seit wann Paesse das Feld tragen. Null = noch nie. Bestandslaeden mit
+     * Rueckhol von vor der Spalte nachrichten_seit haben nur winbackEnabledAt -
+     * das gilt dann, solange Rueckhol an ist.
+     */
+    public Instant nachrichtenFeldSeit() {
+        Instant seit = getNachrichtenSeit();
+        Instant rueckhol = isRueckholAktiv() ? getWinbackEnabledAt() : null;
+        if (seit == null) return rueckhol;
+        if (rueckhol == null) return seit;
+        return rueckhol.isBefore(seit) ? rueckhol : seit;
     }
 
     // ── Standort-Pflicht ────────────────────────────────────────────────
@@ -346,6 +388,16 @@ public class Shop {
     /** Null oder leer = automatisch. Geprueft wird im ShopService. */
     public void updateNameColor(String color) {
         this.nameColor = (color == null || color.isBlank()) ? null : color.trim().toUpperCase();
+        this.updatedAt = Instant.now();
+    }
+
+    // ── Google-Bewertung ────────────────────────────────────────────────
+
+    public String getGoogleReviewUrl() { return googleReviewUrl; }
+
+    /** Null oder leer = kein Link. Geprueft wird im ShopService. */
+    public void updateGoogleReviewUrl(String url) {
+        this.googleReviewUrl = (url == null || url.isBlank()) ? null : url.trim();
         this.updatedAt = Instant.now();
     }
 
