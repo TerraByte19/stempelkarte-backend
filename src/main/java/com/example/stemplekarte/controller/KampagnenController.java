@@ -7,13 +7,18 @@ import com.example.stemplekarte.security.JwtAuthFilter;
 import com.example.stemplekarte.service.KampagnenService;
 import io.swagger.v3.oas.annotations.Operation;
 import org.springframework.security.core.Authentication;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.time.Instant;
+import java.time.format.DateTimeParseException;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Push-Kampagnen des Ladens. Eigener Controller, damit der ShopController
@@ -36,14 +41,15 @@ public class KampagnenController {
         return ((JwtAuthFilter.ShopPrincipal) auth.getPrincipal()).shop();
     }
 
-    // gruppe: Zielgruppe.name(), leer = ALLE.
-    public record KampagneRequest(String text, String gruppe) {}
+    // gruppe: Zielgruppe.name(), leer = ALLE. geplantAm: ISO-Zeitpunkt, leer = sofort.
+    public record KampagneRequest(String text, String gruppe, String geplantAm) {}
 
     public record KampagneItem(String id, String text, String gruppe, String status, int empfaenger,
-                               int gesendet, String erstelltAm, String fertigAm) {
+                               int gesendet, String erstelltAm, String geplantAm, String fertigAm) {
         static KampagneItem von(Kampagne k) {
             return new KampagneItem(k.getId(), k.getText(), k.getGruppe(), k.getStatus(),
                     k.getEmpfaenger(), k.getGesendet(), k.getErstelltAm().toString(),
+                    k.getGeplantAm() != null ? k.getGeplantAm().toString() : null,
                     k.getFertigAm() != null ? k.getFertigAm().toString() : null);
         }
     }
@@ -66,12 +72,27 @@ public class KampagnenController {
         return new KampagnenStand(Kampagne.TEXT_MAX, gruppen, items);
     }
 
-    @Operation(summary = "Push-Kampagne starten",
+    @Operation(summary = "Push-Kampagne starten oder planen",
             description = "Text 1-160 Zeichen an eine Zielgruppe. Jede Karte bekommt hoechstens "
-                    + "eine Kampagne am Tag. Der Versand laeuft im Hintergrund; der Stand "
-                    + "steht danach im Verlauf.")
+                    + "eine Kampagne am Tag. geplantAm (ISO) = spaeter senden, die Empfaenger "
+                    + "werden dann zum Zeitpunkt bestimmt. Der Versand laeuft im Hintergrund.")
     @PostMapping
     public KampagneItem starte(@RequestBody KampagneRequest req, Authentication auth) {
-        return KampagneItem.von(kampagnenService.starte(currentShop(auth), req.text(), req.gruppe()));
+        Instant geplant = null;
+        if (req.geplantAm() != null && !req.geplantAm().isBlank()) {
+            try {
+                geplant = Instant.parse(req.geplantAm().trim());
+            } catch (DateTimeParseException e) {
+                throw new IllegalArgumentException("Ungültiger Zeitpunkt");
+            }
+        }
+        return KampagneItem.von(kampagnenService.starte(currentShop(auth), req.text(), req.gruppe(), geplant));
+    }
+
+    @Operation(summary = "Geplante Kampagne abbrechen")
+    @DeleteMapping("/{id}")
+    public Map<String, Object> abbrechen(@PathVariable String id, Authentication auth) {
+        kampagnenService.abbrechen(currentShop(auth), id);
+        return Map.of("ok", true);
     }
 }

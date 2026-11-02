@@ -15,6 +15,7 @@ import java.time.Instant;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -66,11 +67,26 @@ class KampagnenControllerTest {
     @Test
     void starten_gibtDenNeuenEintrag() {
         Kampagne k = Kampagne.starte(shop, "Hallo", Zielgruppe.NEU, 3, Instant.now());
-        when(service.starte(shop, "Hallo", "neu")).thenReturn(k);
-        var item = controller.starte(new KampagnenController.KampagneRequest("Hallo", "neu"), auth);
+        when(service.starte(shop, "Hallo", "neu", null)).thenReturn(k);
+        var item = controller.starte(new KampagnenController.KampagneRequest("Hallo", "neu", ""), auth);
         assertThat(item.id()).startsWith("KP-");
         assertThat(item.gruppe()).isEqualTo("NEU");
         assertThat(item.status()).isEqualTo("RUNNING");
+        assertThat(item.geplantAm()).isNull();
         assertThat(item.fertigAm()).isNull();
+    }
+
+    @Test
+    void planen_parstDenZeitpunkt() {
+        Instant wann = Instant.parse("2026-12-24T15:00:00Z");
+        Kampagne k = Kampagne.starte(shop, "Frohe Weihnachten", Zielgruppe.ALLE, 3, Instant.now(), wann);
+        when(service.starte(shop, "Frohe Weihnachten", "alle", wann)).thenReturn(k);
+        var item = controller.starte(
+                new KampagnenController.KampagneRequest("Frohe Weihnachten", "alle", "2026-12-24T15:00:00Z"), auth);
+        assertThat(item.status()).isEqualTo("SCHEDULED");
+        assertThat(item.geplantAm()).isEqualTo("2026-12-24T15:00:00Z");
+        assertThatThrownBy(() -> controller.starte(
+                new KampagnenController.KampagneRequest("x", "alle", "morgen"), auth))
+                .isInstanceOf(IllegalArgumentException.class);
     }
 }

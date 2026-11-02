@@ -180,8 +180,20 @@ public class KampagnenService {
         return text.replaceAll("\\p{Cntrl}", " ").replaceAll(" {2,}", " ").trim();
     }
 
-    @Transactional
+    public static final int PLANUNG_MAX_TAGE = 90;
+
     public Kampagne starte(Shop shop, String roh, String gruppeKey) {
+        return starte(shop, roh, gruppeKey, null);
+    }
+
+    /**
+     * geplantAm == null: sofort, Empfaenger werden jetzt festgeschrieben.
+     * Sonst wartet die Kampagne als GEPLANT; der Laeufer bestimmt die
+     * Empfaenger erst zum Zeitpunkt (aktiviere). Die Zahl im Eintrag ist bis
+     * dahin eine Schaetzung von jetzt.
+     */
+    @Transactional
+    public Kampagne starte(Shop shop, String roh, String gruppeKey, Instant geplantAm) {
         String text = sauber(roh);
         if (text.isEmpty()) {
             throw new IllegalArgumentException("Der Text darf nicht leer sein");
@@ -191,15 +203,31 @@ public class KampagnenService {
         }
         Zielgruppe gruppe = Zielgruppe.von(gruppeKey);
         Instant jetzt = Instant.now();
+        if (geplantAm != null) {
+            if (geplantAm.isBefore(jetzt.plusSeconds(60))) {
+                throw new IllegalArgumentException("Der Zeitpunkt liegt in der Vergangenheit");
+            }
+            if (geplantAm.isAfter(jetzt.plus(java.time.Duration.ofDays(PLANUNG_MAX_TAGE)))) {
+                throw new IllegalArgumentException("Höchstens " + PLANUNG_MAX_TAGE + " Tage im Voraus");
+            }
+        }
         // Den Laden frisch laden statt die Kopie aus dem JWT-Filter zu
         // speichern - die ueberschriebe sonst alle Spalten mit altem Stand.
         Shop laden = shopRepo.findById(shop.getId()).orElseThrow();
         // Ab jetzt traegt jeder neu gebaute Pass das Feld. Muss VOR dem
         // Kampagnen-Eintrag stehen, sonst gilt ein Pass von dazwischen als
-        // "hat das Feld", obwohl er es nicht hat.
+        // "hat das Feld", obwohl er es nicht hat. Bei geplanten Kampagnen
+        // gewinnt das sogar Zeit: jeder Stempel bis dahin bringt das Feld
+        // auf ein weiteres iPhone.
         laden.nachrichtenEinschalten(jetzt);
         shopRepo.save(laden);
         List<CustomerCard> empf = empfaenger(laden, gruppe, jetzt);
+        if (geplantAm != null) {
+            Kampagne k = kampagneRepo.save(Kampagne.starte(laden, text, gruppe, empf.size(), jetzt, geplantAm));
+            log.info("[KAMPAGNE] {} geplant fuer {}, Laden {}, Gruppe {}, ~{} Empfaenger",
+                    k.getId(), geplantAm, laden.getId(), gruppe, empf.size());
+            return k;
+        }
         if (empf.isEmpty()) {
             throw new IllegalArgumentException(
                     "In dieser Gruppe ist gerade niemand, der heute noch keine Nachricht bekommen hat.");
@@ -212,12 +240,53 @@ public class KampagnenService {
         return k;
     }
 
+    /** Geplante Kampagne verwerfen. Laufende oder fertige lassen sich nicht zuruecknehmen. */
+    @Transactional
+    public void abbrechen(Shop shop, String kampagneId) {
+        Kampagne k = kampagneRepo.findByIdAndShop(kampagneId, shop)
+                .orElseThrow(() -> new java.util.NoSuchElementException("Kampagne nicht gefunden"));
+        if (!k.istGeplant()) {
+            throw new IllegalArgumentException("Nur geplante Kampagnen lassen sich abbrechen");
+        }
+        kampagneRepo.delete(k);
+        log.info("[KAMPAGNE] {} abgebrochen, Laden {}", kampagneId, shop.getId());
+    }
+
+    /**
+     * Geplante Kampagne ist faellig: Empfaenger jetzt bestimmen und
+     * festschreiben. Niemand da -> gleich fertig mit 0, nicht ewig geplant.
+     */
+    void aktiviere(Kampagne k, Instant jetzt) {
+        List<CustomerCard> empf = tx.execute(status -> {
+            List<CustomerCard> e = empfaenger(k.getShop(), Zielgruppe.von(k.getGruppe()), jetzt);
+            if (e.isEmpty()) {
+                k.aktivieren(0);
+                k.beenden(jetzt);
+            } else {
+                k.aktivieren(e.size());
+                empfaengerRepo.saveAll(e.stream()
+                        .map(cc -> KampagneEmpfaenger.neu(k.getId(), cc.getId())).toList());
+            }
+            kampagneRepo.save(k);
+            return e;
+        });
+        log.info("[KAMPAGNE] {} faellig, {} Empfaenger", k.getId(), empf != null ? empf.size() : 0);
+    }
+
     // ── Laeufer ──────────────────────────────────────────────────────────
 
     @Scheduled(fixedDelay = 30_000, initialDelay = 15_000)
     public void lauf() {
         List<Kampagne> laufend;
         try {
+            Instant jetzt = Instant.now();
+            for (Kampagne k : kampagneRepo.findByStatusAndGeplantAmLessThanEqual(Kampagne.GEPLANT, jetzt)) {
+                try {
+                    aktiviere(k, jetzt);
+                } catch (Exception e) {
+                    log.warn("[KAMPAGNE] {} nicht aktiviert: {}", k.getId(), e.getMessage());
+                }
+            }
             laufend = kampagneRepo.findByStatus(Kampagne.LAEUFT);
         } catch (Exception e) {
             log.warn("[KAMPAGNE] Lauf abgebrochen: {}", e.getMessage());

@@ -105,4 +105,17 @@ class KampagnenAbfragenTest {
         kampagnen.deleteByShop(shop);
         assertThat(kampagnen.findByShop(shop)).isEmpty();
     }
+
+    @Test
+    void geplante_werdenFaellig() {
+        kundenkarte("a@test.de");
+        Kampagne bald = kampagnen.save(Kampagne.starte(shop, "bald", Zielgruppe.ALLE, 1, jetzt, jetzt.plusSeconds(60)));
+        Kampagne spaeter = kampagnen.save(Kampagne.starte(shop, "spaeter", Zielgruppe.ALLE, 1, jetzt, jetzt.plusSeconds(3600)));
+
+        assertThat(kampagnen.findByStatus(Kampagne.LAEUFT)).isEmpty();
+        assertThat(kampagnen.findByStatusAndGeplantAmLessThanEqual(Kampagne.GEPLANT, jetzt)).isEmpty();
+        assertThat(kampagnen.findByStatusAndGeplantAmLessThanEqual(Kampagne.GEPLANT, jetzt.plusSeconds(120)))
+                .extracting(Kampagne::getId).containsExactly(bald.getId());
+        assertThat(kampagnen.findByIdAndShop(spaeter.getId(), shop)).isPresent();
+    }
 }

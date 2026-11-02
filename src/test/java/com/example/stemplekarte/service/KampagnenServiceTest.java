@@ -183,6 +183,78 @@ class KampagnenServiceTest {
                 .containsExactly(a.getId());
     }
 
+    // ── Planen ───────────────────────────────────────────────────────────
+
+    @Test
+    void geplant_wartetOhneEmpfaengerzeilen() {
+        basis(kundenkarte());
+        Instant spaeter = jetzt.plus(Duration.ofHours(3));
+        Kampagne k = dienst.starte(shop, "Happy Hour ab 16 Uhr", "alle", spaeter);
+        assertThat(k.istGeplant()).isTrue();
+        assertThat(k.getStatus()).isEqualTo(Kampagne.GEPLANT);
+        assertThat(k.getGeplantAm()).isEqualTo(spaeter);
+        assertThat(k.getEmpfaenger()).isEqualTo(1);
+        verify(empfaengerRepo, never()).saveAll(any());
+        // Das Feld kommt trotzdem ab sofort in jeden Pass.
+        verify(shop).nachrichtenEinschalten(any());
+    }
+
+    @Test
+    void geplant_vergangenheitUndZuWeitWeg_abgelehnt() {
+        basis(kundenkarte());
+        assertThatThrownBy(() -> dienst.starte(shop, "x", "alle", jetzt.minusSeconds(10)))
+                .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("Vergangenheit");
+        assertThatThrownBy(() -> dienst.starte(shop, "x", "alle", jetzt.plus(Duration.ofDays(91))))
+                .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("90");
+        verify(kampagneRepo, never()).save(any());
+    }
+
+    @Test
+    void geplant_niemandJetzt_trotzdemErlaubt() {
+        basis();
+        Kampagne k = dienst.starte(shop, "x", "inaktiv_90", jetzt.plus(Duration.ofDays(1)));
+        assertThat(k.istGeplant()).isTrue();
+        assertThat(k.getEmpfaenger()).isZero();
+    }
+
+    @Test
+    void faellig_bestimmtEmpfaengerJetzt_undLaeuft() {
+        CustomerCard cc = kundenkarte();
+        basis(cc);
+        Kampagne k = Kampagne.starte(shop, "Happy Hour", Zielgruppe.ALLE, 0, jetzt.minusSeconds(600), jetzt.minusSeconds(1));
+        dienst.aktiviere(k, jetzt);
+        assertThat(k.laeuft()).isTrue();
+        assertThat(k.getEmpfaenger()).isEqualTo(1);
+        ArgumentCaptor<List<KampagneEmpfaenger>> rows = ArgumentCaptor.captor();
+        verify(empfaengerRepo).saveAll(rows.capture());
+        assertThat(rows.getValue()).extracting(KampagneEmpfaenger::getCustomerCardId).containsExactly(cc.getId());
+    }
+
+    @Test
+    void faellig_niemandDa_gleichFertig() {
+        basis();
+        Kampagne k = Kampagne.starte(shop, "x", Zielgruppe.ALLE, 3, jetzt.minusSeconds(600), jetzt.minusSeconds(1));
+        dienst.aktiviere(k, jetzt);
+        assertThat(k.getStatus()).isEqualTo(Kampagne.FERTIG);
+        assertThat(k.getEmpfaenger()).isZero();
+        verify(empfaengerRepo, never()).saveAll(any());
+    }
+
+    @Test
+    void abbrechen_nurGeplante() {
+        Kampagne geplant = Kampagne.starte(shop, "x", Zielgruppe.ALLE, 1, jetzt, jetzt.plusSeconds(3600));
+        when(kampagneRepo.findByIdAndShop(geplant.getId(), shop)).thenReturn(Optional.of(geplant));
+        dienst.abbrechen(shop, geplant.getId());
+        verify(kampagneRepo).delete(geplant);
+
+        Kampagne laeuft = kampagne();
+        when(kampagneRepo.findByIdAndShop(laeuft.getId(), shop)).thenReturn(Optional.of(laeuft));
+        assertThatThrownBy(() -> dienst.abbrechen(shop, laeuft.getId()))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> dienst.abbrechen(shop, "KP-FREMD"))
+                .isInstanceOf(java.util.NoSuchElementException.class);
+    }
+
     // ── Mehrere Karten in einem Laden ────────────────────────────────────
 
     @Test

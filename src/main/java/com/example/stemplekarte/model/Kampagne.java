@@ -19,6 +19,7 @@ import java.util.UUID;
         indexes = @Index(name = "idx_kampagne_shop_zeit", columnList = "shop_id, erstellt_am"))
 public class Kampagne {
 
+    public static final String GEPLANT = "SCHEDULED";
     public static final String LAEUFT = "RUNNING";
     public static final String FERTIG = "DONE";
     public static final int TEXT_MAX = 160;
@@ -52,22 +53,41 @@ public class Kampagne {
     @Column(name = "erstellt_am", nullable = false)
     private Instant erstelltAm;
 
+    // Geplant: Versand erst zu diesem Zeitpunkt. Die Empfaenger werden DANN
+    // bestimmt, nicht beim Anlegen - "30 Tage nicht da" soll die treffen,
+    // die es zum Versand sind. Null = sofort.
+    @Column(name = "geplant_am")
+    private Instant geplantAm;
+
     @Column(name = "fertig_am")
     private Instant fertigAm;
 
     protected Kampagne() {}
 
     public static Kampagne starte(Shop shop, String text, Zielgruppe gruppe, int empfaenger, Instant jetzt) {
+        return starte(shop, text, gruppe, empfaenger, jetzt, null);
+    }
+
+    /** geplantAm != null: Status GEPLANT, empfaenger ist nur eine Schaetzung. */
+    public static Kampagne starte(Shop shop, String text, Zielgruppe gruppe, int empfaenger,
+                                  Instant jetzt, Instant geplantAm) {
         Kampagne k = new Kampagne();
         k.id = "KP-" + UUID.randomUUID().toString().substring(0, 12).toUpperCase();
         k.shop = shop;
         k.text = text;
         k.gruppe = (gruppe != null ? gruppe : Zielgruppe.ALLE).name();
-        k.status = LAEUFT;
+        k.status = geplantAm != null ? GEPLANT : LAEUFT;
         k.empfaenger = empfaenger;
         k.gesendet = 0;
         k.erstelltAm = jetzt;
+        k.geplantAm = geplantAm;
         return k;
+    }
+
+    /** Geplante Kampagne wird faellig: ab jetzt laeuft sie mit der echten Empfaengerzahl. */
+    public void aktivieren(int empfaenger) {
+        this.status = LAEUFT;
+        this.empfaenger = empfaenger;
     }
 
     public void gesendet(int weitere) { this.gesendet += weitere; }
@@ -78,6 +98,8 @@ public class Kampagne {
     }
 
     public boolean laeuft() { return LAEUFT.equals(status); }
+    public boolean istGeplant() { return GEPLANT.equals(status); }
+    public Instant getGeplantAm() { return geplantAm; }
 
     public String getId() { return id; }
     public Shop getShop() { return shop; }

@@ -26,7 +26,15 @@ Empfaengerzahl je Gruppe, Verlauf.
   "30 Tage nicht da" trifft genau die, die es in dem Moment waren.
 - **Keine Uhrzeit-Sperre.** Der Laden drueckt bewusst auf Senden.
 - **Text 1 bis 160 Zeichen**, Steuerzeichen werden zu Leerzeichen.
-- **Kein Zeitplan, keine Vorlagen** - kommt spaeter.
+- **Planen** (`geplantAm`, 1 Minute bis 90 Tage voraus): Status GEPLANT ohne
+  Empfaengerzeilen. Der Laeufer bestimmt die Empfaenger erst zum Zeitpunkt
+  (`aktiviere`) - "30 Tage nicht da" trifft die, die es dann sind. Niemand da
+  -> FERTIG mit 0. Geplante lassen sich loeschen (`DELETE /{id}`), laufende
+  nicht. `nachrichtenSeit` wird schon beim Planen gesetzt: jeder Stempel bis
+  dahin bringt das Feld auf ein weiteres iPhone.
+- **Vorlagen und Entwurf** sind reine Frontend-Sache: vier Texte in der
+  Sprache der Oberflaeche (Happy Hour, neues Produkt, Event, Angebot mit
+  Laufzeit), der Entwurf liegt im localStorage des Browsers.
 
 ## Wie die Nachricht ankommt
 
