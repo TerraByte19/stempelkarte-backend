@@ -12,7 +12,9 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.data.domain.PageRequest;
 
+import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -104,6 +106,30 @@ class KampagnenAbfragenTest {
 
         kampagnen.deleteByShop(shop);
         assertThat(kampagnen.findByShop(shop)).isEmpty();
+    }
+
+    @Test
+    void ergebnis_kundenIdsUndFaelligeFertige() {
+        CustomerCard a = kundenkarte("a@test.de");
+        CustomerCard b = kundenkarte("b@test.de");
+        Kampagne k = kampagnen.save(Kampagne.starte(shop, "x", Zielgruppe.ALLE, 2, jetzt.minus(Duration.ofDays(9))));
+        empfaenger.save(KampagneEmpfaenger.neu(k.getId(), a.getId()));
+        empfaenger.save(KampagneEmpfaenger.neu(k.getId(), b.getId()));
+
+        assertThat(empfaenger.findByKampagneId(k.getId())).hasSize(2);
+        List<Object[]> paare = customerCards.kundenIdsVon(List.of(a.getId(), b.getId()));
+        assertThat(paare).hasSize(2);
+        assertThat(paare).extracting(p -> p[1]).containsExactlyInAnyOrder(
+                a.getCustomer().getId(), b.getCustomer().getId());
+
+        k.beenden(jetzt.minus(Duration.ofDays(8)));
+        kampagnen.save(k);
+        assertThat(kampagnen.findByStatusAndErgebnisAmIsNullAndFertigAmBefore(
+                Kampagne.FERTIG, jetzt.minus(Duration.ofDays(7)))).extracting(Kampagne::getId).containsExactly(k.getId());
+        k.ergebnis(1, jetzt);
+        kampagnen.save(k);
+        assertThat(kampagnen.findByStatusAndErgebnisAmIsNullAndFertigAmBefore(
+                Kampagne.FERTIG, jetzt.minus(Duration.ofDays(7)))).isEmpty();
     }
 
     @Test

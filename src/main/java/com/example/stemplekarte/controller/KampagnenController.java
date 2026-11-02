@@ -44,13 +44,17 @@ public class KampagnenController {
     // gruppe: Zielgruppe.name(), leer = ALLE. geplantAm: ISO-Zeitpunkt, leer = sofort.
     public record KampagneRequest(String text, String gruppe, String geplantAm) {}
 
+    // wiedergekommen: Empfaenger, die in den 7 Tagen danach gescannt haben.
+    // Null solange die Kampagne nicht fertig ist; ergebnisFest = Fenster um.
     public record KampagneItem(String id, String text, String gruppe, String status, int empfaenger,
-                               int gesendet, String erstelltAm, String geplantAm, String fertigAm) {
-        static KampagneItem von(Kampagne k) {
+                               int gesendet, String erstelltAm, String geplantAm, String fertigAm,
+                               Integer wiedergekommen, boolean ergebnisFest) {
+        static KampagneItem von(Kampagne k, Integer wiedergekommen) {
             return new KampagneItem(k.getId(), k.getText(), k.getGruppe(), k.getStatus(),
                     k.getEmpfaenger(), k.getGesendet(), k.getErstelltAm().toString(),
                     k.getGeplantAm() != null ? k.getGeplantAm().toString() : null,
-                    k.getFertigAm() != null ? k.getFertigAm().toString() : null);
+                    k.getFertigAm() != null ? k.getFertigAm().toString() : null,
+                    wiedergekommen, k.ergebnisFest());
         }
     }
 
@@ -67,9 +71,18 @@ public class KampagnenController {
         List<GruppeItem> gruppen = kampagnenService.zaehle(shop).stream()
                 .map(z -> new GruppeItem(z.gruppe().name(), z.empfaenger(), z.heuteSchon()))
                 .toList();
+        Instant jetzt = Instant.now();
         List<KampagneItem> items = kampagneRepo.findTop20ByShopOrderByErstelltAmDesc(shop)
-                .stream().map(KampagneItem::von).toList();
+                .stream().map(k -> KampagneItem.von(k, ergebnis(k, shop, jetzt))).toList();
         return new KampagnenStand(Kampagne.TEXT_MAX, gruppen, items);
+    }
+
+    // Fest = gespeicherter Wert. Fertig, aber Fenster offen = live zaehlen.
+    // Geplant oder laufend = noch kein Ergebnis.
+    private Integer ergebnis(Kampagne k, Shop shop, Instant jetzt) {
+        if (k.ergebnisFest()) return k.getWiedergekommen();
+        if (!Kampagne.FERTIG.equals(k.getStatus())) return null;
+        return kampagnenService.wiedergekommen(k, shop.getId(), jetzt);
     }
 
     @Operation(summary = "Push-Kampagne starten oder planen",
@@ -86,7 +99,7 @@ public class KampagnenController {
                 throw new IllegalArgumentException("Ungültiger Zeitpunkt");
             }
         }
-        return KampagneItem.von(kampagnenService.starte(currentShop(auth), req.text(), req.gruppe(), geplant));
+        return KampagneItem.von(kampagnenService.starte(currentShop(auth), req.text(), req.gruppe(), geplant), null);
     }
 
     @Operation(summary = "Geplante Kampagne abbrechen")

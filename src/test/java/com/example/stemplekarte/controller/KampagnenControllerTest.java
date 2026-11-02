@@ -16,6 +16,8 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -48,8 +50,13 @@ class KampagnenControllerTest {
                 new KampagnenService.GruppenZahl(Zielgruppe.ALLE, 40, 12),
                 new KampagnenService.GruppenZahl(Zielgruppe.INAKTIV_30, 0, 12)));
         when(repo.findTop20ByShopOrderByErstelltAmDesc(shop)).thenReturn(List.of(k));
+        // Fertig, Fenster offen: Zwischenstand live vom Service.
+        when(shop.getId()).thenReturn("SHOP-1");
+        when(service.wiedergekommen(eq(k), eq("SHOP-1"), any())).thenReturn(4);
 
         var stand = controller.stand(auth);
+        assertThat(stand.items().get(0).wiedergekommen()).isEqualTo(4);
+        assertThat(stand.items().get(0).ergebnisFest()).isFalse();
         assertThat(stand.textMax()).isEqualTo(160);
         assertThat(stand.gruppen()).hasSize(2);
         assertThat(stand.gruppen().get(0).gruppe()).isEqualTo("ALLE");

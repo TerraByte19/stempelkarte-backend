@@ -32,6 +32,11 @@ Empfaengerzahl je Gruppe, Verlauf.
   -> FERTIG mit 0. Geplante lassen sich loeschen (`DELETE /{id}`), laufende
   nicht. `nachrichtenSeit` wird schon beim Planen gesetzt: jeder Stempel bis
   dahin bringt das Feld auf ein weiteres iPhone.
+- **Ergebnis** (`wiedergekommen`, `ergebnisAm`): wie viele Empfaenger
+  (Personen) in den 7 Tagen ab Versand mindestens einmal gescannt haben,
+  ueber ScanLog. Solange das Fenster laeuft, rechnet `GET` live
+  ("bisher n"); danach schreibt der Laeufer den Wert fest. Keine
+  Kontrollgruppe - das waere der naechste Schritt.
 - **Vorlagen und Entwurf** sind reine Frontend-Sache: vier Texte in der
   Sprache der Oberflaeche (Happy Hour, neues Produkt, Event, Angebot mit
   Laufzeit), der Entwurf liegt im localStorage des Browsers.

@@ -64,6 +64,11 @@ public interface CustomerCardRepository extends JpaRepository<CustomerCard, Stri
     List<CustomerCard> findRueckholKandidaten(Shop shop, java.time.Instant grenze,
                                               org.springframework.data.domain.Pageable seite);
 
+    // Kampagnen-Ergebnis: zu Kundenkarten-IDs die Personen-IDs, ohne die
+    // Entities zu laden (ScanLog kennt nur die Personen-ID).
+    @Query("select cc.id, cc.customer.id from CustomerCard cc where cc.id in :ids")
+    List<Object[]> kundenIdsVon(java.util.Collection<String> ids);
+
     // Dashboard "Neu dabei": die juengsten Kundenkarten mit Name und Karte.
     @EntityGraph(attributePaths = {"card", "customer"})
     List<CustomerCard> findTop5ByCard_ShopOrderByCreatedAtDesc(Shop shop);

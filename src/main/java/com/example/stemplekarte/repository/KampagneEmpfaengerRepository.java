@@ -13,6 +13,9 @@ public interface KampagneEmpfaengerRepository extends JpaRepository<KampagneEmpf
 
     long countByKampagneIdAndErledigtFalse(String kampagneId);
 
+    // Alle Empfaenger einer Kampagne, fuer das Ergebnis "wer kam danach".
+    List<KampagneEmpfaenger> findByKampagneId(String kampagneId);
+
     // Beim Loeschen eines Ladens (AdminController#deleteShop).
     void deleteByKampagneId(String kampagneId);
 }

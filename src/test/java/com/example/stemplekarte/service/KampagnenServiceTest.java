@@ -6,11 +6,13 @@ import com.example.stemplekarte.model.Customer;
 import com.example.stemplekarte.model.CustomerCard;
 import com.example.stemplekarte.model.Kampagne;
 import com.example.stemplekarte.model.KampagneEmpfaenger;
+import com.example.stemplekarte.model.ScanLog;
 import com.example.stemplekarte.model.Shop;
 import com.example.stemplekarte.repository.AppleDeviceRepository;
 import com.example.stemplekarte.repository.CustomerCardRepository;
 import com.example.stemplekarte.repository.KampagneEmpfaengerRepository;
 import com.example.stemplekarte.repository.KampagneRepository;
+import com.example.stemplekarte.repository.ScanLogRepository;
 import com.example.stemplekarte.repository.ShopRepository;
 import com.example.stemplekarte.wallet.ApnsPushService;
 import com.example.stemplekarte.wallet.GoogleWalletService;
@@ -75,8 +77,70 @@ class KampagnenServiceTest {
         TransactionTemplate tx = mock(TransactionTemplate.class);
         when(tx.execute(any())).thenAnswer(inv ->
                 ((TransactionCallback<?>) inv.getArgument(0)).doInTransaction(null));
-        dienst = new KampagnenService(kampagneRepo, empfaengerRepo, ccRepo, shopRepo, deviceRepo,
+        scanLogRepo = mock(ScanLogRepository.class);
+        dienst = new KampagnenService(kampagneRepo, empfaengerRepo, ccRepo, scanLogRepo, shopRepo, deviceRepo,
                 mock(RewardService.class), apns, google, tx);
+    }
+
+    private ScanLogRepository scanLogRepo;
+
+    private ScanLog scanVon(String kundeId, Instant wann) {
+        ScanLog sl = mock(ScanLog.class);
+        when(sl.getCustomerId()).thenReturn(kundeId);
+        when(sl.getScannedAt()).thenReturn(wann);
+        return sl;
+    }
+
+    // ── Ergebnis ─────────────────────────────────────────────────────────
+
+    @Test
+    void wiedergekommen_zaehltPersonenUnterDenEmpfaengern() {
+        Kampagne k = kampagne();
+        when(empfaengerRepo.findByKampagneId(k.getId())).thenReturn(List.of(
+                KampagneEmpfaenger.neu(k.getId(), "CC-A"), KampagneEmpfaenger.neu(k.getId(), "CC-B")));
+        when(ccRepo.kundenIdsVon(any())).thenReturn(List.<Object[]>of(
+                new Object[]{"CC-A", "CUST-A"}, new Object[]{"CC-B", "CUST-B"}));
+        // A kam zweimal, C ist kein Empfaenger, B kam nicht.
+        List<ScanLog> scans = List.of(
+                scanVon("CUST-A", jetzt.plusSeconds(100)),
+                scanVon("CUST-A", jetzt.plusSeconds(200)),
+                scanVon("CUST-C", jetzt.plusSeconds(300)));
+        when(scanLogRepo.findByShopIdAndScannedAtBetweenOrderByScannedAtAsc(eq("SHOP-1"), any(), any()))
+                .thenReturn(scans);
+        assertThat(dienst.wiedergekommen(k, "SHOP-1", jetzt.plus(Duration.ofDays(1)))).isEqualTo(1);
+    }
+
+    @Test
+    void wiedergekommen_ohneEmpfaenger_null() {
+        Kampagne k = kampagne();
+        when(empfaengerRepo.findByKampagneId(k.getId())).thenReturn(List.of());
+        assertThat(dienst.wiedergekommen(k, "SHOP-1", jetzt)).isZero();
+        verify(scanLogRepo, never()).findByShopIdAndScannedAtBetweenOrderByScannedAtAsc(anyString(), any(), any());
+    }
+
+    @Test
+    void wiedergekommen_fensterEndetNach7Tagen() {
+        Kampagne k = kampagne();
+        when(empfaengerRepo.findByKampagneId(k.getId())).thenReturn(List.of(KampagneEmpfaenger.neu(k.getId(), "CC-A")));
+        when(ccRepo.kundenIdsVon(any())).thenReturn(List.<Object[]>of(new Object[]{"CC-A", "CUST-A"}));
+        when(scanLogRepo.findByShopIdAndScannedAtBetweenOrderByScannedAtAsc(anyString(), any(), any())).thenReturn(List.of());
+        dienst.wiedergekommen(k, "SHOP-1", jetzt.plus(Duration.ofDays(30)));
+        // Gefragt wird nur bis Start + 7 Tage, nicht bis heute.
+        verify(scanLogRepo).findByShopIdAndScannedAtBetweenOrderByScannedAtAsc(
+                "SHOP-1", k.startAm(), k.startAm().plus(Duration.ofDays(7)));
+    }
+
+    @Test
+    void lauf_schreibtErgebnisNachAblaufFest() {
+        Kampagne k = kampagne();
+        k.beenden(jetzt.minus(Duration.ofDays(8)));
+        when(kampagneRepo.findByStatusAndErgebnisAmIsNullAndFertigAmBefore(eq(Kampagne.FERTIG), any()))
+                .thenReturn(List.of(k));
+        when(empfaengerRepo.findByKampagneId(k.getId())).thenReturn(List.of());
+        dienst.lauf();
+        assertThat(k.ergebnisFest()).isTrue();
+        assertThat(k.getWiedergekommen()).isZero();
+        verify(kampagneRepo).save(k);
     }
 
     private int kunden = 0;

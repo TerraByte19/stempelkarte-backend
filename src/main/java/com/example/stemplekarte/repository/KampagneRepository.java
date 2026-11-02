@@ -18,6 +18,10 @@ public interface KampagneRepository extends JpaRepository<Kampagne, String> {
     @EntityGraph(attributePaths = {"shop"})
     List<Kampagne> findByStatusAndGeplantAmLessThanEqual(String status, java.time.Instant jetzt);
 
+    // Fertige, deren 7-Tage-Fenster um ist und deren Ergebnis noch nicht steht.
+    @EntityGraph(attributePaths = {"shop"})
+    List<Kampagne> findByStatusAndErgebnisAmIsNullAndFertigAmBefore(String status, java.time.Instant grenze);
+
     List<Kampagne> findTop20ByShopOrderByErstelltAmDesc(Shop shop);
 
     // Abbrechen: nur die eigene.

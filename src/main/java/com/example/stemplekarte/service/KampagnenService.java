@@ -5,11 +5,13 @@ import com.example.stemplekarte.model.CustomerCard;
 import com.example.stemplekarte.model.Kampagne;
 import com.example.stemplekarte.model.KampagneEmpfaenger;
 import com.example.stemplekarte.model.Reward;
+import com.example.stemplekarte.model.ScanLog;
 import com.example.stemplekarte.model.Shop;
 import com.example.stemplekarte.repository.AppleDeviceRepository;
 import com.example.stemplekarte.repository.CustomerCardRepository;
 import com.example.stemplekarte.repository.KampagneEmpfaengerRepository;
 import com.example.stemplekarte.repository.KampagneRepository;
+import com.example.stemplekarte.repository.ScanLogRepository;
 import com.example.stemplekarte.repository.ShopRepository;
 import com.example.stemplekarte.wallet.ApnsPushService;
 import com.example.stemplekarte.wallet.GoogleWalletService;
@@ -65,6 +67,7 @@ public class KampagnenService {
     private final KampagneRepository kampagneRepo;
     private final KampagneEmpfaengerRepository empfaengerRepo;
     private final CustomerCardRepository customerCardRepo;
+    private final ScanLogRepository scanLogRepo;
     private final ShopRepository shopRepo;
     private final AppleDeviceRepository deviceRepo;
     private final RewardService rewardService;
@@ -73,13 +76,14 @@ public class KampagnenService {
     private final TransactionTemplate tx;
 
     public KampagnenService(KampagneRepository kampagneRepo, KampagneEmpfaengerRepository empfaengerRepo,
-                            CustomerCardRepository customerCardRepo, ShopRepository shopRepo,
-                            AppleDeviceRepository deviceRepo, RewardService rewardService,
-                            ApnsPushService apnsPushService, GoogleWalletService googleWalletService,
-                            TransactionTemplate tx) {
+                            CustomerCardRepository customerCardRepo, ScanLogRepository scanLogRepo,
+                            ShopRepository shopRepo, AppleDeviceRepository deviceRepo,
+                            RewardService rewardService, ApnsPushService apnsPushService,
+                            GoogleWalletService googleWalletService, TransactionTemplate tx) {
         this.kampagneRepo = kampagneRepo;
         this.empfaengerRepo = empfaengerRepo;
         this.customerCardRepo = customerCardRepo;
+        this.scanLogRepo = scanLogRepo;
         this.shopRepo = shopRepo;
         this.deviceRepo = deviceRepo;
         this.rewardService = rewardService;
@@ -273,6 +277,36 @@ public class KampagnenService {
         log.info("[KAMPAGNE] {} faellig, {} Empfaenger", k.getId(), empf != null ? empf.size() : 0);
     }
 
+    // ── Ergebnis ─────────────────────────────────────────────────────────
+
+    public static final int ERGEBNIS_TAGE = 7;
+
+    /**
+     * Wie viele Empfaenger seit dem Versand mindestens einmal gescannt haben,
+     * innerhalb von ERGEBNIS_TAGE. Personen, nicht Scans: wer dreimal kam,
+     * zaehlt einmal. Vor Ablauf des Fensters ist das ein Zwischenstand.
+     *
+     * shopId kommt extra, weil die Kampagnen aus dem Verlauf den Laden nur
+     * als Lazy-Proxy tragen.
+     */
+    public int wiedergekommen(Kampagne k, String shopId, Instant jetzt) {
+        List<KampagneEmpfaenger> zeilen = empfaengerRepo.findByKampagneId(k.getId());
+        if (zeilen.isEmpty() || k.startAm() == null) return 0;
+        Set<String> kunden = new HashSet<>();
+        for (Object[] z : customerCardRepo.kundenIdsVon(
+                zeilen.stream().map(KampagneEmpfaenger::getCustomerCardId).toList())) {
+            if (z[1] != null) kunden.add(z[1].toString());
+        }
+        Instant von = k.startAm();
+        Instant bis = von.plus(java.time.Duration.ofDays(ERGEBNIS_TAGE));
+        if (jetzt.isBefore(bis)) bis = jetzt;
+        Set<String> da = new HashSet<>();
+        for (ScanLog sl : scanLogRepo.findByShopIdAndScannedAtBetweenOrderByScannedAtAsc(shopId, von, bis)) {
+            if (sl.getCustomerId() != null && kunden.contains(sl.getCustomerId())) da.add(sl.getCustomerId());
+        }
+        return da.size();
+    }
+
     // ── Laeufer ──────────────────────────────────────────────────────────
 
     @Scheduled(fixedDelay = 30_000, initialDelay = 15_000)
@@ -285,6 +319,17 @@ public class KampagnenService {
                     aktiviere(k, jetzt);
                 } catch (Exception e) {
                     log.warn("[KAMPAGNE] {} nicht aktiviert: {}", k.getId(), e.getMessage());
+                }
+            }
+            // Fenster um: Ergebnis festschreiben, damit das Dashboard es nicht
+            // bei jedem Aufruf neu zaehlt.
+            Instant grenze = jetzt.minus(java.time.Duration.ofDays(ERGEBNIS_TAGE));
+            for (Kampagne k : kampagneRepo.findByStatusAndErgebnisAmIsNullAndFertigAmBefore(Kampagne.FERTIG, grenze)) {
+                try {
+                    k.ergebnis(wiedergekommen(k, k.getShop().getId(), jetzt), jetzt);
+                    kampagneRepo.save(k);
+                } catch (Exception e) {
+                    log.warn("[KAMPAGNE] {} Ergebnis nicht festgeschrieben: {}", k.getId(), e.getMessage());
                 }
             }
             laufend = kampagneRepo.findByStatus(Kampagne.LAEUFT);

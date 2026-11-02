@@ -62,6 +62,15 @@ public class Kampagne {
     @Column(name = "fertig_am")
     private Instant fertigAm;
 
+    // Ergebnis: wie viele Empfaenger in den 7 Tagen nach dem Versand mindestens
+    // einmal gescannt haben. Null = noch nicht festgeschrieben (das Dashboard
+    // rechnet solange live), ergebnisAm = wann es fest wurde.
+    @Column(name = "wiedergekommen")
+    private Integer wiedergekommen;
+
+    @Column(name = "ergebnis_am")
+    private Instant ergebnisAm;
+
     protected Kampagne() {}
 
     public static Kampagne starte(Shop shop, String text, Zielgruppe gruppe, int empfaenger, Instant jetzt) {
@@ -91,6 +100,20 @@ public class Kampagne {
     }
 
     public void gesendet(int weitere) { this.gesendet += weitere; }
+
+    public void ergebnis(int wiedergekommen, Instant jetzt) {
+        this.wiedergekommen = wiedergekommen;
+        this.ergebnisAm = jetzt;
+    }
+
+    /** Ab wann die Nachricht draussen war: der geplante Zeitpunkt, sonst das Anlegen. */
+    public Instant startAm() {
+        return geplantAm != null ? geplantAm : erstelltAm;
+    }
+
+    public boolean ergebnisFest() { return ergebnisAm != null; }
+    public Integer getWiedergekommen() { return wiedergekommen; }
+    public Instant getErgebnisAm() { return ergebnisAm; }
 
     public void beenden(Instant jetzt) {
         this.status = FERTIG;
