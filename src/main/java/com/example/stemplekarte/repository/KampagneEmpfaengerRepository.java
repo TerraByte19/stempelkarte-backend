@@ -18,4 +18,12 @@ public interface KampagneEmpfaengerRepository extends JpaRepository<KampagneEmpf
 
     // Beim Loeschen eines Ladens (AdminController#deleteShop).
     void deleteByKampagneId(String kampagneId);
+
+    // Eigene Automation: wann jede Karte zuletzt von ihr eine Nachricht
+    // bekam - [customerCardId, Instant]. Daraus macht der Automat "schon
+    // dran gewesen" (einmal je Karte, je Pause, je Jahr).
+    @org.springframework.data.jpa.repository.Query(
+            "select e.customerCardId, max(k.erstelltAm) from KampagneEmpfaenger e, Kampagne k "
+            + "where e.kampagneId = k.id and k.automationId = :automationId group by e.customerCardId")
+    List<Object[]> letzterVersandJeKarte(@org.springframework.data.repository.query.Param("automationId") String automationId);
 }

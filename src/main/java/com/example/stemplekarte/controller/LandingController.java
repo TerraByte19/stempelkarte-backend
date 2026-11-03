@@ -39,17 +39,20 @@ public class LandingController {
     private final CardService cardService;
     private final GoogleWalletService googleWalletService;
     private final RewardService rewardService;
+    private final com.example.stemplekarte.service.EmpfehlungService empfehlungService;
 
     @Value("${stempelkarte.base-url:http://localhost:8080}")
     private String baseUrl;
 
     public LandingController(CustomerService customerService, CardService cardService,
                              GoogleWalletService googleWalletService,
-                             RewardService rewardService) {
+                             RewardService rewardService,
+                             com.example.stemplekarte.service.EmpfehlungService empfehlungService) {
         this.customerService = customerService;
         this.cardService = cardService;
         this.googleWalletService = googleWalletService;
         this.rewardService = rewardService;
+        this.empfehlungService = empfehlungService;
     }
 
     // ── Karten-Anmeldung mit Werbe-Einwilligung (von /karte-neu/ aufgerufen) ──
@@ -59,8 +62,9 @@ public class LandingController {
     // - die Bestätigungs-Mail (Double-Opt-In) auslösen.
     // birthday (JJJJ-MM-TT) und phone sind optional; ob sie Pflicht sind,
     // sagt der Laden (Shop.signup*). Ein aelteres Formular schickt sie nicht.
+    // ref: Empfehlungscode eines Freundes (Kunde wirbt Kunde), optional.
     public record RegisterRequest(String name, String email, String cardId,
-                                  boolean marketingConsent, String birthday, String phone) {}
+                                  boolean marketingConsent, String birthday, String phone, String ref) {}
 
     @PostMapping("/karte-neu/register")
     public Map<String, Object> registerForCard(@RequestBody RegisterRequest req) {
@@ -77,7 +81,7 @@ public class LandingController {
             throw new IllegalArgumentException("Bitte Handynummer angeben");
         }
         customerService.registerForCard(
-                req.name(), req.email(), req.cardId(), req.marketingConsent(), geburtstag, telefon);
+                req.name(), req.email(), req.cardId(), req.marketingConsent(), geburtstag, telefon, req.ref());
         // Jede Anmeldung verlangt jetzt IMMER eine Mail-Bestätigung.
         // Das Frontend zeigt daher immer den "Check deine Mails"-Screen;
         // die Weiterleitung zur Karte passiert erst über den Link in der Mail.
@@ -329,7 +333,8 @@ public class LandingController {
                 googleSaveUrl.isBlank() ? ""
                         : "<a href='" + escapeHtml(googleSaveUrl) + "' class='btn-google' id='google-btn'>" +
                                 "\uD83E\uDD16 Zu Google Wallet hinzuf\u00fcgen</a>",
-                bewertungsLinks(card.getShop(), customerId, cardId),
+                stufenZeile(card, cc) + bewertungsLinks(card.getShop(), customerId, cardId) + empfehlungsBlock(card, cc)
+                        + demoBlock(card, customerId, cardId),
                 // Die beiden IDs stehen in JS-Zeichenketten. toJsString
                 // liefert sie inklusive Anfuehrungszeichen - im Vorlagentext
                 // stehen an dieser Stelle deshalb KEINE.
@@ -421,6 +426,12 @@ public class LandingController {
             // bleibt unangetastet - er laeuft in echten Laeden.
             if (card.isPoints()) {
                 return punkteSeite(cc, card, customer, customerId, cardId);
+            }
+            if (card.isMember()) {
+                return mitgliedSeite(cc, card, customer, customerId, cardId);
+            }
+            if (card.isPackage()) {
+                return paketSeite(cc, card, customer, customerId, cardId);
             }
 
             String shopName = card.getShop().getName();
@@ -699,7 +710,8 @@ public class LandingController {
                     googleSaveUrl.isBlank() ? ""
                             : "<a href='" + escapeHtml(googleSaveUrl) + "' class='btn-google' id='google-btn'>" +
                                     "🤖 Zu Google Wallet hinzufügen</a>",
-                    bewertungsLinks(card.getShop(), customerId, cardId),
+                    stufenZeile(card, cc) + bewertungsLinks(card.getShop(), customerId, cardId) + empfehlungsBlock(card, cc)
+                        + demoBlock(card, customerId, cardId),
                     // Parameter fuer das JS: custId, cId, threshold, rewardText (als JS-String), stamps
                     toJsString(customerId), toJsString(cardId), threshold,
                     toJsString(card.getRewardText()), stamps,
@@ -872,6 +884,12 @@ public class LandingController {
                             %s
                         </div>
                         <script>
+                            // Empfehlungslink eines Freundes (?ref=CODE) ins Feld, falls es eins gibt.
+                            (function () {
+                                const p = new URLSearchParams(location.search).get('ref')
+                                const el = document.getElementById('ref')
+                                if (p && el && !el.value) el.value = p
+                            })()
                             async function getCard() {
                                 const name = document.getElementById('name').value.trim()
                                 const email = document.getElementById('email').value.trim()
@@ -882,6 +900,8 @@ public class LandingController {
                                 const pEl = document.getElementById('phone')
                                 const birthday = bEl ? bEl.value : null
                                 const phone = pEl ? pEl.value.trim() : null
+                                const rEl = document.getElementById('ref')
+                                const ref = rEl ? rEl.value.trim() : (new URLSearchParams(location.search).get('ref') || null)
 
                                 if (!name || !email) {
                                     errorEl.style.display = 'block'
@@ -907,7 +927,7 @@ public class LandingController {
                                             name, email,
                                             cardId: %s,
                                             marketingConsent: consent,
-                                            birthday, phone
+                                            birthday, phone, ref
                                         })
                                     })
                                     if (!res.ok) {
@@ -937,7 +957,7 @@ public class LandingController {
                     escapeHtml(shopName),
                     anmeldeTitel(card),
                     anmeldeText(card),
-                    anmeldeFelder(card.getShop()),
+                    anmeldeFelder(card.getShop()) + empfehlungsFeld(card),
                     escapeHtml(shopName),
                     bewertungsLink(card.getShop()),
                     // cardId steht in einer JS-Zeichenkette - toJsString
@@ -981,6 +1001,261 @@ public class LandingController {
                 + "color:inherit;opacity:.85;text-decoration:underline'>"
                 + "💬 Wie war's? Sag es " + escapeHtml(shop.getName()) + "</a>";
         return rueck + google;
+    }
+
+    /**
+     * Kundenseite einer Mitgliedskarte: Name, Mitglied seit, Besuche, die
+     * Wallet-Knoepfe. Eigene, kleine Vorlage - die Stempel- und Punkteseiten
+     * bleiben unangetastet.
+     */
+    private ResponseEntity<String> mitgliedSeite(CustomerCard cc, Card card, Customer customer,
+                                                 String customerId, String cardId) {
+        String shopName = card.getShop().getName();
+        String bgColor = farbeVon(card);
+        String logoUrl = logoVon(card);
+        String googleSaveUrl = "";
+        try {
+            googleSaveUrl = googleWalletService.generateSaveUrl(cc);
+        } catch (Exception e) {
+            // Google Wallet nicht konfiguriert
+        }
+        String applePassUrl = baseUrl + "/api/customer/" + customerId + "/card/" + cardId + "/apple-pass";
+        String seit = cc.getCreatedAt() != null
+                ? java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy")
+                        .format(cc.getCreatedAt().atZone(java.time.ZoneId.of("Europe/Berlin")))
+                : "";
+        int besuche = cc.getStamps();
+
+        String html = """
+                <!DOCTYPE html>
+                <html lang="de">
+                <head>
+                    <meta charset="UTF-8">
+                    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                    <title>%s — Mitgliedskarte</title>
+                    <style>
+                        * { margin: 0; padding: 0; box-sizing: border-box; }
+                        body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: #f5f5f7;
+                               min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px; }
+                        .card { background: %s; border-radius: 20px; padding: 28px; width: 100%%; max-width: 380px;
+                                color: rgb(var(--ink)); box-shadow: 0 20px 60px rgba(0,0,0,0.3); }
+                        .shop-header { display: flex; align-items: center; gap: 12px; margin-bottom: 24px; }
+                        .shop-logo { width: 50px; height: 50px; border-radius: 12px; object-fit: cover; background: rgba(var(--ink),0.2); }
+                        .shop-name { font-size: 20px; font-weight: 600; }
+                        .card-name { font-size: 13px; opacity: 0.75; margin-top: 2px; }
+                        .mitglied-label { font-size: 12px; opacity: 0.7; text-transform: uppercase; letter-spacing: 0.5px; }
+                        .mitglied-name { font-size: 28px; font-weight: 800; line-height: 1.15; margin: 2px 0 18px; }
+                        .zeile { display: flex; justify-content: space-between; font-size: 14px; padding: 8px 0;
+                                 border-top: 1px solid rgba(var(--ink),0.15); }
+                        .zeile b { font-weight: 700; }
+                        .btn { display: block; text-align: center; padding: 14px; border-radius: 12px; font-weight: 600;
+                               font-size: 15px; text-decoration: none; margin-top: 12px; }
+                        .btn-apple { background: #000; color: #fff; }
+                        .btn-google { background: #fff; color: #222; }
+                    </style>
+                </head>
+                <body>
+                    <div class="card">
+                        <div class="shop-header">
+                            %s
+                            <div>
+                                <div class="shop-name">%s</div>
+                                <div class="card-name">%s</div>
+                            </div>
+                        </div>
+                        <div class="mitglied-label">Mitglied</div>
+                        <div class="mitglied-name">%s</div>
+                        <div class="zeile"><span>Mitglied seit</span><b>%s</b></div>
+                        <div class="zeile"><span>Besuche</span><b id="besuche">%d</b></div>
+                        <a href="%s" class="btn btn-apple">🍎 Zu Apple Wallet hinzufügen</a>
+                        %s
+                        %s
+                    </div>
+                </body>
+                </html>
+                """.formatted(
+                escapeHtml(shopName), safeCssColor(bgColor),
+                logoUrl.isBlank() ? ""
+                        : "<img src='" + escapeHtml(logoUrl) + "' class='shop-logo' alt='Logo'>",
+                escapeHtml(shopName), escapeHtml(card.getName()),
+                escapeHtml(customer.getName()), seit, besuche,
+                escapeHtml(applePassUrl),
+                googleSaveUrl.isBlank() ? ""
+                        : "<a href='" + escapeHtml(googleSaveUrl) + "' class='btn btn-google' id='google-btn'>" +
+                                "🤖 Zu Google Wallet hinzufügen</a>",
+                stufenZeile(card, cc) + bewertungsLinks(card.getShop(), customerId, cardId)
+                        + demoBlock(card, customerId, cardId)
+        );
+        log.info("Landing-Mitgliedskarte geladen: customerCard={} card={} besuche={}", cc.getId(), cardId, besuche);
+        return ResponseEntity.ok(mitKontrast(html, bgColor, card.getShop().getNameColor()));
+    }
+
+    /**
+     * Kundenseite einer 10er-Karte: Rest gross, Paketgroesse, genutzte
+     * Besuche, Wallet-Knoepfe. Leer = Hinweis auf die Kasse.
+     */
+    private ResponseEntity<String> paketSeite(CustomerCard cc, Card card, Customer customer,
+                                              String customerId, String cardId) {
+        String shopName = card.getShop().getName();
+        String bgColor = farbeVon(card);
+        String logoUrl = logoVon(card);
+        String googleSaveUrl = "";
+        try {
+            googleSaveUrl = googleWalletService.generateSaveUrl(cc);
+        } catch (Exception e) {
+            // Google Wallet nicht konfiguriert
+        }
+        String applePassUrl = baseUrl + "/api/customer/" + customerId + "/card/" + cardId + "/apple-pass";
+        int rest = cc.getPaketRest();
+        String hinweis = rest > 0
+                ? ""
+                : "<div class='leer'>" + (cc.getPaketeGekauft() > 0
+                        ? "Dein Paket ist aufgebraucht. Ein neues gibt's an der Kasse."
+                        : "Noch kein Paket geladen. Dein erstes Paket gibt's an der Kasse.") + "</div>";
+
+        String html = """
+                <!DOCTYPE html>
+                <html lang="de">
+                <head>
+                    <meta charset="UTF-8">
+                    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                    <title>%s — 10er-Karte</title>
+                    <style>
+                        * { margin: 0; padding: 0; box-sizing: border-box; }
+                        body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: #f5f5f7;
+                               min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px; }
+                        .card { background: %s; border-radius: 20px; padding: 28px; width: 100%%; max-width: 380px;
+                                color: rgb(var(--ink)); box-shadow: 0 20px 60px rgba(0,0,0,0.3); }
+                        .shop-header { display: flex; align-items: center; gap: 12px; margin-bottom: 24px; }
+                        .shop-logo { width: 50px; height: 50px; border-radius: 12px; object-fit: cover; background: rgba(var(--ink),0.2); }
+                        .shop-name { font-size: 20px; font-weight: 600; }
+                        .card-name { font-size: 13px; opacity: 0.75; margin-top: 2px; }
+                        .rest-label { font-size: 12px; opacity: 0.7; text-transform: uppercase; letter-spacing: 0.5px; text-align: center; }
+                        .rest { font-size: 64px; font-weight: 800; line-height: 1.05; text-align: center; margin: 4px 0 2px; }
+                        .rest-einheit { font-size: 14px; opacity: 0.8; text-align: center; margin-bottom: 18px; }
+                        .leer { background: rgba(var(--ink),0.12); border-radius: 12px; padding: 12px; font-size: 14px;
+                                text-align: center; margin-bottom: 14px; }
+                        .zeile { display: flex; justify-content: space-between; font-size: 14px; padding: 8px 0;
+                                 border-top: 1px solid rgba(var(--ink),0.15); }
+                        .zeile b { font-weight: 700; }
+                        .btn { display: block; text-align: center; padding: 14px; border-radius: 12px; font-weight: 600;
+                               font-size: 15px; text-decoration: none; margin-top: 12px; }
+                        .btn-apple { background: #000; color: #fff; }
+                        .btn-google { background: #fff; color: #222; }
+                    </style>
+                </head>
+                <body>
+                    <div class="card">
+                        <div class="shop-header">
+                            %s
+                            <div>
+                                <div class="shop-name">%s</div>
+                                <div class="card-name">%s</div>
+                            </div>
+                        </div>
+                        <div class="rest-label">Noch übrig</div>
+                        <div class="rest" id="rest">%d</div>
+                        <div class="rest-einheit">%s</div>
+                        %s
+                        <div class="zeile"><span>Paket</span><b>%s</b></div>
+                        <div class="zeile"><span>Genutzt</span><b id="besuche">%d</b></div>
+                        <div class="zeile"><span>Name</span><b>%s</b></div>
+                        <a href="%s" class="btn btn-apple">🍎 Zu Apple Wallet hinzufügen</a>
+                        %s
+                        %s
+                    </div>
+                </body>
+                </html>
+                """.formatted(
+                escapeHtml(shopName), safeCssColor(bgColor),
+                logoUrl.isBlank() ? ""
+                        : "<img src='" + escapeHtml(logoUrl) + "' class='shop-logo' alt='Logo'>",
+                escapeHtml(shopName), escapeHtml(card.getName()),
+                rest, escapeHtml(card.getPaketEinheit()),
+                hinweis,
+                escapeHtml(card.paketText()), cc.getStamps(),
+                escapeHtml(customer.getName()),
+                escapeHtml(applePassUrl),
+                googleSaveUrl.isBlank() ? ""
+                        : "<a href='" + escapeHtml(googleSaveUrl) + "' class='btn btn-google' id='google-btn'>" +
+                                "🤖 Zu Google Wallet hinzufügen</a>",
+                stufenZeile(card, cc) + bewertungsLinks(card.getShop(), customerId, cardId)
+                        + demoBlock(card, customerId, cardId)
+        );
+        log.info("Landing-10er-Karte geladen: customerCard={} card={} rest={}", cc.getId(), cardId, rest);
+        return ResponseEntity.ok(mitKontrast(html, bgColor, card.getShop().getNameColor()));
+    }
+
+    /**
+     * Demo-Laden: Knopf "Nächster Schritt" auf der Kartenseite. Macht per
+     * /api/public/demo/stempel, was an der Kasse passieren wuerde, zeigt die
+     * Meldung und laedt die Seite neu. Nur bei Demo-Laeden im Markup.
+     */
+    static String demoBlock(Card card, String customerId, String cardId) {
+        if (card == null || card.getShop() == null || !card.getShop().isDemo()) return "";
+        return "<div class='demo' style='margin-top:18px;padding:14px;border-radius:12px;"
+                + "background:rgba(255,255,255,.14);text-align:center;font-size:14px'>"
+                + "<div style='font-weight:600;margin-bottom:6px'>🧪 Demo</div>"
+                + "<div style='opacity:.9;margin-bottom:10px'>Spiel die Kasse: ein Tipp = ein Besuch im Laden.</div>"
+                + "<button type='button' id='demo-btn' data-cid='" + escapeHtml(customerId) + "' data-card='"
+                + escapeHtml(cardId) + "' "
+                + "onclick=\"var b=this;b.disabled=true;b.textContent='…';"
+                + "fetch('/api/public/demo/stempel',{method:'POST',headers:{'Content-Type':'application/json'},"
+                + "body:JSON.stringify({customerId:b.dataset.cid,cardId:b.dataset.card})})"
+                + ".then(function(r){return r.json()}).then(function(j){"
+                + "var m=document.getElementById('demo-msg');m.textContent=j.message||j.error||'Fehler';"
+                + "if(j.action){setTimeout(function(){location.reload()},1500)}else{b.disabled=false;b.textContent='Nächster Schritt'}"
+                + "}).catch(function(){b.disabled=false;b.textContent='Nächster Schritt'})\" "
+                + "style='border:0;border-radius:8px;padding:9px 14px;font-size:14px;font-weight:600;"
+                + "cursor:pointer;background:rgba(255,255,255,.92);color:#222'>Nächster Schritt</button>"
+                + "<div id='demo-msg' style='margin-top:8px;font-size:13px;opacity:.9'></div>"
+                + "</div>";
+    }
+
+    /** Status-Zeile (Bronze, Silber, Gold) auf der Kartenseite, nur bei Karten mit Stufen. */
+    static String stufenZeile(Card card, CustomerCard cc) {
+        com.example.stemplekarte.service.Stufen.Stufe s = com.example.stemplekarte.service.Stufen.von(card, cc);
+        if (s == null) return "";
+        return "<div class='stufe' style='margin-top:14px;text-align:center;font-size:14px;opacity:.9'>"
+                + "🏅 Dein Status: <b>"
+                + escapeHtml(com.example.stemplekarte.service.Stufen.text(
+                        s, com.example.stemplekarte.service.Stufen.besuche(card, cc)))
+                + "</b></div>";
+    }
+
+    /**
+     * Feld "Empfehlungscode (optional)" im Anmeldeformular, nur bei
+     * eingeschalteter Empfehlung. Das JS der Seite fuellt es aus ?ref=.
+     */
+    static String empfehlungsFeld(Card card) {
+        if (card == null || !card.isEmpfehlungAktiv()) return "";
+        return "<input type='text' id='ref' maxlength='12' autocapitalize='characters' "
+                + "placeholder='Empfehlungscode (optional)' />";
+    }
+
+    /**
+     * Block "Freunde werben" auf der Kartenseite: Satz, Code, Teilen-Knopf
+     * (navigator.share, sonst Zwischenablage). Nur bei eingeschalteter
+     * Empfehlung und wenn die Karte einen Code hat. Link und Code sind
+     * Server-Werte, stehen aber in Attributen - escapeHtml.
+     */
+    String empfehlungsBlock(Card card, CustomerCard cc) {
+        if (!com.example.stemplekarte.service.EmpfehlungService.sichtbar(card, cc)) return "";
+        String link = empfehlungService.link(cc);
+        return "<div class='empfehlung' style='margin-top:18px;padding:14px;border-radius:12px;"
+                + "background:rgba(255,255,255,.14);text-align:center;font-size:14px'>"
+                + "<div style='font-weight:600;margin-bottom:6px'>👥 Freunde werben</div>"
+                + "<div style='opacity:.9;margin-bottom:8px'>"
+                + escapeHtml(com.example.stemplekarte.service.EmpfehlungService.werbeText(card)) + "</div>"
+                + "<div style='font-size:12px;opacity:.85;margin-bottom:10px'>Dein Code: <b>"
+                + escapeHtml(cc.getEmpfehlungsCode()) + "</b></div>"
+                + "<button type='button' id='empfehlung-btn' data-link='" + escapeHtml(link) + "' "
+                + "onclick=\"var l=this.dataset.link,b=this;"
+                + "if(navigator.share){navigator.share({url:l}).catch(function(){})}"
+                + "else if(navigator.clipboard){navigator.clipboard.writeText(l).then(function(){b.textContent='Link kopiert'})}\" "
+                + "style='border:0;border-radius:8px;padding:9px 14px;font-size:14px;font-weight:600;"
+                + "cursor:pointer;background:rgba(255,255,255,.92);color:#222'>Link teilen</button>"
+                + "</div>";
     }
 
     /**

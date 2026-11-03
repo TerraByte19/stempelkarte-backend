@@ -22,10 +22,20 @@ public class OrteService {
 
     private final ShopOrtRepository ortRepo;
     private final ShopRepository shopRepo;
+    // Zugaenge, die an einem geloeschten Ort haengen, zurueck auf den
+    // Hauptstandort setzen. Null in Tests, die den Dienst von Hand bauen.
+    private final com.example.stemplekarte.repository.StaffTokenRepository staffTokenRepo;
 
     public OrteService(ShopOrtRepository ortRepo, ShopRepository shopRepo) {
+        this(ortRepo, shopRepo, null);
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public OrteService(ShopOrtRepository ortRepo, ShopRepository shopRepo,
+                       com.example.stemplekarte.repository.StaffTokenRepository staffTokenRepo) {
         this.ortRepo = ortRepo;
         this.shopRepo = shopRepo;
+        this.staffTokenRepo = staffTokenRepo;
     }
 
     public List<ShopOrt> liste(Shop shop) {
@@ -67,6 +77,14 @@ public class OrteService {
         ShopOrt ort = ortRepo.findByIdAndShop(ortId, shop)
                 .orElseThrow(() -> new NoSuchElementException("Ort nicht gefunden"));
         ortRepo.delete(ort);
+        if (staffTokenRepo != null) {
+            for (com.example.stemplekarte.model.StaffToken t : staffTokenRepo.findByShop(shop)) {
+                if (ortId.equals(t.getOrtId())) {
+                    t.ort(null);
+                    staffTokenRepo.save(t);
+                }
+            }
+        }
         return liste(shop);
     }
 }

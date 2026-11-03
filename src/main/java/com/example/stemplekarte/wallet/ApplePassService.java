@@ -286,7 +286,30 @@ public class ApplePassService {
             var punkte = baueFelderPunkte(card, cc);
             nachrichtFeld(punkte, card.getShop(), cc);
             rueckmeldungFeld(punkte, card, cc);
+            tagesangebotFeld(punkte, card.getShop());
+            empfehlungFeld(punkte, card, cc);
+            statusFeld(punkte, card, cc);
             return punkte.build();
+        }
+
+        // Mitgliedskarte: eigener Zweig, kein Stempelraster, keine Praemie.
+        if (card.isMember()) {
+            var mitglied = baueFelderMitglied(cc);
+            nachrichtFeld(mitglied, card.getShop(), cc);
+            rueckmeldungFeld(mitglied, card, cc);
+            tagesangebotFeld(mitglied, card.getShop());
+            statusFeld(mitglied, card, cc);
+            return mitglied.build();
+        }
+
+        // 10er-Karte: eigener Zweig, zaehlt runter statt hoch.
+        if (card.isPackage()) {
+            var paket = baueFelderPaket(card, cc);
+            nachrichtFeld(paket, card.getShop(), cc);
+            rueckmeldungFeld(paket, card, cc);
+            tagesangebotFeld(paket, card.getShop());
+            statusFeld(paket, card, cc);
+            return paket.build();
         }
 
         // Willkommensgeschenk offen: eigener Zweig, der normale Weg darunter
@@ -296,6 +319,9 @@ public class ApplePassService {
             var gesperrt = baueFelderGesperrt(card, cc, grid);
             nachrichtFeld(gesperrt, card.getShop(), cc);
             rueckmeldungFeld(gesperrt, card, cc);
+            tagesangebotFeld(gesperrt, card.getShop());
+            empfehlungFeld(gesperrt, card, cc);
+            statusFeld(gesperrt, card, cc);
             return gesperrt.build();
         }
 
@@ -351,7 +377,107 @@ public class ApplePassService {
 
         nachrichtFeld(genericPass, card.getShop(), cc);
         rueckmeldungFeld(genericPass, card, cc);
+        tagesangebotFeld(genericPass, card.getShop());
+        empfehlungFeld(genericPass, card, cc);
+        statusFeld(genericPass, card, cc);
         return genericPass.build();
+    }
+
+    /**
+     * Felder der Mitgliedskarte: Besuche im Kopf (mit changeMessage, damit
+     * der Scan eine Mitteilung ausloest), Name gross, Mitglied seit und
+     * eine kurze Nummer. Kein Raster, kein Ziel.
+     */
+    /**
+     * Felder der 10er-Karte: Rest im Kopf (mit changeMessage - Abbuchen und
+     * Aufladen loesen die Mitteilung aus; der Text haengt am Zustand des
+     * neuen Passes), Rest gross in der Mitte, Paketgroesse, Kundenname.
+     * Kein Raster, kein Streifen. Der Kopf-Key bleibt bei jedem Update
+     * gleich, sonst meldet iOS nichts.
+     */
+    private PKGenericPassBuilder baueFelderPaket(Card card, CustomerCard cc) {
+        int rest = cc.getPaketRest();
+        String einheit = card.getPaketEinheit();
+        String changeMsg = rest <= 0
+                ? "Paket aufgebraucht (%@ übrig). Ein neues Paket gibt's an der Kasse!"
+                : cc.paketFrischAufgeladen()
+                        ? "Paket aufgeladen! Noch %@ " + einheit + " übrig"
+                        : "Abgebucht! Noch %@ " + einheit + " übrig";
+        return PKGenericPass.builder()
+                .passType(PKPassType.PKStoreCard)
+                .headerFieldBuilder(PKField.builder()
+                        .key("rest-header").label("ÜBRIG")
+                        .value(String.valueOf(rest))
+                        .changeMessage(changeMsg))
+                .primaryFieldBuilder(PKField.builder()
+                        .key("rest-big").label(rest > 0 ? "NOCH ÜBRIG" : "PAKET")
+                        .value(rest > 0 ? String.valueOf(rest) : "Leer"))
+                .secondaryFieldBuilder(PKField.builder()
+                        .key("paket").label("PAKET").value(card.paketText()))
+                .auxiliaryFieldBuilder(PKField.builder()
+                        .key("name").label("KUNDE").value(cc.getCustomer().getName()));
+    }
+
+    private PKGenericPassBuilder baueFelderMitglied(CustomerCard cc) {
+        String seit = cc.getCreatedAt() != null
+                ? java.time.format.DateTimeFormatter.ofPattern("MM/yyyy")
+                        .format(cc.getCreatedAt().atZone(java.time.ZoneId.of("Europe/Berlin")))
+                : "";
+        String nummer = cc.getId() != null && cc.getId().startsWith("CC-") ? cc.getId().substring(3) : cc.getId();
+        return PKGenericPass.builder()
+                .passType(PKPassType.PKStoreCard)
+                .headerFieldBuilder(PKField.builder()
+                        .key("visits-header").label("BESUCHE")
+                        .value(String.valueOf(cc.getStamps()))
+                        .changeMessage("Besuch erfasst! Du hast jetzt %@ Besuche"))
+                .primaryFieldBuilder(PKField.builder()
+                        .key("member-name").label("MITGLIED").value(cc.getCustomer().getName()))
+                .secondaryFieldBuilder(PKField.builder()
+                        .key("member-since").label("MITGLIED SEIT").value(seit))
+                .auxiliaryFieldBuilder(PKField.builder()
+                        .key("member-no").label("NR.").value(nummer != null ? nummer : ""));
+    }
+
+    /**
+     * Stufe (Bronze, Silber, Gold) auf der Rueckseite, nur bei Karten mit
+     * Stufen. Ohne changeMessage: der Gluckwunsch zum Aufstieg kommt ueber
+     * den Automaten (AutoNachrichtTyp.STUFE), nicht ueber dieses Feld.
+     */
+    private void statusFeld(PKGenericPassBuilder pass, Card card, CustomerCard cc) {
+        com.example.stemplekarte.service.Stufen.Stufe s = com.example.stemplekarte.service.Stufen.von(card, cc);
+        if (s == null) return;
+        pass.backFieldBuilder(PKField.builder()
+                .key("status").label("STATUS")
+                .value(com.example.stemplekarte.service.Stufen.text(
+                        s, com.example.stemplekarte.service.Stufen.besuche(card, cc))));
+    }
+
+    /**
+     * Kunde wirbt Kunde auf der Rueckseite: Satz plus Link mit dem Code der
+     * Karte. Nur bei eingeschalteter Empfehlung und wenn die Karte einen
+     * Code traegt. Ohne changeMessage - das Feld soll nie klingeln.
+     */
+    private void empfehlungFeld(PKGenericPassBuilder pass, Card card, CustomerCard cc) {
+        if (!com.example.stemplekarte.service.EmpfehlungService.sichtbar(card, cc)) return;
+        pass.backFieldBuilder(PKField.builder()
+                .key("empfehlen").label("FREUNDE WERBEN")
+                .value(com.example.stemplekarte.service.EmpfehlungService.werbeText(card) + " Dein Link: "
+                        + com.example.stemplekarte.service.EmpfehlungService.linkFuer(
+                                props.baseUrl(), card.getId(), cc.getEmpfehlungsCode())));
+    }
+
+    /**
+     * Tagesangebot auf der Rueckseite - nur bei Laeden, die es je benutzt
+     * haben, dann dauerhaft (leer = Ruhetext), damit iOS den alten Wert
+     * kennt. Ohne changeMessage: die Mitteilung kommt ueber das
+     * Nachrichtenfeld der Kampagne "Heute: ...", sonst klingelt es doppelt.
+     */
+    private void tagesangebotFeld(PKGenericPassBuilder pass, Shop shop) {
+        if (shop == null || !shop.hatTagesangebotFeld()) return;
+        String angebot = shop.tagesangebot(java.time.Instant.now());
+        pass.backFieldBuilder(PKField.builder()
+                .key("heute").label("HEUTE")
+                .value(angebot != null ? angebot : "Heute kein besonderes Angebot."));
     }
 
     /**

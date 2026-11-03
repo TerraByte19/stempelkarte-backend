@@ -89,7 +89,7 @@ class PunkteBuchungTest {
         when(rewardService.list(card)).thenReturn(List.of(kaffee, kuchen));
 
         service = new PointsService(customerCardRepo, cardRepo, bookingRepo,
-                scanLogRepo, rewardService);
+                scanLogRepo, rewardService, mock(EmpfehlungService.class));
     }
 
     /**

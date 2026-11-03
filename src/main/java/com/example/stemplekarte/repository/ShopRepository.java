@@ -12,4 +12,7 @@ public interface ShopRepository extends JpaRepository<Shop, String> {
     // mit gleichem sortOrder (Bestandslaeden stehen alle auf 0) wenigstens
     // stabil und lesbar sortiert sind statt in Datenbank-Reihenfolge.
     java.util.List<Shop> findAllByOrderBySortOrderAscNameAsc();
+
+    // Demo-Laeden fuer die Website (DemoService).
+    java.util.List<Shop> findByDemoTrue();
 }

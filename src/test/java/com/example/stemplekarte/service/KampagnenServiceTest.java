@@ -455,6 +455,19 @@ class KampagnenServiceTest {
     // ── Versand ──────────────────────────────────────────────────────────
 
     @Test
+    void platzhalter_jeKarteGefuellt_vorlageBleibt() {
+        CustomerCard cc = kundenkarte();   // 1 von 10, Praemie "Gratis Kaffee"
+        Kampagne k = Kampagne.starte(shop, "Noch {offen} Stempel bis: {praemie}!", Zielgruppe.ALLE, 1, jetzt);
+        zeilen(k, cc);
+
+        dienst.verarbeite(k, jetzt.plusSeconds(30));
+
+        assertThat(cc.getKampagneText()).isEqualTo("Noch 9 Stempel bis: Gratis Kaffee!");
+        verify(google).sendeNachricht(cc.getId(), "Café Mokka", "Noch 9 Stempel bis: Gratis Kaffee!", "kampagne");
+        assertThat(k.getText()).isEqualTo("Noch {offen} Stempel bis: {praemie}!");
+    }
+
+    @Test
     void nurGoogle_bekommtTextSofort() {
         CustomerCard cc = kundenkarte();
         Kampagne k = kampagne();

@@ -31,14 +31,28 @@ public class ScanController {
     private final WalletNotifier notifier;
     private final PointsService pointsService;
     private final com.example.stemplekarte.service.GeoPruefung geoPruefung;
+    private final com.example.stemplekarte.service.PaketService paketService;
+
+    // Filialen: welchem Standort ein Scan zugeordnet wird. Optional, damit
+    // Tests den Controller ohne diesen Dienst bauen koennen - dann gilt nur
+    // die Zuordnung des Zugangs.
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.example.stemplekarte.service.FilialenService filialen;
+
+    /** Filiale fuers Protokoll: Zuordnung des Zugangs, sonst Geraeteort, sonst Hauptstandort. */
+    private String ortFuer(com.example.stemplekarte.model.StaffToken staff, Shop shop, Double lat, Double lon) {
+        return filialen != null ? filialen.ortFuer(staff, shop, lat, lon) : staff.getOrtId();
+    }
 
     public ScanController(CustomerService service, WalletNotifier notifier,
                           PointsService pointsService,
-                          com.example.stemplekarte.service.GeoPruefung geoPruefung) {
+                          com.example.stemplekarte.service.GeoPruefung geoPruefung,
+                          com.example.stemplekarte.service.PaketService paketService) {
         this.service = service;
         this.notifier = notifier;
         this.pointsService = pointsService;
         this.geoPruefung = geoPruefung;
+        this.paketService = paketService;
     }
 
     @Operation(summary = "Einstellungen des Ladens fuer den Scanner",
@@ -80,8 +94,15 @@ public class ScanController {
             String action, String message, String customerId,
             String cardId, int stamps, int totalRewards,
             int rewardThreshold, int stampsAdded,
-            boolean rewardEarned, String rewardText
+            boolean rewardEarned, String rewardText,
+            // 10er-Karte: was vom Paket uebrig ist; bei anderen Karten null.
+            Integer paketRest
     ) {}
+
+    /** Null bei allen Karten ausser der 10er-Karte. */
+    private static Integer paketRest(com.example.stemplekarte.model.CustomerCard cc) {
+        return cc.getCard().isPackage() ? cc.getPaketRest() : null;
+    }
 
     @Operation(summary = "QR-Code scannen und Stempel vergeben",
             description = "Erfordert X-Staff-Token Header. count = Anzahl Stempel (1-20)")
@@ -119,7 +140,9 @@ public class ScanController {
 
         int count = req.count() <= 0 ? 1 : req.count();
 
-        ScanResult result = service.processScan(req.qrPayload(), shop, count);
+        var staff = ((StaffTokenFilter.StaffPrincipal) auth.getPrincipal()).staff();
+        ScanResult result = service.processScan(req.qrPayload(), shop, count,
+                staff.getLabel(), ortFuer(staff, shop, req.lat(), req.lon()));
         var cc = result.customerCard();
 
         // Startpunkt jeder Wallet-Kette. Ab hier laesst sich ein Vorfall
@@ -147,13 +170,23 @@ public class ScanController {
                 ? GoogleWalletService.Meldung.VOLL
                 : result instanceof ScanResult.Stamped
                         ? GoogleWalletService.Meldung.STEMPEL
-                        : GoogleWalletService.Meldung.KEINE;
-        notifier.nachStempelAenderung(cc, meldung);
+                        : result instanceof ScanResult.Visited
+                                ? GoogleWalletService.Meldung.BESUCH
+                                : result instanceof ScanResult.Debited
+                                        ? GoogleWalletService.Meldung.PAKET
+                                        : GoogleWalletService.Meldung.KEINE;
+        // Leeres Paket: nichts gebucht, nichts zu melden - der Pass ist unveraendert.
+        if (!(result instanceof ScanResult.Empty)) {
+            notifier.nachStempelAenderung(cc, meldung);
+        }
 
         String action = switch (result) {
             case ScanResult.Stamped s -> "stamped";
             case ScanResult.Full f -> "full";
             case ScanResult.Redeemed r -> "redeemed";
+            case ScanResult.Visited v -> "visited";
+            case ScanResult.Debited d -> "debited";
+            case ScanResult.Empty e -> "empty";
         };
 
         return new ScanResponse(
@@ -163,9 +196,55 @@ public class ScanController {
                 cc.getStamps(),
                 cc.getTotalRewards(),
                 cc.getCard().getRewardThreshold(),
-                count,
+                result instanceof ScanResult.Empty ? 0 : count,
                 rewardEarned,
-                rewardEarned ? cc.getCard().getRewardText() : null
+                rewardEarned ? cc.getCard().getRewardText() : null,
+                paketRest(cc)
+        );
+    }
+
+    public record AufladenRequest(@NotBlank String qrPayload, Double lat, Double lon) {}
+
+    @Operation(summary = "Neues Paket auf eine 10er-Karte laden",
+            description = "Erfordert X-Staff-Token. Gleiche Standort-Pruefung wie beim Stempeln. "
+                    + "Die Paketgroesse der Karte kommt zum Guthaben dazu.")
+    @PostMapping("/aufladen")
+    public ScanResponse aufladen(@Valid @RequestBody AufladenRequest req, Authentication auth) {
+        boolean tokenOk = auth != null && auth.getPrincipal() instanceof StaffTokenFilter.StaffPrincipal;
+        log.info("[SCAN] aufladen eingang token={} payload={}", tokenOk ? "ok" : "FEHLT", req.qrPayload());
+        if (!tokenOk) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Kein gueltiger Staff-Token");
+        }
+        var staff = ((StaffTokenFilter.StaffPrincipal) auth.getPrincipal()).staff();
+        Shop shop = staff.getShop();
+        if (!com.example.stemplekarte.service.StandortPflicht.darfScannen(shop, java.time.Instant.now())) {
+            log.warn("[SCAN] GESPERRT laden={} grund=kein_standort", shop.getId());
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                    com.example.stemplekarte.service.StandortPflicht.sperrText());
+        }
+        String geoSperre = geoPruefung.sperre(shop, staff.getLabel(), req.lat(), req.lon());
+        if (geoSperre != null) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, geoSperre);
+        }
+
+        var cc = paketService.aufladen(req.qrPayload(), shop, staff.getLabel());
+
+        log.info("[WALLET] AUFLADEN serial={} kunde={} karte={} laden={} rest={}",
+                cc.getId(), cc.getCustomer().getId(), cc.getCard().getId(), shop.getId(), cc.getPaketRest());
+
+        notifier.nachStempelAenderung(cc, GoogleWalletService.Meldung.AUFGELADEN);
+
+        return new ScanResponse(
+                "topup", com.example.stemplekarte.service.PaketService.aufgeladenText(cc.getCard(), cc),
+                cc.getCustomer().getId(),
+                cc.getCard().getId(),
+                cc.getStamps(),
+                cc.getTotalRewards(),
+                cc.getCard().getRewardThreshold(),
+                0,
+                false,
+                null,
+                cc.getPaketRest()
         );
     }
 
@@ -215,6 +294,7 @@ public class ScanController {
                 cc.getCard().getRewardThreshold(),
                 0,
                 false,
+                null,
                 null
         );
     }
@@ -229,7 +309,14 @@ public class ScanController {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Kein gueltiger Staff-Token");
         }
 
-        Shop shop = ((StaffTokenFilter.StaffPrincipal) auth.getPrincipal()).staff().getShop();
+        var staff = ((StaffTokenFilter.StaffPrincipal) auth.getPrincipal()).staff();
+        // Zuruecksetzen = Praemie eingeloest, neue Karte. Das darf eine
+        // Aushilfe nicht - sonst gaebe es den Gratis-Artikel ohne Kontrolle.
+        if (staff.istAushilfe()) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                    com.example.stemplekarte.model.StaffToken.NUR_MITARBEITER_TEXT);
+        }
+        Shop shop = staff.getShop();
         var cc = service.resetCard(req.qrPayload(), shop);
 
         notifier.nachStempelAenderung(cc);
@@ -243,7 +330,8 @@ public class ScanController {
                 cc.getCard().getRewardThreshold(),
                 0,
                 false,
-                null
+                null,
+                paketRest(cc)
         );
     }
 }

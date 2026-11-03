@@ -39,6 +39,19 @@ public class CardService {
                 pointsPerEuroX100, rounding));
     }
 
+    /** Mitgliedskarte: kein Stempel, keine Praemie, nur Ausweis und Besuche. */
+    @Transactional
+    public Card createMember(Shop shop, String name, String description) {
+        return cardRepo.save(Card.createMember(shop, name, description));
+    }
+
+    /** 10er-Karte: groesse Besuche je Paket, einheit z. B. "Kurse" (leer = Besuche). */
+    @Transactional
+    public Card createPackage(Shop shop, String name, String description, Integer groesse, String einheit) {
+        PaketService.Einstellung e = PaketService.pruefe(groesse, einheit);
+        return cardRepo.save(Card.createPackage(shop, name, description, e.groesse(), e.einheit()));
+    }
+
     @Transactional
     public Card save(Card card) {
         return cardRepo.save(card);

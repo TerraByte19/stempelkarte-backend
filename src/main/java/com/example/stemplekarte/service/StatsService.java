@@ -123,6 +123,31 @@ public class StatsService {
 
             einloesungen += rewards;
 
+            if (card.isMember() || card.isPackage()) {
+                // Mitglieds- und 10er-Karte: keine Stempel, keine Praemien - nur
+                // Besuche; die 10er-Karte dazu Pakete und offenes Guthaben.
+                if (card.isActive()) {
+                    Map<String, Object> cardMap = new HashMap<>();
+                    cardMap.put("cardId", card.getId());
+                    cardMap.put("cardName", card.getName());
+                    cardMap.put("type", card.isMember() ? "MEMBER" : "PACKAGE");
+                    cardMap.put("customerCount", ccs.size());
+                    cardMap.put("totalStamps", 0);
+                    cardMap.put("totalRewards", 0);
+                    cardMap.put("rewardThreshold", card.isPackage() ? card.getRewardThreshold() : 0);
+                    cardMap.put("besuche", ccs.stream().mapToInt(CustomerCard::getStamps).sum());
+                    if (card.isPackage()) {
+                        cardMap.put("paketEinheit", card.getPaketEinheit());
+                        cardMap.put("paketeGekauft", ccs.stream().mapToInt(CustomerCard::getPaketeGekauft).sum());
+                        cardMap.put("restGesamt", ccs.stream().mapToInt(CustomerCard::getPaketRest).sum());
+                        cardMap.put("leer", ccs.stream()
+                                .filter(cc -> cc.getPaketeGekauft() >= 1 && cc.getPaketRest() <= 0).count());
+                    }
+                    perCard.add(cardMap);
+                }
+                continue;
+            }
+
             if (card.isPoints()) {
                 // Stempel-Kennzahlen gelten hier nicht. Frueher lief jede Karte
                 // durch dieselbe Schleife, und weil eine Punktekarte
@@ -411,6 +436,7 @@ public class StatsService {
             m.put("karte", kartenNamen.getOrDefault(sl.getCardId(), ""));
             m.put("stempel", sl.getStampsAdded());
             m.put("praemien", sl.getRewardsEarned());
+            m.put("von", sl.getStaffLabel() != null ? sl.getStaffLabel() : "");
             letzte.add(m);
         }
 

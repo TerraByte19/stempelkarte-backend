@@ -76,8 +76,37 @@ class StempelScanTest {
                 .thenReturn(Optional.of(cc));
         when(customerCardRepo.save(any(CustomerCard.class))).thenAnswer(i -> i.getArgument(0));
 
+        empfehlung = mock(EmpfehlungService.class);
         service = new CustomerService(customerRepo, cardRepo, customerCardRepo,
-                mock(AppleDeviceRepository.class), mock(EmailService.class), scanLogRepo);
+                mock(AppleDeviceRepository.class), mock(EmailService.class), scanLogRepo, empfehlung);
+    }
+
+    private EmpfehlungService empfehlung;
+
+    @Test
+    void webhook_wirdMitStempelGemeldet() {
+        WebhookService webhooks = mock(WebhookService.class);
+        service.webhooks(webhooks);
+        service.processScan(QR, shop, 2);
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<java.util.Map<String, Object>> daten = ArgumentCaptor.forClass(java.util.Map.class);
+        verify(webhooks).melde(org.mockito.ArgumentMatchers.eq(shop), org.mockito.ArgumentMatchers.eq("stamp.added"), daten.capture());
+        assertThat(daten.getValue()).containsEntry("customerId", "CUST-1").containsEntry("stamps", 2)
+                .containsEntry("stampsAdded", 2).doesNotContainKey("rewardText");
+    }
+
+    @Test
+    void ersterStempel_mitEmpfehlung_bonusInDerMeldung_nurEinmal() {
+        when(empfehlung.belohnen(org.mockito.ArgumentMatchers.eq(cc), any()))
+                .thenReturn(new EmpfehlungService.Bonus(2, false));
+        ScanResult r = service.processScan(QR, shop, 1);
+        assertThat(r).isInstanceOf(ScanResult.Stamped.class);
+        assertThat(r.message()).isEqualTo("Stempel hinzugefuegt (1/10) · +2 Empfehlungsbonus");
+
+        // Zweiter Scan ist kein erster Besuch mehr.
+        ScanResult r2 = service.processScan(QR, shop, 1);
+        assertThat(r2.message()).isEqualTo("Stempel hinzugefuegt (2/10)");
+        verify(empfehlung, org.mockito.Mockito.times(1)).belohnen(any(), any());
     }
 
     @Test

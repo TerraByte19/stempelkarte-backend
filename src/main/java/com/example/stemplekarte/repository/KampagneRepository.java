@@ -30,6 +30,9 @@ public interface KampagneRepository extends JpaRepository<Kampagne, String> {
     // Geburtstagsgruss: gab es heute schon einen fuer diesen Laden?
     boolean existsByShopAndGruppeAndErstelltAmGreaterThanEqual(Shop shop, String gruppe, java.time.Instant seit);
 
+    // Eigene Automation: lief sie heute schon?
+    boolean existsByAutomationIdAndErstelltAmGreaterThanEqual(String automationId, java.time.Instant seit);
+
     // Beim Loeschen eines Ladens (AdminController#deleteShop).
     List<Kampagne> findByShop(Shop shop);
     void deleteByShop(Shop shop);

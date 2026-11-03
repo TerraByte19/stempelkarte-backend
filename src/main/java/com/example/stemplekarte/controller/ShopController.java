@@ -99,7 +99,9 @@ public class ShopController {
             String stampColor, String emptyStampStyle, String stampIconUrl,
             String colorBackground, String colorForeground, String colorLabel,
             String logoUrl, String heroImageUrl,
-            String type, Integer pointsPerEuroX100, String pointsRounding
+            String type, Integer pointsPerEuroX100, String pointsRounding,
+            // 10er-Karte: Einheit der Besuche ("Kurse"); rewardThreshold = Paketgroesse.
+            String paketEinheit
     ) {
         static CardResponse from(Card c) {
             return new CardResponse(
@@ -113,16 +115,35 @@ public class ShopController {
                     c.getHeroImageUrl() != null ? c.getHeroImageUrl() : "",
                     c.getType().name(),
                     c.getPointsPerEuroX100(),
-                    c.isPoints() ? c.getPointsRounding().name() : null
+                    c.isPoints() ? c.getPointsRounding().name() : null,
+                    c.isPackage() ? c.getPaketEinheit() : null
             );
         }
     }
+
+    public record CreatePackageCardRequest(
+            @NotBlank String name,
+            @NotBlank String description,
+            Integer groesse,
+            String einheit,
+            String colorBackground, String colorForeground, String colorLabel,
+            String logoUrl, String heroImageUrl
+    ) {}
+
+    public record PaketRequest(Integer groesse, String einheit) {}
 
     public record CreatePointsCardRequest(
             @NotBlank String name,
             @NotBlank String description,
             int pointsPerEuroX100,
             String pointsRounding,
+            String colorBackground, String colorForeground, String colorLabel,
+            String logoUrl, String heroImageUrl
+    ) {}
+
+    public record CreateMemberCardRequest(
+            @NotBlank String name,
+            @NotBlank String description,
             String colorBackground, String colorForeground, String colorLabel,
             String logoUrl, String heroImageUrl
     ) {}
@@ -378,6 +399,52 @@ public class ShopController {
         return CardResponse.from(card);
     }
 
+    @Operation(summary = "Neue Mitgliedskarte erstellen",
+            description = "Ausweis im Wallet ohne Stempel und Punkte. Der Scan zaehlt den Besuch.")
+    @PostMapping("/cards/member")
+    public CardResponse createMemberCard(@Valid @RequestBody CreateMemberCardRequest req, Authentication auth) {
+        Shop shop = currentShop(auth);
+        Card card = cardService.createMember(shop, req.name(), req.description());
+        card.updateColors(req.colorBackground(), req.colorForeground(), req.colorLabel());
+        com.example.stemplekarte.service.BildUrl.pruefe(req.logoUrl(), "logoUrl");
+        com.example.stemplekarte.service.BildUrl.pruefe(req.heroImageUrl(), "heroImageUrl");
+        if (req.logoUrl() != null) card.setLogoUrl(req.logoUrl());
+        if (req.heroImageUrl() != null) card.setHeroImageUrl(req.heroImageUrl());
+        cardService.save(card);
+        return CardResponse.from(card);
+    }
+
+    @Operation(summary = "Neue 10er-Karte erstellen",
+            description = "Besuchspaket: groesse Besuche je Paket (1-100), einheit z. B. \"Kurse\" (leer = Besuche). "
+                    + "Der Scan bucht ab, das Personal laedt an der Kasse auf.")
+    @PostMapping("/cards/package")
+    public CardResponse createPackageCard(@Valid @RequestBody CreatePackageCardRequest req, Authentication auth) {
+        Shop shop = currentShop(auth);
+        Card card = cardService.createPackage(shop, req.name(), req.description(), req.groesse(), req.einheit());
+        card.updateColors(req.colorBackground(), req.colorForeground(), req.colorLabel());
+        com.example.stemplekarte.service.BildUrl.pruefe(req.logoUrl(), "logoUrl");
+        com.example.stemplekarte.service.BildUrl.pruefe(req.heroImageUrl(), "heroImageUrl");
+        if (req.logoUrl() != null) card.setLogoUrl(req.logoUrl());
+        if (req.heroImageUrl() != null) card.setHeroImageUrl(req.heroImageUrl());
+        cardService.save(card);
+        return CardResponse.from(card);
+    }
+
+    @Operation(summary = "Paketgroesse und Einheit einer 10er-Karte aendern",
+            description = "Wirkt nur auf kuenftige Aufladungen; bestehende Guthaben bleiben.")
+    @PutMapping("/cards/{cardId}/paket")
+    public CardResponse updatePaket(@PathVariable String cardId, @RequestBody PaketRequest req, Authentication auth) {
+        Card card = cardService.getByIdAndShop(cardId, currentShop(auth));
+        if (!card.isPackage()) {
+            throw new IllegalArgumentException("Das ist keine 10er-Karte");
+        }
+        com.example.stemplekarte.service.PaketService.Einstellung e =
+                com.example.stemplekarte.service.PaketService.pruefe(req.groesse(), req.einheit());
+        card.updatePaket(e.groesse(), e.einheit());
+        cardService.save(card);
+        return CardResponse.from(card);
+    }
+
     @Operation(summary = "Neue Punktekarte erstellen")
     @PostMapping("/cards/points")
     public CardResponse createPointsCard(@Valid @RequestBody CreatePointsCardRequest req,
@@ -454,7 +521,7 @@ public class ShopController {
                                                @RequestBody WillkommenRequest req,
                                                Authentication auth) {
         Card card = cardService.getByIdAndShop(cardId, currentShop(auth));
-        if (card.isPoints()) {
+        if (!card.isStamp()) {
             throw new IllegalArgumentException("Das Willkommensgeschenk gibt es nur für Stempelkarten");
         }
         // Steuerzeichen raus: der Text steht im Wallet-Pass, in einer Mail

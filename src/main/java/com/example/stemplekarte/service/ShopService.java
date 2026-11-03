@@ -241,6 +241,12 @@ public class ShopService {
 
     @Transactional
     public StaffToken createStaffToken(String shopId, String label) {
+        return createStaffToken(shopId, label, null);
+    }
+
+    /** rolle: MITARBEITER oder AUSHILFE, leer = MITARBEITER. */
+    @Transactional
+    public StaffToken createStaffToken(String shopId, String label, String rolle) {
         Shop shop = getById(shopId);
         List<StaffToken> existing = staffTokenRepo.findByShop(shop);
         if (existing.size() >= shop.getMaxTokens()) {
@@ -248,7 +254,7 @@ public class ShopService {
                     "Maximale Anzahl an Staff-Tokens erreicht (" + shop.getMaxTokens() + ")"
             );
         }
-        return staffTokenRepo.save(StaffToken.create(shop, label));
+        return staffTokenRepo.save(StaffToken.create(shop, label, rolle));
     }
 
     public List<StaffToken> getStaffTokens(String shopId) {

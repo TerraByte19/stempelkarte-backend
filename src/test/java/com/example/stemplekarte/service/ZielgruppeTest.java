@@ -159,4 +159,121 @@ class ZielgruppeTest {
         p.addPoints(500);
         assertThat(passt(Zielgruppe.BEWERTUNG, p, spaeter)).isFalse();
     }
+
+    // ── Automaten ────────────────────────────────────────────────────────
+
+    @Test
+    void auto_nichtWaehlbar() {
+        for (Zielgruppe g : Zielgruppe.values()) {
+            if (g.name().startsWith("AUTO_")) {
+                assertThat(g.waehlbar()).isFalse();
+                assertThat(Zielgruppe.waehlbare()).doesNotContain(g);
+            }
+        }
+    }
+
+    @Test
+    void autoWillkommen_tagDanach_ersteZweiWochen_einmal() {
+        CustomerCard cc = karte(1);
+        assertThat(passt(Zielgruppe.AUTO_WILLKOMMEN, cc, in(1))).isTrue();
+        // Gerade erst gestempelt bzw. zu lange her.
+        assertThat(passt(Zielgruppe.AUTO_WILLKOMMEN, cc, jetzt.plus(Duration.ofHours(1)))).isFalse();
+        assertThat(passt(Zielgruppe.AUTO_WILLKOMMEN, cc, in(4))).isFalse();
+        // Noch nichts gesammelt: kein Willkommen.
+        assertThat(passt(Zielgruppe.AUTO_WILLKOMMEN, karte(0), in(1))).isFalse();
+        // Schon geschickt.
+        cc.willkommenGeschickt(jetzt);
+        assertThat(passt(Zielgruppe.AUTO_WILLKOMMEN, cc, in(1))).isFalse();
+        // Punktekarte mit Punkten.
+        CustomerCard p = CustomerCard.create(mock(Customer.class), punkte);
+        assertThat(passt(Zielgruppe.AUTO_WILLKOMMEN, p, in(1))).isFalse();
+        p.addPoints(500);
+        assertThat(passt(Zielgruppe.AUTO_WILLKOMMEN, p, in(1))).isTrue();
+    }
+
+    @Test
+    void autoZweiterBesuch_besuchDeutlichNachAnlage_zweiStempel() {
+        // Anlage und Stempel im selben Moment: das war der erste Besuch.
+        assertThat(passt(Zielgruppe.AUTO_ZWEITER_BESUCH, karte(2), in(1))).isFalse();
+        // Karte zwei Tage vor dem Besuch angelegt: er war wieder da.
+        CustomerCard cc = org.mockito.Mockito.spy(karte(2));
+        org.mockito.Mockito.doReturn(jetzt.minus(Duration.ofDays(2))).when(cc).getCreatedAt();
+        assertThat(passt(Zielgruppe.AUTO_ZWEITER_BESUCH, cc, in(1))).isTrue();
+        assertThat(passt(Zielgruppe.AUTO_ZWEITER_BESUCH, cc, in(4))).isFalse();
+        cc.zweiterBesuchGeschickt(jetzt);
+        assertThat(passt(Zielgruppe.AUTO_ZWEITER_BESUCH, cc, in(1))).isFalse();
+        // Nur ein Stempel: nein.
+        CustomerCard einer = org.mockito.Mockito.spy(karte(1));
+        org.mockito.Mockito.doReturn(jetzt.minus(Duration.ofDays(2))).when(einer).getCreatedAt();
+        assertThat(passt(Zielgruppe.AUTO_ZWEITER_BESUCH, einer, in(1))).isFalse();
+    }
+
+    @Test
+    void autoFastVoll_nochEinsOderZwei_nachZweiBisZehnTagen_einmalProRunde() {
+        CustomerCard cc = karte(8);
+        assertThat(passt(Zielgruppe.AUTO_FAST_VOLL, cc, in(3))).isTrue();
+        assertThat(passt(Zielgruppe.AUTO_FAST_VOLL, cc, in(1))).isFalse();
+        assertThat(passt(Zielgruppe.AUTO_FAST_VOLL, cc, in(11))).isFalse();
+        assertThat(passt(Zielgruppe.AUTO_FAST_VOLL, karte(7), in(3))).isFalse();
+        cc.fastVollGeschickt();
+        assertThat(passt(Zielgruppe.AUTO_FAST_VOLL, cc, in(3))).isFalse();
+        // Naechste Runde: Praemie geholt, wieder bei 8.
+        cc.addStamp(); cc.addStamp();
+        cc.redeemReward(10);
+        for (int i = 0; i < 8; i++) cc.addStamp();
+        assertThat(passt(Zielgruppe.AUTO_FAST_VOLL, cc, in(3))).isTrue();
+    }
+
+    @Test
+    void autoPraemie_karteVoll_nachZweiBisVierzehnTagen_einmalProRunde() {
+        CustomerCard cc = karte(10);
+        assertThat(passt(Zielgruppe.AUTO_PRAEMIE, cc, in(3))).isTrue();
+        assertThat(passt(Zielgruppe.AUTO_PRAEMIE, cc, in(1))).isFalse();
+        assertThat(passt(Zielgruppe.AUTO_PRAEMIE, cc, in(15))).isFalse();
+        assertThat(passt(Zielgruppe.AUTO_PRAEMIE, karte(9), in(3))).isFalse();
+        cc.praemieBereitGeschickt();
+        assertThat(passt(Zielgruppe.AUTO_PRAEMIE, cc, in(3))).isFalse();
+        // Punktekarte: genug Punkte fuer eine Praemie aus dem Katalog.
+        Reward r = mock(Reward.class);
+        when(r.getCostPointsX100()).thenReturn(300L);
+        CustomerCard p = CustomerCard.create(mock(Customer.class), punkte);
+        p.addPoints(500);
+        assertThat(Zielgruppe.AUTO_PRAEMIE.passt(p, in(3), c -> List.of(r))).isTrue();
+        assertThat(Zielgruppe.AUTO_PRAEMIE.passt(p, in(3), c -> List.of())).isFalse();
+    }
+
+    @Test
+    void stufeTop_undAutoStufe() {
+        assertThat(Zielgruppe.STUFE_TOP.waehlbar()).isTrue();
+        // Stufen aus: niemand.
+        assertThat(passt(Zielgruppe.STUFE_TOP, karte(10), jetzt)).isFalse();
+        stempel.updateStufen(true, null, null, 5, null, 8);
+        assertThat(passt(Zielgruppe.STUFE_TOP, karte(7), jetzt)).isFalse();
+        assertThat(passt(Zielgruppe.STUFE_TOP, karte(8), jetzt)).isTrue();
+
+        // Aufstieg auf Silber (5): am Tag danach, einmal.
+        CustomerCard cc = karte(5);
+        assertThat(passt(Zielgruppe.AUTO_STUFE, cc, in(1))).isTrue();
+        assertThat(passt(Zielgruppe.AUTO_STUFE, cc, jetzt.plus(Duration.ofHours(1)))).isFalse();
+        cc.stufeGemeldet(2);
+        assertThat(passt(Zielgruppe.AUTO_STUFE, cc, in(1))).isFalse();
+        // Gold: wieder faellig.
+        for (int i = 0; i < 3; i++) cc.addStamp();
+        assertThat(passt(Zielgruppe.AUTO_STUFE, cc, in(1))).isTrue();
+        // Bronze meldet nichts.
+        assertThat(passt(Zielgruppe.AUTO_STUFE, karte(2), in(1))).isFalse();
+    }
+
+    @Test
+    void autoVip_vieleBesuche_undKuerzlichDa() {
+        CustomerCard cc = karte(10);
+        cc.redeemReward(10);
+        cc.addStamp(); cc.addStamp();   // 12 Besuche >= 2 x 5
+        assertThat(passt(Zielgruppe.AUTO_VIP, cc, jetzt)).isTrue();
+        assertThat(passt(Zielgruppe.AUTO_VIP, cc, in(31))).isFalse();
+        assertThat(passt(Zielgruppe.AUTO_VIP, karte(9), jetzt)).isFalse();
+        CustomerCard p = CustomerCard.create(mock(Customer.class), punkte);
+        p.addPoints(500);
+        assertThat(passt(Zielgruppe.AUTO_VIP, p, jetzt)).isFalse();
+    }
 }

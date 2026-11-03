@@ -39,7 +39,9 @@ class WillkommenSeiteTest {
         cardService = mock(CardService.class);
         GoogleWalletService google = mock(GoogleWalletService.class);
         when(google.generateSaveUrl(any())).thenReturn("");
-        controller = new LandingController(customerService, cardService, google, mock(RewardService.class));
+        empfehlung = mock(com.example.stemplekarte.service.EmpfehlungService.class);
+        when(empfehlung.link(any())).thenReturn("https://stampit.test/karte-neu/CARD-1?ref=ABC234");
+        controller = new LandingController(customerService, cardService, google, mock(RewardService.class), empfehlung);
 
         Shop shop = mock(Shop.class);
         when(shop.getName()).thenReturn("Café Nord");
@@ -48,9 +50,74 @@ class WillkommenSeiteTest {
         when(customer.getName()).thenReturn("Ana");
     }
 
+    private com.example.stemplekarte.service.EmpfehlungService empfehlung;
+
     private String kundenseite(CustomerCard cc) {
         when(customerService.getOrCreateCustomerCard("CUST-1", "CARD-1")).thenReturn(cc);
         return controller.landingPage("CUST-1", "CARD-1").getBody();
+    }
+
+    @Test
+    void mitgliedskarte_eigeneSeite() {
+        Shop shop = mock(Shop.class);
+        when(shop.getName()).thenReturn("Club Nord");
+        Card mitglied = Card.createMember(shop, "Clubkarte", "Ausweis");
+        CustomerCard cc = CustomerCard.create(customer, mitglied);
+        cc.addStamp(); cc.addStamp(); cc.addStamp();
+        when(customerService.getOrCreateCustomerCard("CUST-1", "CARD-1")).thenReturn(cc);
+        String html = controller.landingPage("CUST-1", "CARD-1").getBody();
+        assertThat(html).contains("Mitgliedskarte").contains("Club Nord").contains("Clubkarte")
+                .contains("Ana").contains("Mitglied seit").contains("id=\"besuche\">3<")
+                .contains("apple-pass")
+                .doesNotContain("Stempel bis");
+    }
+
+    @Test
+    void zehnerKarte_eigeneSeite() {
+        Shop shop = mock(Shop.class);
+        when(shop.getName()).thenReturn("Yoga Nord");
+        Card paket = Card.createPackage(shop, "Yoga 10er", "Paket", 10, "Kurse");
+        CustomerCard cc = CustomerCard.create(customer, paket);
+        when(customerService.getOrCreateCustomerCard("CUST-1", "CARD-1")).thenReturn(cc);
+
+        // Nie geladen.
+        String html = controller.landingPage("CUST-1", "CARD-1").getBody();
+        assertThat(html).contains("10er-Karte").contains("Yoga Nord").contains("id=\"rest\">0<")
+                .contains("Noch kein Paket geladen").contains("10 Kurse").contains("apple-pass")
+                .doesNotContain("Stempel bis").doesNotContain("Karte nicht gefunden");
+
+        // Geladen und drei genutzt.
+        cc.paketAufladen(10, java.time.Instant.now());
+        cc.paketAbbuchen(3, java.time.Instant.now());
+        html = controller.landingPage("CUST-1", "CARD-1").getBody();
+        assertThat(html).contains("id=\"rest\">7<").contains("id=\"besuche\">3<")
+                .doesNotContain("aufgebraucht").doesNotContain("kein Paket");
+
+        // Aufgebraucht.
+        cc.paketAbbuchen(7, java.time.Instant.now());
+        html = controller.landingPage("CUST-1", "CARD-1").getBody();
+        assertThat(html).contains("id=\"rest\">0<").contains("aufgebraucht");
+    }
+
+    @Test
+    void empfehlung_blockNurWennAnUndCodeDa() {
+        CustomerCard cc = CustomerCard.create(customer, card);
+        cc.addStamp();
+        assertThat(kundenseite(cc)).doesNotContain("Freunde werben");
+
+        card.updateEmpfehlung(true, 2);
+        assertThat(kundenseite(cc)).doesNotContain("Freunde werben");   // noch kein Code
+
+        cc.empfehlungsCodeSetzen("ABC234");
+        String html = kundenseite(cc);
+        assertThat(html).contains("Freunde werben")
+                .contains("2 Stempel für euch beide")
+                .contains("Dein Code: <b>ABC234</b>")
+                .contains("data-link='https://stampit.test/karte-neu/CARD-1?ref=ABC234'");
+        // Anmeldeseite: Feld fuer den Code nur bei eingeschalteter Empfehlung.
+        assertThat(LandingController.empfehlungsFeld(card)).contains("id='ref'");
+        card.updateEmpfehlung(false, 2);
+        assertThat(LandingController.empfehlungsFeld(card)).isEmpty();
     }
 
     @Test

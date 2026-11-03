@@ -23,6 +23,7 @@ public class SecurityConfig {
     private final JwtService jwtService;
     private final ShopRepository shopRepo;
     private final StaffTokenRepository staffTokenRepo;
+    private final com.example.stemplekarte.repository.ApiKeyRepository apiKeyRepo;
 
     // Komma-getrennte Liste von erlaubten Frontend-URLs
     // z.B. FRONTEND_URL=https://stempelkarte-frontend.onrender.com
@@ -30,10 +31,12 @@ public class SecurityConfig {
     private String frontendUrl;
 
     public SecurityConfig(JwtService jwtService, ShopRepository shopRepo,
-                          StaffTokenRepository staffTokenRepo) {
+                          StaffTokenRepository staffTokenRepo,
+                          com.example.stemplekarte.repository.ApiKeyRepository apiKeyRepo) {
         this.jwtService = jwtService;
         this.shopRepo = shopRepo;
         this.staffTokenRepo = staffTokenRepo;
+        this.apiKeyRepo = apiKeyRepo;
     }
 
     @Bean
@@ -106,6 +109,8 @@ public class SecurityConfig {
                         .requestMatchers("/api/admin/login").permitAll()
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")
                         .requestMatchers("/api/shop/**").hasRole("SHOP")
+                        // Externe API fuer Kassen, CRM, Zapier: X-Api-Key (ApiKeyFilter).
+                        .requestMatchers("/api/v1/**").hasRole("API")
                         .requestMatchers(
                                 "/swagger-ui.html", "/swagger-ui/**",
                                 "/v3/api-docs", "/v3/api-docs/**"
@@ -116,7 +121,9 @@ public class SecurityConfig {
                 .addFilterBefore(new JwtAuthFilter(jwtService, shopRepo),
                         UsernamePasswordAuthenticationFilter.class)
                 .addFilterBefore(new StaffTokenFilter(staffTokenRepo),
-                        JwtAuthFilter.class);
+                        JwtAuthFilter.class)
+                .addFilterBefore(new ApiKeyFilter(apiKeyRepo),
+                        StaffTokenFilter.class);
 
         return http.build();
     }

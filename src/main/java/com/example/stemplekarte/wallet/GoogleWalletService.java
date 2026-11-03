@@ -136,7 +136,7 @@ public class GoogleWalletService {
      * geaenderte Felder nur mit eigenem Text ("Points hat sich veraendert");
      * einen eigenen Text gibt es nur ueber addMessage.
      */
-    public enum Meldung { KEINE, STEMPEL, VOLL, PUNKTE }
+    public enum Meldung { KEINE, STEMPEL, VOLL, PUNKTE, BESUCH, PAKET, AUFGELADEN }
 
     @Async
     @Transactional
@@ -189,6 +189,17 @@ public class GoogleWalletService {
             case PUNKTE -> new String[]{
                     "Punkte bei " + laden,
                     "Du hast jetzt " + PointsMath.formatiere(cc.getPointsX100()) + " Punkte."};
+            case BESUCH -> new String[]{
+                    "Besuch bei " + laden,
+                    "Schön, dass du da warst! Das war dein " + cc.getStamps() + ". Besuch."};
+            case PAKET -> new String[]{
+                    "Abgebucht bei " + laden,
+                    cc.getPaketRest() > 0
+                            ? com.example.stemplekarte.service.PaketService.restText(card, cc) + "."
+                            : "Dein Paket ist aufgebraucht. Ein neues gibt's an der Kasse!"};
+            case AUFGELADEN -> new String[]{
+                    "Paket aufgeladen bei " + laden,
+                    card.paketText() + " dazu. " + com.example.stemplekarte.service.PaketService.restText(card, cc) + "."};
             case KEINE -> null;
         };
     }
@@ -416,7 +427,27 @@ public class GoogleWalletService {
         // bestehenden Karte sauber mit nichts ueberschrieben.
         List<TextModuleData> module = new ArrayList<>();
 
-        if (card.isPoints()) {
+        if (card.isMember()) {
+            // Mitgliedskarte: Besuche und "Mitglied seit", kein Ziel.
+            String seit = cc.getCreatedAt() != null
+                    ? java.time.format.DateTimeFormatter.ofPattern("MM/yyyy")
+                            .format(cc.getCreatedAt().atZone(java.time.ZoneId.of("Europe/Berlin")))
+                    : "";
+            haupt = new LoyaltyPoints()
+                    .setLabel("Besuche")
+                    .setBalance(new LoyaltyPointsBalance().setString(String.valueOf(cc.getStamps())));
+            neben = new LoyaltyPoints()
+                    .setLabel("Mitglied seit")
+                    .setBalance(new LoyaltyPointsBalance().setString(seit));
+        } else if (card.isPackage()) {
+            // 10er-Karte: Rest und Paketgroesse.
+            haupt = new LoyaltyPoints()
+                    .setLabel("Übrig")
+                    .setBalance(new LoyaltyPointsBalance().setString(String.valueOf(cc.getPaketRest())));
+            neben = new LoyaltyPoints()
+                    .setLabel("Paket")
+                    .setBalance(new LoyaltyPointsBalance().setString(card.paketText()));
+        } else if (card.isPoints()) {
             long stand = cc.getPointsX100();
             List<Reward> katalog = rewardService.list(card);
             Reward ziel = RewardService.naechstesZiel(katalog, stand);
@@ -473,6 +504,28 @@ public class GoogleWalletService {
                     .setLabel("Belohnung")
                     .setBalance(new LoyaltyPointsBalance()
                             .setString(card.getRewardText()));
+        }
+
+        // Tagesangebot als Textbaustein, nur solange es gilt. Die Mitteilung
+        // dazu kommt ueber die Kampagne; abgelaufen faellt der Baustein beim
+        // naechsten Objekt-Update von selbst weg (module wird komplett gesetzt).
+        String heute = card.getShop() != null ? card.getShop().tagesangebot(java.time.Instant.now()) : null;
+        if (heute != null) {
+            module.add(new TextModuleData().setId("heute").setHeader("Heute").setBody(heute));
+        }
+        // Stufe (Bronze, Silber, Gold), nur bei Karten mit Stufen.
+        com.example.stemplekarte.service.Stufen.Stufe stufe = com.example.stemplekarte.service.Stufen.von(card, cc);
+        if (stufe != null) {
+            module.add(new TextModuleData().setId("status").setHeader("Status")
+                    .setBody(com.example.stemplekarte.service.Stufen.text(
+                            stufe, com.example.stemplekarte.service.Stufen.besuche(card, cc))));
+        }
+        // Kunde wirbt Kunde: Satz plus Link mit dem Code dieser Karte.
+        if (com.example.stemplekarte.service.EmpfehlungService.sichtbar(card, cc)) {
+            module.add(new TextModuleData().setId("empfehlen").setHeader("Freunde werben")
+                    .setBody(com.example.stemplekarte.service.EmpfehlungService.werbeText(card) + " Dein Link: "
+                            + com.example.stemplekarte.service.EmpfehlungService.linkFuer(
+                                    props.baseUrl(), card.getId(), cc.getEmpfehlungsCode())));
         }
 
         LoyaltyObject loyaltyObject = new LoyaltyObject()

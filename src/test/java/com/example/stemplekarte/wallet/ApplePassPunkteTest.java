@@ -88,6 +88,155 @@ class ApplePassPunkteTest {
         assertThat(pass.getHeaderFields().get(0).getKey()).isEqualTo("stamps-header");
     }
 
+    // ── Tagesangebot: Rueckseitenfeld nur, wenn je benutzt; nie klingeln ──
+
+    @Test
+    void tagesangebotFeld_nurWennJeBenutzt_ohneChangeMessage() {
+        Shop shop = mock(Shop.class);
+        Card card = Card.create(shop, "Kaffee", "10 Stempel", 10, "Gratis Kaffee");
+        CustomerCard cc = karte(card, 3, 0);
+        ApplePassService dienst = dienst(mock(RewardService.class));
+
+        // Nie benutzt: Pass bleibt wie er ist.
+        assertThat(dienst.baueFelder(card, cc, false).getBackFields()).isNullOrEmpty();
+
+        // Benutzt, aber gerade kein Angebot: Ruhetext, damit iOS den alten Wert kennt.
+        when(shop.hatTagesangebotFeld()).thenReturn(true);
+        var ruhe = dienst.baueFelder(card, cc, false);
+        assertThat(ruhe.getBackFields()).hasSize(1);
+        assertThat(ruhe.getBackFields().get(0).getKey()).isEqualTo("heute");
+        assertThat(ruhe.getBackFields().get(0).getValue()).isEqualTo("Heute kein besonderes Angebot.");
+        assertThat(ruhe.getBackFields().get(0).getChangeMessage()).isNull();
+
+        // Mit Angebot.
+        when(shop.tagesangebot(org.mockito.ArgumentMatchers.any())).thenReturn("Cappuccino 2,50 €");
+        var pass = dienst.baueFelder(card, cc, false);
+        assertThat(pass.getBackFields().get(0).getValue()).isEqualTo("Cappuccino 2,50 €");
+        assertThat(pass.getBackFields().get(0).getChangeMessage()).isNull();
+        assertThat(pass.getHeaderFields().get(0).getKey()).isEqualTo("stamps-header");
+    }
+
+    // ── Kunde wirbt Kunde: Rueckseitenfeld nur, wenn an und Code da ──────
+
+    @Test
+    void empfehlungFeld_nurWennAnUndCodeDa_ohneChangeMessage() {
+        Shop shop = mock(Shop.class);
+        Card card = Card.create(shop, "Kaffee", "10 Stempel", 10, "Gratis Kaffee");
+        CustomerCard cc = karte(card, 3, 0);
+        AppProperties props = mock(AppProperties.class);
+        when(props.baseUrl()).thenReturn("https://stampit.test");
+        ApplePassService dienst = new ApplePassService(props, mock(PassTemplateGenerator.class),
+                mock(RewardService.class));
+
+        assertThat(dienst.baueFelder(card, cc, false).getBackFields()).isNullOrEmpty();
+        card.updateEmpfehlung(true, 2);
+        assertThat(dienst.baueFelder(card, cc, false).getBackFields()).isNullOrEmpty();   // kein Code
+
+        when(cc.getEmpfehlungsCode()).thenReturn("ABC234");
+        var pass = dienst.baueFelder(card, cc, false);
+        assertThat(pass.getBackFields()).hasSize(1);
+        assertThat(pass.getBackFields().get(0).getKey()).isEqualTo("empfehlen");
+        assertThat(pass.getBackFields().get(0).getValue())
+                .isEqualTo("Für jeden Freund, der mitmacht, gibt's 2 Stempel für euch beide. "
+                        + "Dein Link: https://stampit.test/karte-neu/" + card.getId() + "?ref=ABC234");
+        assertThat(pass.getBackFields().get(0).getChangeMessage()).isNull();
+        assertThat(pass.getHeaderFields().get(0).getKey()).isEqualTo("stamps-header");
+    }
+
+    // ── Stufen: Rueckseitenfeld nur bei Karten mit Stufen; nie klingeln ──
+
+    @Test
+    void statusFeld_nurMitStufen_ohneChangeMessage() {
+        Card card = stempelkarte();
+        CustomerCard cc = karte(card, 7, 0);
+        ApplePassService dienst = dienst(mock(RewardService.class));
+        assertThat(dienst.baueFelder(card, cc, false).getBackFields()).isNullOrEmpty();
+
+        card.updateStufen(true, null, null, 5, null, 20);
+        var pass = dienst.baueFelder(card, cc, false);
+        assertThat(pass.getBackFields()).hasSize(1);
+        assertThat(pass.getBackFields().get(0).getKey()).isEqualTo("status");
+        assertThat(pass.getBackFields().get(0).getValue()).isEqualTo("Silber · noch 13 Besuche bis Gold");
+        assertThat(pass.getBackFields().get(0).getChangeMessage()).isNull();
+        assertThat(pass.getHeaderFields().get(0).getKey()).isEqualTo("stamps-header");
+    }
+
+    // ── Mitgliedskarte: eigener Zweig, Besuche im Kopf, kein Raster ──────
+
+    @Test
+    void mitgliedskarte_besucheImKopf_keineRueckseite() {
+        Shop shop = mock(Shop.class);
+        Card card = Card.createMember(shop, "Clubkarte", "Ausweis");
+        CustomerCard cc = karte(card, 12, 0);
+        when(cc.getId()).thenReturn("CC-ABCD1234");
+        when(cc.getCreatedAt()).thenReturn(java.time.Instant.parse("2026-03-15T10:00:00Z"));
+        ApplePassService dienst = dienst(mock(RewardService.class));
+
+        var pass = dienst.baueFelder(card, cc, true);
+        assertThat(pass.getHeaderFields()).hasSize(1);
+        assertThat(pass.getHeaderFields().get(0).getKey()).isEqualTo("visits-header");
+        assertThat(pass.getHeaderFields().get(0).getValue()).isEqualTo("12");
+        assertThat(pass.getHeaderFields().get(0).getChangeMessage()).contains("%@");
+        assertThat(pass.getPrimaryFields().get(0).getKey()).isEqualTo("member-name");
+        assertThat(pass.getPrimaryFields().get(0).getValue()).isEqualTo("Adham");
+        assertThat(pass.getSecondaryFields().get(0).getValue()).isEqualTo("03/2026");
+        assertThat(pass.getAuxiliaryFields().get(0).getValue()).isEqualTo("ABCD1234");
+        assertThat(pass.getBackFields()).isNullOrEmpty();
+
+        // Google-Mitteilung zum Besuch.
+        when(cc.getCard().getShop().getName()).thenReturn("Club Nord");
+        String[] text = GoogleWalletService.meldungText(cc, GoogleWalletService.Meldung.BESUCH);
+        assertThat(text[0]).isEqualTo("Besuch bei Club Nord");
+        assertThat(text[1]).contains("12. Besuch");
+    }
+
+    @Test
+    void zehnerKarte_restImKopf_textJeZustand() {
+        Shop shop = mock(Shop.class);
+        Card card = Card.createPackage(shop, "Yoga 10er", "Paket", 10, "Kurse");
+        CustomerCard cc = karte(card, 3, 0);
+        when(cc.getPaketRest()).thenReturn(7);
+        ApplePassService dienst = dienst(mock(RewardService.class));
+
+        var pass = dienst.baueFelder(card, cc, false);
+        assertThat(pass.getHeaderFields()).hasSize(1);
+        assertThat(pass.getHeaderFields().get(0).getKey()).isEqualTo("rest-header");
+        assertThat(pass.getHeaderFields().get(0).getValue()).isEqualTo("7");
+        assertThat(pass.getHeaderFields().get(0).getChangeMessage()).contains("%@").contains("Abgebucht").contains("Kurse");
+        assertThat(pass.getPrimaryFields().get(0).getKey()).isEqualTo("rest-big");
+        assertThat(pass.getPrimaryFields().get(0).getValue()).isEqualTo("7");
+        assertThat(pass.getSecondaryFields().get(0).getValue()).isEqualTo("10 Kurse");
+        assertThat(pass.getAuxiliaryFields().get(0).getValue()).isEqualTo("Adham");
+        assertThat(pass.getBackFields()).isNullOrEmpty();
+
+        // Gerade aufgeladen: anderer Text, gleicher Key.
+        when(cc.paketFrischAufgeladen()).thenReturn(true);
+        pass = dienst.baueFelder(card, cc, false);
+        assertThat(pass.getHeaderFields().get(0).getKey()).isEqualTo("rest-header");
+        assertThat(pass.getHeaderFields().get(0).getChangeMessage()).contains("%@").contains("aufgeladen");
+
+        // Leer.
+        when(cc.paketFrischAufgeladen()).thenReturn(false);
+        when(cc.getPaketRest()).thenReturn(0);
+        pass = dienst.baueFelder(card, cc, false);
+        assertThat(pass.getHeaderFields().get(0).getKey()).isEqualTo("rest-header");
+        assertThat(pass.getHeaderFields().get(0).getValue()).isEqualTo("0");
+        assertThat(pass.getHeaderFields().get(0).getChangeMessage()).contains("%@").contains("aufgebraucht");
+        assertThat(pass.getPrimaryFields().get(0).getValue()).isEqualTo("Leer");
+
+        // Google-Mitteilungen.
+        when(shop.getName()).thenReturn("Yoga Nord");
+        String[] text = GoogleWalletService.meldungText(cc, GoogleWalletService.Meldung.PAKET);
+        assertThat(text[0]).isEqualTo("Abgebucht bei Yoga Nord");
+        assertThat(text[1]).contains("aufgebraucht");
+        when(cc.getPaketRest()).thenReturn(12);
+        assertThat(GoogleWalletService.meldungText(cc, GoogleWalletService.Meldung.PAKET)[1])
+                .isEqualTo("Noch 12 Kurse übrig.");
+        text = GoogleWalletService.meldungText(cc, GoogleWalletService.Meldung.AUFGELADEN);
+        assertThat(text[0]).isEqualTo("Paket aufgeladen bei Yoga Nord");
+        assertThat(text[1]).isEqualTo("10 Kurse dazu. Noch 12 Kurse übrig.");
+    }
+
     // ── Stempel-Pass: darf sich NICHT bewegen ────────────────────────────
 
     @Test

@@ -44,17 +44,30 @@ public class PointsService {
     private final PointsBookingRepository bookingRepo;
     private final ScanLogRepository scanLogRepo;
     private final RewardService rewardService;
+    private final EmpfehlungService empfehlung;
+
+    // Optional (siehe CustomerService): ohne Webhook-Dienst wird nichts gemeldet.
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private WebhookService webhooks;
+
+    void webhooks(WebhookService webhooks) { this.webhooks = webhooks; }
+
+    private void webhook(Shop shop, String typ, java.util.Map<String, Object> daten) {
+        if (webhooks != null) webhooks.melde(shop, typ, daten);
+    }
 
     public PointsService(CustomerCardRepository customerCardRepo,
                          CardRepository cardRepo,
                          PointsBookingRepository bookingRepo,
                          ScanLogRepository scanLogRepo,
-                         RewardService rewardService) {
+                         RewardService rewardService,
+                         EmpfehlungService empfehlung) {
         this.customerCardRepo = customerCardRepo;
         this.cardRepo = cardRepo;
         this.bookingRepo = bookingRepo;
         this.scanLogRepo = scanLogRepo;
         this.rewardService = rewardService;
+        this.empfehlung = empfehlung;
     }
 
     // ── Ausgabe-Typen ─────────────────────────────────────────────────────
@@ -103,7 +116,10 @@ public class PointsService {
             // Willkommensgeschenk offen: der Scanner zeigt statt der
             // Stempelmaske die Einloese-Maske. Hinten angehaengt, damit
             // ein Scanner mit altem Stand die Antwort weiter versteht.
-            boolean willkommenOffen, String willkommenText) {}
+            boolean willkommenOffen, String willkommenText,
+            // 10er-Karte: Rest des Pakets und Einheit; sonst null. Der Scanner
+            // zeigt daran den Aufladen-Knopf.
+            Integer paketRest, String paketEinheit) {}
 
     /** Ergebnis einer Buchung. */
     public record PointsResult(
@@ -123,12 +139,15 @@ public class PointsService {
         CustomerCard cc = ladeKundenkarte(qr, card);
 
         if (!card.isPoints()) {
-            // Stempelkarte: der Scanner braucht nur den Typ und den Stand.
+            // Stempel-, Mitglieds- und 10er-Karte: der Scanner braucht nur den
+            // Typ und den Stand (bei der 10er-Karte dazu den Rest).
             return new PointsState(cc.getId(), cc.getCustomer().getName(),
-                    card.getId(), card.getName(), CardType.STAMP,
+                    card.getId(), card.getName(), card.getType(),
                     0, "0", cc.getStamps(), card.getRewardThreshold(), card.getRewardText(),
                     null, null, List.of(), null, 0, "0", null,
-                    cc.isWillkommenOffen(), cc.isWillkommenOffen() ? cc.getWillkommenText() : null);
+                    cc.isWillkommenOffen(), cc.isWillkommenOffen() ? cc.getWillkommenText() : null,
+                    card.isPackage() ? cc.getPaketRest() : null,
+                    card.isPackage() ? card.getPaketEinheit() : null);
         }
 
         long stand = cc.getPointsX100();
@@ -146,13 +165,19 @@ public class PointsService {
                 fehlend, PointsMath.formatiere(fehlend),
                 BookingView.von(letzteBuchung(cc.getId())),
                 // Punktekarten haben kein Willkommensgeschenk.
-                false, null);
+                false, null, null, null);
     }
 
     // ── Buchen ────────────────────────────────────────────────────────────
 
     @Transactional
     public PointsResult earn(String qrPayload, Shop shop, long amountCents, String staffLabel) {
+        return earn(qrPayload, shop, amountCents, staffLabel, null);
+    }
+
+    /** ortId: Filiale (ShopOrt.id) fuers Protokoll, null = Hauptstandort. */
+    @Transactional
+    public PointsResult earn(String qrPayload, Shop shop, long amountCents, String staffLabel, String ortId) {
         if (amountCents <= 0) {
             throw new IllegalArgumentException(
                     "Betrag muss groesser als null sein. Fuer einen Abzug die Korrektur benutzen.");
@@ -171,7 +196,19 @@ public class PointsService {
         PointsBooking booking = bookingRepo.save(
                 PointsBooking.earn(cc, shop.getId(), gebucht, amountCents, kurs, staffLabel));
 
-        scanLogSchreiben(shop, card, cc, 0);
+        // Kunde wirbt Kunde: erster Einkauf des Geworbenen, Bonus fuer beide.
+        // Nicht als Buchungszeile - der Bonus ist kein Einkauf.
+        if (vorher == 0 && cc.getTotalRewards() == 0
+                && empfehlung.belohnen(cc, java.time.Instant.now()) != null) {
+            customerCardRepo.save(cc);
+        }
+
+        scanLogSchreiben(shop, card, cc, 0, ortId);
+
+        webhook(shop, "points.earned", WebhookService.daten(
+                "customerId", qr.customerId(), "cardId", card.getId(), "customerCardId", cc.getId(),
+                "amountCents", amountCents, "pointsX100", gebucht, "balanceX100", cc.getPointsX100(),
+                "staff", staffLabel, "locationId", ortId));
 
         log.info("[PUNKTE] EARN karte={} betrag={} punkte={} stand={}",
                 cc.getId(), amountCents, gebucht, cc.getPointsX100());
@@ -181,6 +218,12 @@ public class PointsService {
 
     @Transactional
     public PointsResult redeem(String qrPayload, Shop shop, String rewardId, String staffLabel) {
+        return redeem(qrPayload, shop, rewardId, staffLabel, null);
+    }
+
+    /** ortId: Filiale (ShopOrt.id) fuers Protokoll, null = Hauptstandort. */
+    @Transactional
+    public PointsResult redeem(String qrPayload, Shop shop, String rewardId, String staffLabel, String ortId) {
         QrPayload qr = QrPayload.parse(qrPayload);
         Card card = ladePunktekarte(qr.cardId(), shop);
         CustomerCard cc = ladeKundenkarte(qr, card);
@@ -216,7 +259,13 @@ public class PointsService {
         // Gezaehlt werden Punkte-Einloesungen in PointsBooking - dort ist die
         // Ruecknahme sauber abgebildet, und daraus kommt auch die Rangliste
         // der beliebtesten Praemien.
-        scanLogSchreiben(shop, card, cc, 0);
+        scanLogSchreiben(shop, card, cc, 0, ortId);
+
+        webhook(shop, "points.redeemed", WebhookService.daten(
+                "customerId", qr.customerId(), "cardId", card.getId(), "customerCardId", cc.getId(),
+                "rewardId", reward.getId(), "rewardName", reward.getName(),
+                "costPointsX100", reward.getCostPointsX100(), "balanceX100", cc.getPointsX100(),
+                "staff", staffLabel));
 
         log.info("[PUNKTE] REDEEM karte={} praemie={} kosten={} stand={}",
                 cc.getId(), reward.getName(), reward.getCostPointsX100(), cc.getPointsX100());
@@ -370,12 +419,16 @@ public class PointsService {
     }
 
     private void scanLogSchreiben(Shop shop, Card card, CustomerCard cc, int rewardsEarned) {
+        scanLogSchreiben(shop, card, cc, rewardsEarned, null);
+    }
+
+    private void scanLogSchreiben(Shop shop, Card card, CustomerCard cc, int rewardsEarned, String ortId) {
         // Wie beim Stempel-Weg: schlaegt das Protokoll fehl, darf die Buchung
         // NICHT scheitern. stampsAdded bleibt 0, damit sich Stempel- und
         // Punktzahlen in der Statistik nicht vermischen.
         try {
             scanLogRepo.save(ScanLog.create(shop.getId(), card.getId(),
-                    cc.getCustomer().getId(), 0, rewardsEarned));
+                    cc.getCustomer().getId(), 0, rewardsEarned, null, ortId));
         } catch (Exception e) {
             log.warn("ScanLog konnte nicht gespeichert werden: {}", e.getMessage());
         }

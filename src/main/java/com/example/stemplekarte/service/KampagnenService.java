@@ -283,6 +283,37 @@ public class KampagnenService {
         return k;
     }
 
+    /**
+     * Kampagne mit fertiger Empfaengerliste (eigene Automation,
+     * AutomationService). Gruppe AUTOMATION, keine Kontrollgruppe; die
+     * Karte je Person und das Tageslimit hat der Aufrufer schon beachtet.
+     */
+    @Transactional
+    public Kampagne starteFuer(Shop shop, String roh, List<CustomerCard> empf, String automationId) {
+        String text = sauber(roh);
+        if (text.isEmpty()) {
+            throw new IllegalArgumentException("Der Text darf nicht leer sein");
+        }
+        if (text.length() > Kampagne.TEXT_MAX) {
+            throw new IllegalArgumentException("Der Text darf höchstens " + Kampagne.TEXT_MAX + " Zeichen haben");
+        }
+        if (empf == null || empf.isEmpty()) {
+            throw new IllegalArgumentException("Niemand fällig");
+        }
+        Instant jetzt = Instant.now();
+        Shop laden = shopRepo.findById(shop.getId()).orElseThrow();
+        laden.nachrichtenEinschalten(jetzt);
+        shopRepo.save(laden);
+        Kampagne k = Kampagne.starte(laden, text, Zielgruppe.AUTOMATION, empf.size(), jetzt);
+        k.vonAutomation(automationId);
+        k = kampagneRepo.save(k);
+        empfaengerFestschreiben(k, empf, false);
+        kampagneRepo.save(k);
+        log.info("[KAMPAGNE] {} gestartet (Automation {}), Laden {}, {} Empfaenger",
+                k.getId(), automationId, laden.getId(), k.getEmpfaenger());
+        return k;
+    }
+
     /** Geplante Kampagne verwerfen. Laufende oder fertige lassen sich nicht zuruecknehmen. */
     @Transactional
     public void abbrechen(Shop shop, String kampagneId) {
@@ -401,7 +432,8 @@ public class KampagnenService {
         }
     }
 
-    private record Versand(String customerCardId, boolean apple, boolean nurAuffrischen) {}
+    /** text = je Karte gefuellte Vorlage (Platzhalter), null beim stillen Auffrischen. */
+    private record Versand(String customerCardId, boolean apple, boolean nurAuffrischen, String text) {}
 
     /** Eine Seite: festschreiben, committen, dann pushen. Nichts mehr offen = fertig. */
     void verarbeite(Kampagne k, Instant jetzt) {
@@ -426,7 +458,7 @@ public class KampagnenService {
             }
             if (v.nurAuffrischen()) continue;
             mitText++;
-            try { googleWalletService.sendeNachricht(v.customerCardId(), titel, k.getText(), "kampagne"); }
+            try { googleWalletService.sendeNachricht(v.customerCardId(), titel, v.text(), "kampagne"); }
             catch (Exception e) { log.warn("[KAMPAGNE] Google fehlgeschlagen {}: {}", v.customerCardId(), e.getMessage()); }
         }
         k.gesendet(mitText);
@@ -438,6 +470,9 @@ public class KampagnenService {
     private List<Versand> markiere(Kampagne k, Instant jetzt) {
         Shop shop = k.getShop();
         List<Versand> versand = new ArrayList<>();
+        // Platzhalter ({name}, {offen}, {praemie}) je Karte fuellen; der
+        // Katalog einer Punktekarte wird dabei nur einmal geladen.
+        Function<Card, List<Reward>> katalog = katalogCache();
         List<KampagneEmpfaenger> seite = empfaengerRepo.findByKampagneIdAndErledigtFalse(
                 k.getId(), PageRequest.of(0, SEITE));
         for (KampagneEmpfaenger e : seite) {
@@ -455,11 +490,12 @@ public class KampagnenService {
                 // Zeile bleibt offen und bekommt den Text im naechsten Lauf.
                 cc.passAuffrischen(jetzt);
                 e.aufgefrischt(jetzt);
-                versand.add(new Versand(cc.getId(), true, true));
+                versand.add(new Versand(cc.getId(), true, true, null));
             } else {
-                cc.kampagneErhalten(k.getText(), jetzt);
+                String text = Platzhalter.fuelle(k.getText(), cc, katalog);
+                cc.kampagneErhalten(text, jetzt);
                 e.erledigen();
-                versand.add(new Versand(cc.getId(), apple, false));
+                versand.add(new Versand(cc.getId(), apple, false, text));
             }
             customerCardRepo.save(cc);
             empfaengerRepo.save(e);

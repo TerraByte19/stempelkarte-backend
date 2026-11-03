@@ -54,6 +54,10 @@ public class AdminController {
     private final com.example.stemplekarte.repository.RewardRepository rewards;
     private final com.example.stemplekarte.repository.ShopOrtRepository shopOrte;
     private final com.example.stemplekarte.repository.RueckmeldungRepository rueckmeldungen;
+    private final com.example.stemplekarte.repository.AutoNachrichtRepository autoNachrichten;
+    private final com.example.stemplekarte.repository.ApiKeyRepository apiKeys;
+    private final com.example.stemplekarte.repository.WebhookEreignisRepository webhookEreignisse;
+    private final com.example.stemplekarte.repository.AutomationRepository automationen;
 
     @Value("${stempelkarte.admin-secret:admin-geheim-nur-lokal}")
     private String adminSecret;
@@ -79,9 +83,17 @@ public class AdminController {
                            com.example.stemplekarte.repository.SentNewsletterRepository sentNewsletters,
                            com.example.stemplekarte.repository.RewardRepository rewards,
                            com.example.stemplekarte.repository.ShopOrtRepository shopOrte,
-                           com.example.stemplekarte.repository.RueckmeldungRepository rueckmeldungen) {
+                           com.example.stemplekarte.repository.RueckmeldungRepository rueckmeldungen,
+                           com.example.stemplekarte.repository.AutoNachrichtRepository autoNachrichten,
+                           com.example.stemplekarte.repository.ApiKeyRepository apiKeys,
+                           com.example.stemplekarte.repository.WebhookEreignisRepository webhookEreignisse,
+                           com.example.stemplekarte.repository.AutomationRepository automationen) {
+        this.automationen = automationen;
         this.shopOrte = shopOrte;
         this.rueckmeldungen = rueckmeldungen;
+        this.autoNachrichten = autoNachrichten;
+        this.apiKeys = apiKeys;
+        this.webhookEreignisse = webhookEreignisse;
         this.kampagnen = kampagnen;
         this.kampagneEmpfaenger = kampagneEmpfaenger;
         this.sentNewsletters = sentNewsletters;
@@ -181,6 +193,8 @@ public class AdminController {
             map.put("standortGesetzt",
                     com.example.stemplekarte.service.StandortPflicht.hatStandort(shop));
             map.put("maxOrte", shop.getMaxOrte());
+            map.put("apiFreigeschaltet", shop.isApiFreigeschaltet());
+            map.put("demo", shop.isDemo());
             return map;
         }).toList();
 
@@ -443,6 +457,40 @@ public class AdminController {
         return ResponseEntity.ok(Map.of("id", shop.getId(), "maxOrte", shop.getMaxOrte()));
     }
 
+    public record ApiRequest(boolean freigeschaltet) {}
+
+    /** Schnittstelle (API-Schluessel, Webhooks) je Laden freischalten - Tarif. */
+    @PostMapping("/shops/{shopId}/api")
+    public ResponseEntity<Map<String, Object>> setApi(@PathVariable String shopId, @RequestBody ApiRequest req) {
+        Shop shop = shopRepo.findById(shopId).orElse(null);
+        if (shop == null) {
+            return ResponseEntity.status(404).body(Map.of("error", "Shop nicht gefunden: " + shopId));
+        }
+        shop.setApiFreigeschaltet(req.freigeschaltet());
+        shopRepo.save(shop);
+        log.info("[ADMIN] Schnittstelle laden={} frei={}", shop.getId(), req.freigeschaltet());
+        return ResponseEntity.ok(Map.of("id", shop.getId(), "apiFreigeschaltet", shop.isApiFreigeschaltet()));
+    }
+
+    public record DemoRequest(boolean demo) {}
+
+    /**
+     * Demo-Laden fuer die Website: seine Karten stehen unter /api/public/demo,
+     * Besucher stempeln sich dort selbst. Testkarten, die aelter als eine
+     * Woche sind, raeumt der DemoService weg.
+     */
+    @PostMapping("/shops/{shopId}/demo")
+    public ResponseEntity<Map<String, Object>> setDemo(@PathVariable String shopId, @RequestBody DemoRequest req) {
+        Shop shop = shopRepo.findById(shopId).orElse(null);
+        if (shop == null) {
+            return ResponseEntity.status(404).body(Map.of("error", "Shop nicht gefunden: " + shopId));
+        }
+        shop.setDemo(req.demo());
+        shopRepo.save(shop);
+        log.info("[ADMIN] Demo laden={} demo={}", shop.getId(), req.demo());
+        return ResponseEntity.ok(Map.of("id", shop.getId(), "demo", shop.isDemo()));
+    }
+
     /**
      * Löscht einen Shop komplett:
      * Apple-Registrierungen → CustomerCards → StaffTokens → Cards → Shop
@@ -484,6 +532,10 @@ public class AdminController {
         kampagnen.deleteByShop(shop);
         shopOrte.deleteByShop(shop);
         rueckmeldungen.deleteByShop(shop);
+        autoNachrichten.deleteByShop(shop);
+        automationen.deleteByShop(shop);
+        apiKeys.deleteByShop(shop);
+        webhookEreignisse.deleteByShopId(shop.getId());
 
         // 5. Shop löschen
         shopRepo.delete(shop);

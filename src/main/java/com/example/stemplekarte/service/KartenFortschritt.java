@@ -18,8 +18,9 @@ import java.util.List;
  */
 public record KartenFortschritt(String belohnung, String offen, String einheit, boolean erreicht) {
 
-    /** Null bei einer Punktekarte ohne Praemie - dann gibt es kein Ziel zu nennen. */
+    /** Null bei einer Punktekarte ohne Praemie, bei Mitglieds- und 10er-Karten - dann gibt es kein Ziel zu nennen. */
     public static KartenFortschritt von(Card card, CustomerCard cc, RewardService rewardService) {
+        if (card.isMember() || card.isPackage()) return null;
         if (card.isPoints()) {
             List<Reward> katalog = rewardService.list(card);
             Reward ziel = RewardService.naechstesZiel(katalog, cc.getPointsX100());

@@ -58,7 +58,8 @@ class WillkommenScanTest {
         service = mock(CustomerService.class);
         notifier = mock(WalletNotifier.class);
         controller = new ScanController(service, notifier, mock(PointsService.class),
-                new GeoPruefung(mock(GeoVorfallRepository.class)));
+                new GeoPruefung(mock(GeoVorfallRepository.class)),
+                mock(com.example.stemplekarte.service.PaketService.class));
 
         // Proxy-Verhalten: die ID kennt er, der Name wuerde nachladen.
         shop = mock(Shop.class);
@@ -135,7 +136,7 @@ class WillkommenScanTest {
         CardRepository cardRepo = mock(CardRepository.class);
         PointsService points = new PointsService(ccRepo, cardRepo,
                 mock(PointsBookingRepository.class), mock(ScanLogRepository.class),
-                mock(RewardService.class));
+                mock(RewardService.class), mock(com.example.stemplekarte.service.EmpfehlungService.class));
 
         Card card = Card.create(shop, "Kaffee", "x", 10, "Gratis Kaffee");
         Customer customer = mock(Customer.class);

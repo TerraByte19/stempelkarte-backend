@@ -26,18 +26,32 @@ public class CustomerService {
     private final AppleDeviceRepository appleDeviceRepo;
     private final EmailService emailService;
     private final ScanLogRepository scanLogRepo;
+    private final EmpfehlungService empfehlung;
+
+    // Optional, damit die Unit-Tests den Dienst weiter ohne Spring bauen
+    // koennen: ohne Webhook-Dienst wird schlicht nichts gemeldet.
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private WebhookService webhooks;
+
+    void webhooks(WebhookService webhooks) { this.webhooks = webhooks; }
+
+    private void webhook(Shop shop, String typ, java.util.Map<String, Object> daten) {
+        if (webhooks != null) webhooks.melde(shop, typ, daten);
+    }
 
     public CustomerService(CustomerRepository customerRepo, CardRepository cardRepo,
                            CustomerCardRepository customerCardRepo,
                            AppleDeviceRepository appleDeviceRepo,
                            EmailService emailService,
-                           ScanLogRepository scanLogRepo) {
+                           ScanLogRepository scanLogRepo,
+                           EmpfehlungService empfehlung) {
         this.customerRepo = customerRepo;
         this.cardRepo = cardRepo;
         this.customerCardRepo = customerCardRepo;
         this.appleDeviceRepo = appleDeviceRepo;
         this.emailService = emailService;
         this.scanLogRepo = scanLogRepo;
+        this.empfehlung = empfehlung;
     }
 
     @Transactional
@@ -63,6 +77,14 @@ public class CustomerService {
     public CustomerCard registerForCard(String name, String email, String cardId,
                                         boolean marketingConsent,
                                         java.time.LocalDate birthday, String phone) {
+        return registerForCard(name, email, cardId, marketingConsent, birthday, phone, null);
+    }
+
+    /** refCode: Empfehlungscode eines Freundes (Kunde wirbt Kunde), nur bei einer NEUEN Kundenkarte. */
+    @Transactional
+    public CustomerCard registerForCard(String name, String email, String cardId,
+                                        boolean marketingConsent,
+                                        java.time.LocalDate birthday, String phone, String refCode) {
         Card card = cardRepo.findById(cardId)
                 .orElseThrow(() -> new NoSuchElementException("Karte nicht gefunden: " + cardId));
 
@@ -76,8 +98,21 @@ public class CustomerService {
         customer.requireNewConfirmation();
         customerRepo.save(customer);
 
-        CustomerCard cc = customerCardRepo.findByCustomerAndCard(customer, card)
-                .orElseGet(() -> customerCardRepo.save(neueKundenkarte(customer, card)));
+        CustomerCard cc = customerCardRepo.findByCustomerAndCard(customer, card).orElse(null);
+        boolean neu = cc == null;
+        if (neu) {
+            cc = neueKundenkarte(customer, card);
+            // Eigener Code fuer die neue Karte; der Code des Freundes wird
+            // nur hier verknuepft - wer die Karte schon hat, wird nicht
+            // nachtraeglich "geworben".
+            empfehlung.codeVergeben(cc);
+            empfehlung.verknuepfen(cc, refCode, java.time.Instant.now());
+            cc = customerCardRepo.save(cc);
+            webhook(card.getShop(), "customer.signup", WebhookService.daten(
+                    "customerId", customer.getId(), "cardId", card.getId(), "customerCardId", cc.getId(),
+                    "name", customer.getName(), "email", customer.getEmail(),
+                    "marketingConsent", marketingConsent, "geworben", cc.getGeworbenVon() != null));
+        }
 
         // Einwilligung speichern (nur wenn neu, nicht ungewollt zurücksetzen)
         if (marketingConsent && !cc.isMarketingConsent()) {
@@ -127,8 +162,15 @@ public class CustomerService {
         Customer customer = getById(customerId);
         Card card = cardRepo.findById(cardId)
                 .orElseThrow(() -> new NoSuchElementException("Karte nicht gefunden: " + cardId));
-        return customerCardRepo.findByCustomerAndCard(customer, card)
-                .orElseGet(() -> customerCardRepo.save(CustomerCard.create(customer, card)));
+        CustomerCard cc = customerCardRepo.findByCustomerAndCard(customer, card).orElse(null);
+        if (cc != null) {
+            // Alte Karte ohne Empfehlungscode: jetzt nachholen.
+            empfehlung.codeSicherstellen(cc);
+            return cc;
+        }
+        cc = CustomerCard.create(customer, card);
+        empfehlung.codeVergeben(cc);
+        return customerCardRepo.save(cc);
     }
 
     public CustomerCard getCustomerCardById(String customerCardId) {
@@ -174,6 +216,18 @@ public class CustomerService {
 
     @Transactional
     public ScanResult processScan(String qrPayload, Shop shop, int count) {
+        return processScan(qrPayload, shop, count, null);
+    }
+
+    /** staffLabel: Name des Zugangs, der gestempelt hat - nur fuers Protokoll. */
+    @Transactional
+    public ScanResult processScan(String qrPayload, Shop shop, int count, String staffLabel) {
+        return processScan(qrPayload, shop, count, staffLabel, null);
+    }
+
+    /** ortId: Filiale (ShopOrt.id), in der gescannt wurde - nur fuers Protokoll. Null = Hauptstandort. */
+    @Transactional
+    public ScanResult processScan(String qrPayload, Shop shop, int count, String staffLabel, String ortId) {
         QrPayload qr = QrPayload.parse(qrPayload);
         String customerId = qr.customerId();
         String cardId = qr.cardId();
@@ -204,10 +258,33 @@ public class CustomerService {
 
         int threshold = card.getRewardThreshold();
 
+        // Erster echter Besuch: danach wird eine Empfehlung belohnt.
+        boolean ersterBesuch = cc.getStamps() == 0 && cc.getTotalRewards() == 0;
+
         ScanResult result = null;
         int rewardsEarnedThisScan = 0;
 
-        for (int i = 0; i < count; i++) {
+        // Mitgliedskarte: ein Scan = ein Besuch, egal wie viele Stempel der
+        // Scanner mitschickt. Keine Schwelle, keine Praemie.
+        if (card.isMember()) {
+            count = 1;
+            cc.addStamp();
+            result = new ScanResult.Visited(cc, "Besuch erfasst (%d)".formatted(cc.getStamps()), 0);
+        }
+
+        // 10er-Karte: Besuche vom Paket abbuchen, hoechstens so viele wie
+        // uebrig. Leer = nichts buchen, kein Besuch, kein Protokoll - das
+        // Personal sieht "Paket leer" und laedt auf (PaketService).
+        if (card.isPackage()) {
+            if (cc.getPaketRest() <= 0) {
+                log.info("Scan auf leerer 10er-Karte: Kunde {} Karte {}", customerId, cardId);
+                return new ScanResult.Empty(cc, PaketService.leerText(card), 0);
+            }
+            count = cc.paketAbbuchen(count, java.time.Instant.now());
+            result = new ScanResult.Debited(cc, PaketService.abgebuchtText(card, cc, count), 0);
+        }
+
+        for (int i = 0; i < count && !card.isMember() && !card.isPackage(); i++) {
             if (cc.getStamps() >= threshold) {
                 cc.redeemReward(threshold);
                 result = new ScanResult.Redeemed(cc, card.getRewardText() + " eingeloest!", rewardsEarnedThisScan);
@@ -225,17 +302,62 @@ public class CustomerService {
 
         customerCardRepo.save(cc);
 
+        // Kunde wirbt Kunde: beim ersten Besuch des Geworbenen bekommen beide
+        // den Bonus. Der Werber wird im EmpfehlungService gespeichert und
+        // nach dem Commit benachrichtigt.
+        if (ersterBesuch) {
+            EmpfehlungService.Bonus bonus = empfehlung.belohnen(cc, java.time.Instant.now());
+            if (bonus != null) {
+                customerCardRepo.save(cc);
+                result = mitBonus(result, bonus);
+            }
+        }
+
+        // Webhook (Kasse, CRM): in derselben Transaktion wie der Stempel.
+        String ereignis = switch (result) {
+            case ScanResult.Stamped s -> "stamp.added";
+            case ScanResult.Full f -> "card.full";
+            case ScanResult.Redeemed r -> "reward.redeemed";
+            case ScanResult.Visited v -> "visit.recorded";
+            case ScanResult.Debited d -> "package.debited";
+            case ScanResult.Empty e -> "package.empty";   // kommt hier nicht an (oben zurueckgegeben)
+        };
+        webhook(card.getShop(), ereignis, WebhookService.daten(
+                "customerId", customerId, "cardId", cardId, "customerCardId", cc.getId(),
+                "stamps", cc.getStamps(), "totalRewards", cc.getTotalRewards(),
+                "rewardThreshold", threshold, "stampsAdded", count,
+                "rewardText", (result instanceof ScanResult.Full || result instanceof ScanResult.Redeemed)
+                        ? card.getRewardText() : null,
+                "remaining", card.isPackage() ? cc.getPaketRest() : null,
+                "staff", staffLabel, "locationId", ortId));
+
         // Scan protokollieren (für Verlaufs-Statistik). Schlägt das Logging
         // fehl, darf der Scan selbst NICHT scheitern — daher abgesichert.
         try {
+            // Mitglieds- und 10er-Karte: der Besuch steht im Protokoll, aber ohne
+            // Stempel - wie bei der Punktekarte, damit die Stempel-Statistik sauber bleibt.
             scanLogRepo.save(ScanLog.create(
-                    shop.getId(), cardId, customerId, count, rewardsEarnedThisScan));
+                    shop.getId(), cardId, customerId, card.isMember() || card.isPackage() ? 0 : count,
+                    rewardsEarnedThisScan, staffLabel, ortId));
         } catch (Exception e) {
             log.warn("ScanLog konnte nicht gespeichert werden: {}", e.getMessage());
         }
 
         log.info("Scan fuer Kunde {} auf Karte {} ({}x): {}", customerId, cardId, count, result.message());
         return result;
+    }
+
+    /** Dieselbe Ergebnisart, nur die Meldung fuer den Scanner um den Bonus ergaenzt. */
+    private static ScanResult mitBonus(ScanResult r, EmpfehlungService.Bonus b) {
+        String msg = r.message() + " · +" + b.bonus() + " Empfehlungsbonus";
+        return switch (r) {
+            case ScanResult.Stamped s -> new ScanResult.Stamped(s.customerCard(), msg, s.rewardsEarnedThisScan());
+            case ScanResult.Full f -> new ScanResult.Full(f.customerCard(), msg, f.rewardsEarnedThisScan());
+            case ScanResult.Redeemed d -> new ScanResult.Redeemed(d.customerCard(), msg, d.rewardsEarnedThisScan());
+            case ScanResult.Visited v -> new ScanResult.Visited(v.customerCard(), msg, v.rewardsEarnedThisScan());
+            case ScanResult.Debited d -> new ScanResult.Debited(d.customerCard(), msg, d.rewardsEarnedThisScan());
+            case ScanResult.Empty e -> e;
+        };
     }
 
     /**

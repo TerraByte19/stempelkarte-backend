@@ -31,6 +31,12 @@ public class PointsController {
     private final WalletNotifier notifier;
     private final com.example.stemplekarte.service.GeoPruefung geoPruefung;
 
+    // Filialen: welchem Standort eine Buchung zugeordnet wird. Optional,
+    // damit Tests den Controller ohne diesen Dienst bauen koennen - dann
+    // gilt nur die Zuordnung des Zugangs.
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.example.stemplekarte.service.FilialenService filialen;
+
     public PointsController(PointsService service, WalletNotifier notifier,
                             com.example.stemplekarte.service.GeoPruefung geoPruefung) {
         this.service = service;
@@ -71,7 +77,8 @@ public class PointsController {
     public PointsResponse earn(@Valid @RequestBody EarnRequest req, Authentication auth) {
         Staff staff = staffAus(auth);
         pruefeStandort(staff, req.lat(), req.lon());
-        var ergebnis = service.earn(req.qrPayload(), staff.shop(), req.amountCents(), staff.label());
+        var ergebnis = service.earn(req.qrPayload(), staff.shop(), req.amountCents(), staff.label(),
+                ortFuer(staff, req.lat(), req.lon()));
         melden(ergebnis);
         return antwort(ergebnis);
     }
@@ -80,8 +87,10 @@ public class PointsController {
     @PostMapping("/redeem")
     public PointsResponse redeem(@Valid @RequestBody RedeemRequest req, Authentication auth) {
         Staff staff = staffAus(auth);
+        nurMitarbeiter(staff);
         pruefeStandort(staff, req.lat(), req.lon());
-        var ergebnis = service.redeem(req.qrPayload(), staff.shop(), req.rewardId(), staff.label());
+        var ergebnis = service.redeem(req.qrPayload(), staff.shop(), req.rewardId(), staff.label(),
+                ortFuer(staff, req.lat(), req.lon()));
         melden(ergebnis);
         return antwort(ergebnis);
     }
@@ -90,6 +99,7 @@ public class PointsController {
     @PostMapping("/correct")
     public PointsResponse correct(@Valid @RequestBody CorrectRequest req, Authentication auth) {
         Staff staff = staffAus(auth);
+        nurMitarbeiter(staff);
         pruefeStandort(staff, req.lat(), req.lon());
         var ergebnis = service.correct(req.qrPayload(), staff.shop(),
                 req.amountCents(), req.pointsX100(), staff.label());
@@ -101,6 +111,7 @@ public class PointsController {
     @PostMapping("/undo")
     public PointsResponse undo(@Valid @RequestBody UndoRequest req, Authentication auth) {
         Staff staff = staffAus(auth);
+        nurMitarbeiter(staff);
         pruefeStandort(staff, req.lat(), req.lon());
         var ergebnis = service.undo(req.qrPayload(), staff.shop(), req.bookingId(), staff.label());
         melden(ergebnis);
@@ -111,7 +122,22 @@ public class PointsController {
 
     /** Laden und Geraetename. Das Token selbst bleibt hier - sein Wert ist
      *  die Zugangsberechtigung und hat in keiner Antwort etwas verloren. */
-    private record Staff(Shop shop, String label) {}
+    private record Staff(Shop shop, String label, boolean aushilfe, com.example.stemplekarte.model.StaffToken token) {}
+
+    /** Filiale fuers Protokoll: Zuordnung des Zugangs, sonst Geraeteort, sonst Hauptstandort. */
+    private String ortFuer(Staff staff, Double lat, Double lon) {
+        return filialen != null
+                ? filialen.ortFuer(staff.token(), staff.shop(), lat, lon)
+                : staff.token().getOrtId();
+    }
+
+    /** Einloesen, Korrigieren, Zuruecknehmen: nicht fuer eine Aushilfe. */
+    private void nurMitarbeiter(Staff staff) {
+        if (staff.aushilfe()) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                    com.example.stemplekarte.model.StaffToken.NUR_MITARBEITER_TEXT);
+        }
+    }
 
     /**
      * Dieselbe Sperre wie beim Stempeln: ohne Ladenort oder ausserhalb des
@@ -136,7 +162,7 @@ public class PointsController {
         if (auth == null || !(auth.getPrincipal() instanceof StaffTokenFilter.StaffPrincipal p)) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Kein gueltiger Staff-Token");
         }
-        return new Staff(p.staff().getShop(), p.staff().getLabel());
+        return new Staff(p.staff().getShop(), p.staff().getLabel(), p.staff().istAushilfe(), p.staff());
     }
 
     private void melden(PointsService.PointsResult e) {

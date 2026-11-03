@@ -56,7 +56,7 @@ class ScanControllerTest {
         when(cc.getCard()).thenReturn(card);
         when(cc.getStamps()).thenReturn(1);
 
-        when(service.processScan(anyString(), any(Shop.class), anyInt()))
+        when(service.processScan(anyString(), any(Shop.class), anyInt(), any(), any()))
                 .thenReturn(new ScanResult.Stamped(cc, "Stempel hinzugefuegt", 0));
 
         return new ScanController(service, new WalletNotifier(
@@ -64,7 +64,8 @@ class ScanControllerTest {
                 mock(GoogleWalletService.class)),
                 mock(com.example.stemplekarte.service.PointsService.class),
                 new com.example.stemplekarte.service.GeoPruefung(
-                        mock(com.example.stemplekarte.repository.GeoVorfallRepository.class)));
+                        mock(com.example.stemplekarte.repository.GeoVorfallRepository.class)),
+                mock(com.example.stemplekarte.service.PaketService.class));
     }
 
     private Authentication authFuer(Shop shop) {

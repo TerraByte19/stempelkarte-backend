@@ -95,6 +95,65 @@ public class CustomerCard {
     @Column(name = "review_reminded_at")
     private Instant reviewRemindedAt;
 
+    // Automatische Nachrichten (service.AutoNachrichtTyp): wann Willkommen
+    // und "zweiter Besuch" kamen (einmal pro Karte), und bei welchem
+    // Praemienstand "fast voll" bzw. "Praemie bereit" kam (einmal pro Runde:
+    // steigt totalRewards, ist die Karte wieder faellig). Null = noch nie.
+    @Column(name = "auto_willkommen_am")
+    private Instant autoWillkommenAm;
+
+    @Column(name = "auto_zweiter_am")
+    private Instant autoZweiterAm;
+
+    @Column(name = "auto_fast_voll_bei")
+    private Integer autoFastVollBei;
+
+    @Column(name = "auto_praemie_bei")
+    private Integer autoPraemieBei;
+
+    // Hoechste Stufe (service.Stufen), zu der schon gratuliert wurde. Null = keine.
+    @Column(name = "stufe_benachrichtigt")
+    private Integer stufeBenachrichtigt;
+
+    // ── 10er-Karte (Card.isPackage) ──────────────────────────────────────
+    // Was vom Paket noch uebrig ist, wann zuletzt aufgeladen wurde, wie viele
+    // Pakete je gekauft wurden. Alles nullable: bestehende Zeilen tragen NULL
+    // und sind keine 10er-Karten. "stamps" zaehlt die Besuche hoch.
+    // autoPaketLeerBei: bei welchem Paketstand der "Paket leer"-Automat kam.
+    @Column(name = "paket_rest")
+    private Integer paketRest;
+
+    @Column(name = "paket_aufgeladen_am")
+    private Instant paketAufgeladenAm;
+
+    @Column(name = "pakete_gekauft")
+    private Integer paketeGekauft;
+
+    @Column(name = "auto_paket_leer_bei")
+    private Integer autoPaketLeerBei;
+
+    // true = gerade aufgeladen, seitdem nichts abgebucht oder korrigiert.
+    // Der Pass meldet dann "aufgeladen" statt "abgebucht". Eigener Merker
+    // statt Zeitvergleich: zwei Buchungen in derselben Millisekunde saehen
+    // sonst gleich aus.
+    @Column(name = "paket_frisch")
+    private Boolean paketFrisch;
+
+    // Kunde wirbt Kunde (service.EmpfehlungService): eigener Code zum
+    // Weitergeben; wer mich geworben hat (customerCardId) und wann; wann der
+    // Bonus fuer beide gebucht wurde (einmal, beim ersten echten Besuch).
+    @Column(name = "empfehlungs_code", length = 12, unique = true)
+    private String empfehlungsCode;
+
+    @Column(name = "geworben_von", length = 40)
+    private String geworbenVon;
+
+    @Column(name = "geworben_am")
+    private Instant geworbenAm;
+
+    @Column(name = "empfehlung_bonus_am")
+    private Instant empfehlungBonusAm;
+
     // ── Willkommensgeschenk ──────────────────────────────────────────────
     // true = Karte gesperrt, bis das Personal das Geschenk einloest.
     // Nullable OHNE Default mit Absicht: null heisst "nicht gesperrt", und
@@ -289,6 +348,110 @@ public class CustomerCard {
 
     /** Nur der Merker; der Pass aendert sich dadurch nicht, also kein updatedAt. */
     public void bewertungErinnert(Instant jetzt) { this.reviewRemindedAt = jetzt; }
+
+    // ── Automatische Nachrichten (nur Merker, kein updatedAt) ────────────
+
+    public Instant getAutoWillkommenAm() { return autoWillkommenAm; }
+    public Instant getAutoZweiterAm() { return autoZweiterAm; }
+    public Integer getAutoFastVollBei() { return autoFastVollBei; }
+    public Integer getAutoPraemieBei() { return autoPraemieBei; }
+
+    public void willkommenGeschickt(Instant jetzt) { this.autoWillkommenAm = jetzt; }
+    public void zweiterBesuchGeschickt(Instant jetzt) { this.autoZweiterAm = jetzt; }
+    /** Merkt den Praemienstand: nach der naechsten Praemie ist die Karte wieder dran. */
+    public void fastVollGeschickt() { this.autoFastVollBei = totalRewards; }
+    public void praemieBereitGeschickt() { this.autoPraemieBei = totalRewards; }
+
+    public Integer getStufeBenachrichtigt() { return stufeBenachrichtigt; }
+    public void stufeGemeldet(int index) { this.stufeBenachrichtigt = index; }
+
+    // ── 10er-Karte ──────────────────────────────────────────────────────
+
+    /** Nie null: ohne Aufladung ist das Paket leer. */
+    public int getPaketRest() { return paketRest != null ? paketRest : 0; }
+    public int getPaketeGekauft() { return paketeGekauft != null ? paketeGekauft : 0; }
+    public Instant getPaketAufgeladenAm() { return paketAufgeladenAm; }
+    public Integer getAutoPaketLeerBei() { return autoPaketLeerBei; }
+
+    /**
+     * Neues Paket gekauft: der Rest wird addiert, nicht ersetzt - zwei
+     * uebrige Besuche verfallen nicht. Zaehlt als Besuch (der Kunde steht an
+     * der Kasse) und bewegt updatedAt, damit der Pass den Stand zeigt.
+     */
+    public void paketAufladen(int groesse, Instant jetzt) {
+        this.paketRest = getPaketRest() + Math.max(1, groesse);
+        this.paketeGekauft = getPaketeGekauft() + 1;
+        this.paketAufgeladenAm = jetzt;
+        this.paketFrisch = true;
+        this.updatedAt = jetzt;
+        this.lastVisitAt = jetzt;
+    }
+
+    /**
+     * Besuche abbuchen, hoechstens so viele wie uebrig. Gibt zurueck, wie
+     * viele es wurden; 0 bei leerem Paket - dann hat sich nichts bewegt.
+     */
+    public int paketAbbuchen(int anzahl, Instant jetzt) {
+        int abgebucht = Math.min(Math.max(0, anzahl), getPaketRest());
+        if (abgebucht == 0) return 0;
+        this.paketRest = getPaketRest() - abgebucht;
+        this.stamps += abgebucht;
+        this.paketFrisch = false;
+        this.updatedAt = jetzt;
+        this.lastVisitAt = jetzt;
+        return abgebucht;
+    }
+
+    /** Rest von Hand setzen (Kundenliste). Kein Besuch, kein Paket gekauft. */
+    public void korrigierePaketRest(int neu) {
+        this.paketRest = Math.max(0, neu);
+        this.paketFrisch = false;
+        this.updatedAt = Instant.now();
+    }
+
+    /** Gerade aufgeladen und seitdem nichts abgebucht - der Pass meldet dann "aufgeladen" statt "abgebucht". */
+    public boolean paketFrischAufgeladen() {
+        return Boolean.TRUE.equals(paketFrisch);
+    }
+
+    /** Merker des "Paket leer"-Automaten: nach dem naechsten Kauf ist die Karte wieder dran. */
+    public void paketLeerGeschickt() { this.autoPaketLeerBei = getPaketeGekauft(); }
+
+    // ── Kunde wirbt Kunde ───────────────────────────────────────────────
+
+    public String getEmpfehlungsCode() { return empfehlungsCode; }
+    public String getGeworbenVon() { return geworbenVon; }
+    public Instant getGeworbenAm() { return geworbenAm; }
+    public Instant getEmpfehlungBonusAm() { return empfehlungBonusAm; }
+
+    /** Nur der Code; kein updatedAt, der Pass soll deswegen nicht neu gebaut werden. */
+    public void empfehlungsCodeSetzen(String code) { this.empfehlungsCode = code; }
+
+    public void geworbenVon(String werberCardId, Instant jetzt) {
+        this.geworbenVon = werberCardId;
+        this.geworbenAm = jetzt;
+    }
+
+    public void empfehlungBelohnt(Instant jetzt) { this.empfehlungBonusAm = jetzt; }
+
+    /**
+     * Bonus-Stempel, gedeckelt bei der Schwelle: eine volle Karte wird nicht
+     * "voller". Kein Besuch (lastVisitAt bleibt), aber updatedAt, damit der
+     * Pass den neuen Stand ausliefert. Gibt zurueck, wie viele es wurden.
+     */
+    public int bonusStempel(int anzahl, int schwelle) {
+        int vorher = this.stamps;
+        this.stamps = Math.min(Math.max(schwelle, vorher), vorher + Math.max(0, anzahl));
+        if (this.stamps != vorher) this.updatedAt = Instant.now();
+        return this.stamps - vorher;
+    }
+
+    /** Bonus-Punkte ohne Besuch: addPoints wuerde lastVisitAt setzen. */
+    public void bonusPunkte(long deltaX100) {
+        if (deltaX100 <= 0) return;
+        this.pointsX100 += deltaX100;
+        this.updatedAt = Instant.now();
+    }
 
     /**
      * Was im Nachrichtenfeld des Passes steht: die neuere von Rueckhol

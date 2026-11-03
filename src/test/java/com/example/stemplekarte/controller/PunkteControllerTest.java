@@ -76,7 +76,7 @@ class PunkteControllerTest {
         PointsService service = mock(PointsService.class);
         Shop shop = mock(Shop.class);
         when(shop.getId()).thenReturn("SHOP-1");
-        when(service.earn(anyString(), any(Shop.class), anyLong(), anyString()))
+        when(service.earn(anyString(), any(Shop.class), anyLong(), anyString(), any()))
                 .thenReturn(ergebnis());
 
         PointsController controller = new PointsController(service, mock(WalletNotifier.class), geoStumpf());
@@ -85,7 +85,7 @@ class PunkteControllerTest {
                 new PointsController.EarnRequest("{}", 14_500, 0.0, 0.0),
                 authMit(shop, "Kasse 1"));
 
-        verify(service).earn(anyString(), any(Shop.class), anyLong(), eq("Kasse 1"));
+        verify(service).earn(anyString(), any(Shop.class), anyLong(), eq("Kasse 1"), any());
         assertThat(antwort.letzteBuchung().staffLabel()).isEqualTo("Kasse 1");
         assertThat(antwort.pointsText()).isEqualTo("145");
         assertThat(antwort.zielName()).isEqualTo("Kuchen");
@@ -96,7 +96,7 @@ class PunkteControllerTest {
         PointsService service = mock(PointsService.class);
         WalletNotifier notifier = mock(WalletNotifier.class);
         Shop shop = mock(Shop.class);
-        when(service.earn(anyString(), any(Shop.class), anyLong(), anyString()))
+        when(service.earn(anyString(), any(Shop.class), anyLong(), anyString(), any()))
                 .thenReturn(ergebnis());
 
         new PointsController(service, notifier, geoStumpf()).earn(

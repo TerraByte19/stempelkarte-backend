@@ -194,6 +194,47 @@ public class Shop {
     @Column(name = "geo_befreit")
     private Boolean geoBefreit;
 
+    // Kundengruppen (service.Kundengruppe): ab wie vielen Besuchen jemand
+    // Stammgast ist, nach wie vielen Tagen ohne Besuch er "wird ruhig" bzw.
+    // "verloren" ist. Null = Standard (5 / 30 / 90).
+    @Column(name = "gruppe_stamm_ab")
+    private Integer gruppeStammAb;
+
+    @Column(name = "gruppe_ruhig_tage")
+    private Integer gruppeRuhigTage;
+
+    @Column(name = "gruppe_verloren_tage")
+    private Integer gruppeVerlorenTage;
+
+    // Tagesangebot: ein Satz, der bis Tagesende auf der Karte steht
+    // (Rueckseite bei Apple, Textbaustein bei Google) und beim Setzen als
+    // Kampagne aufs Handy geht. tagesangebotAm != null = Laden hat die
+    // Funktion je benutzt, dann traegt jeder Pass das Feld (auch leer).
+    @Column(name = "tagesangebot_text", length = 80)
+    private String tagesangebotText;
+
+    @Column(name = "tagesangebot_am")
+    private Instant tagesangebotAm;
+
+    @Column(name = "tagesangebot_bis")
+    private Instant tagesangebotBis;
+
+    // Schnittstelle (API-Schluessel, Webhooks): vom Admin je Tarif
+    // freigeschaltet. Null = aus. Webhook-URL und Geheimnis setzt der Laden.
+    @Column(name = "api_freigeschaltet")
+    private Boolean apiFreigeschaltet;
+
+    // Demo-Laden fuer die Website: Besucher holen sich eine Karte und
+    // stempeln sich selbst (DemoService). Vom Admin gesetzt. Null = nein.
+    @Column(name = "demo")
+    private Boolean demo;
+
+    @Column(name = "webhook_url", length = 500)
+    private String webhookUrl;
+
+    @Column(name = "webhook_secret", length = 64)
+    private String webhookSecret;
+
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
@@ -499,6 +540,100 @@ public class Shop {
 
     public void setRueckmeldungAktiv(boolean aktiv) {
         this.rueckmeldungAktiv = aktiv;
+        this.updatedAt = Instant.now();
+    }
+
+    // ── Tagesangebot ────────────────────────────────────────────────────
+
+    public static final int TAGESANGEBOT_MAX = 80;
+
+    /** Das Angebot, solange es gilt; sonst null. */
+    public String tagesangebot(Instant jetzt) {
+        if (tagesangebotText == null || tagesangebotBis == null) return null;
+        return jetzt.isBefore(tagesangebotBis) ? tagesangebotText : null;
+    }
+
+    /** Je benutzt: dann steht das Feld dauerhaft im Pass (leer oder mit Angebot). */
+    public boolean hatTagesangebotFeld() { return tagesangebotAm != null; }
+
+    public String getTagesangebotText() { return tagesangebotText; }
+    public Instant getTagesangebotAm() { return tagesangebotAm; }
+    public Instant getTagesangebotBis() { return tagesangebotBis; }
+
+    /** Laenge prueft der TagesangebotService. */
+    public void setzeTagesangebot(String text, Instant jetzt, Instant bis) {
+        this.tagesangebotText = text;
+        this.tagesangebotAm = jetzt;
+        this.tagesangebotBis = bis;
+        this.updatedAt = jetzt;
+    }
+
+    /** Angebot weg, das Feld bleibt (tagesangebotAm steht). */
+    public void loescheTagesangebot(Instant jetzt) {
+        this.tagesangebotText = null;
+        this.tagesangebotBis = null;
+        this.updatedAt = jetzt;
+    }
+
+    // ── Schnittstelle ───────────────────────────────────────────────────
+
+    public boolean isApiFreigeschaltet() { return Boolean.TRUE.equals(apiFreigeschaltet); }
+
+    /** Vom Admin. */
+    public void setApiFreigeschaltet(boolean frei) {
+        this.apiFreigeschaltet = frei;
+        this.updatedAt = Instant.now();
+    }
+
+    public String getWebhookUrl() { return webhookUrl; }
+    public String getWebhookSecret() { return webhookSecret; }
+
+    // ── Demo ────────────────────────────────────────────────────────────
+
+    public boolean isDemo() { return Boolean.TRUE.equals(demo); }
+
+    /** Vom Admin. */
+    public void setDemo(boolean demo) {
+        this.demo = demo;
+        this.updatedAt = Instant.now();
+    }
+
+    /** Geprueft vom WebhookService. */
+    public void webhookSetzen(String url, String secret) {
+        this.webhookUrl = url;
+        this.webhookSecret = secret;
+        this.updatedAt = Instant.now();
+    }
+
+    public void webhookEntfernen() {
+        this.webhookUrl = null;
+        this.webhookSecret = null;
+        this.updatedAt = Instant.now();
+    }
+
+    // ── Kundengruppen ───────────────────────────────────────────────────
+
+    public static final int GRUPPE_STAMM_AB_STANDARD = 5;
+    public static final int GRUPPE_RUHIG_TAGE_STANDARD = 30;
+    public static final int GRUPPE_VERLOREN_TAGE_STANDARD = 90;
+
+    public int getGruppeStammAb() {
+        return gruppeStammAb != null && gruppeStammAb > 0 ? gruppeStammAb : GRUPPE_STAMM_AB_STANDARD;
+    }
+
+    public int getGruppeRuhigTage() {
+        return gruppeRuhigTage != null && gruppeRuhigTage > 0 ? gruppeRuhigTage : GRUPPE_RUHIG_TAGE_STANDARD;
+    }
+
+    public int getGruppeVerlorenTage() {
+        return gruppeVerlorenTage != null && gruppeVerlorenTage > 0 ? gruppeVerlorenTage : GRUPPE_VERLOREN_TAGE_STANDARD;
+    }
+
+    /** Bereich und Reihenfolge prueft Kundengruppe.Regeln#pruefe. */
+    public void updateKundengruppen(int stammAb, int ruhigTage, int verlorenTage) {
+        this.gruppeStammAb = stammAb;
+        this.gruppeRuhigTage = ruhigTage;
+        this.gruppeVerlorenTage = verlorenTage;
         this.updatedAt = Instant.now();
     }
 

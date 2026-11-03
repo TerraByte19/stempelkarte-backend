@@ -6,13 +6,15 @@ import java.time.Instant;
 import java.util.UUID;
 
 /**
- * Ein weiterer Ort eines Ladens fuer die Naehe-Erinnerung und die
- * Geo-Pruefung beim Scannen: Stand auf dem Wochenmarkt, zweiter Eingang,
- * Food-Truck-Platz. Der Hauptort bleibt an Shop.latitude/longitude; Apple
- * nimmt bis zu zehn Orte pro Pass, also hoechstens neun hier.
+ * Ein weiterer Standort eines Ladens: Filiale, Stand auf dem Wochenmarkt,
+ * Food-Truck-Platz. Der Hauptstandort bleibt an Shop.latitude/longitude;
+ * Apple nimmt bis zu zehn Orte pro Pass, also hoechstens neun hier. Wie
+ * viele ein Laden haben darf, setzt der Admin (Shop.maxOrte).
  *
- * Bewusst KEINE Filiale (eigene Karten, eigene Statistik) - nur ein Punkt
- * auf der Karte mehr.
+ * Dient der Naehe-Erinnerung, der Geo-Pruefung beim Scannen und - seit den
+ * Filialen - der Zuordnung von Zugaengen (StaffToken.ortId) und Scans
+ * (ScanLog.ortId, FilialenService). Eine Karte gilt an allen Standorten;
+ * eigene Karten je Filiale gibt es bewusst nicht.
  */
 @Entity
 @Table(name = "shop_orte")

@@ -80,6 +80,12 @@ public class Kampagne {
     @Column(name = "kontrolle_wiedergekommen")
     private Integer kontrolleWiedergekommen;
 
+    // Eigene Automation (model.Automation), die diese Kampagne gestartet hat.
+    // Null = vom Laden von Hand oder von einem festen Automaten. Ueber die
+    // Empfaengerzeilen weiss der Automat so, wer schon dran war.
+    @Column(name = "automation_id", length = 64)
+    private String automationId;
+
     protected Kampagne() {}
 
     public static Kampagne starte(Shop shop, String text, Zielgruppe gruppe, int empfaenger, Instant jetzt) {
@@ -101,6 +107,9 @@ public class Kampagne {
         k.geplantAm = geplantAm;
         return k;
     }
+
+    public void vonAutomation(String automationId) { this.automationId = automationId; }
+    public String getAutomationId() { return automationId; }
 
     /** Geplante Kampagne wird faellig: ab jetzt laeuft sie mit der echten Empfaengerzahl. */
     public void aktivieren(int empfaenger) {

@@ -72,7 +72,9 @@ public class CustomerController {
                                        boolean rewardAvailable, int totalRewards,
                                        // Die Kundenseite schaltet darauf um - der
                                        // Stempelstand allein bleibt beim Freischalten 0.
-                                       boolean willkommenOffen) {
+                                       boolean willkommenOffen,
+                                       // 10er-Karte: Rest des Pakets; sonst null.
+                                       Integer paketRest) {
         static CustomerCardResponse from(CustomerCard cc) {
             return new CustomerCardResponse(
                     cc.getId(),
@@ -81,9 +83,10 @@ public class CustomerController {
                     cc.getCard().getShop().getName(),
                     cc.getStamps(),
                     cc.getCard().getRewardThreshold(),
-                    cc.getStamps() >= cc.getCard().getRewardThreshold(),
+                    cc.getCard().isStamp() && cc.getStamps() >= cc.getCard().getRewardThreshold(),
                     cc.getTotalRewards(),
-                    cc.isWillkommenOffen()
+                    cc.isWillkommenOffen(),
+                    cc.getCard().isPackage() ? cc.getPaketRest() : null
             );
         }
     }

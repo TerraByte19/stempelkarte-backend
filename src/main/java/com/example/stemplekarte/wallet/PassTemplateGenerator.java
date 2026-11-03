@@ -169,7 +169,9 @@ public class PassTemplateGenerator {
         generateIconImages(logoUrl, bgColor, templatePath);
 
         deleteStripImages(templatePath);
-        if (brauchtWillkommensBild(cc)) {
+        if (card.isMember() || card.isPackage()) {
+            // Mitglieds- und 10er-Karte: kein Raster, kein Balken - nur Logo und Felder.
+        } else if (brauchtWillkommensBild(cc)) {
             generateWillkommensStreifen(card.getWelcomeImageUrl(), templatePath);
         } else if (brauchtStreifen(walletStyle, cc)) {
             if ("grid".equalsIgnoreCase(walletStyle)) {

@@ -23,9 +23,21 @@ public interface ScanLogRepository extends JpaRepository<ScanLog, String> {
     // Wird der QR-Code dieser Karte benutzt? Scans seit <after>.
     long countByCardIdAndScannedAtAfter(String cardId, Instant after);
 
+    // Wie viel hat ein Mitarbeiter-Zugang (nach Name) seit <after> gestempelt.
+    long countByShopIdAndStaffLabelAndScannedAtAfter(String shopId, String staffLabel, Instant after);
+
     // Alle Scans eines Shops in einem Zeitfenster (Tages-Detail: Stunden-
     // verteilung fuer EINEN Tag).
     List<ScanLog> findByShopIdAndScannedAtBetweenOrderByScannedAtAsc(String shopId, Instant from, Instant to);
+
+    // Besuche je Kundenkarte fuer die Kundengruppen von Punktekarten (die
+    // zaehlen keine Stempel). Eine Abfrage je Laden: [customerId, cardId, anzahl].
+    @Query("select sl.customerId, sl.cardId, count(sl) from ScanLog sl "
+            + "where sl.shopId = :shopId group by sl.customerId, sl.cardId")
+    List<Object[]> zaehleJeKundenkarte(@Param("shopId") String shopId);
+
+    // Dasselbe fuer EINE Karte (nach einer Korrektur in der Kundenliste).
+    long countByCardIdAndCustomerId(String cardId, String customerId);
 
     // Wie viele UNTERSCHIEDLICHE Kunden haben seit <after> mindestens einmal
     // gescannt. Ehrliche "aktiv"-Kennzahl - der CustomerCard.updatedAt-Weg
