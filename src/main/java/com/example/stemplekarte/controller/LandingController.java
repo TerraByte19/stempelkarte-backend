@@ -16,6 +16,8 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import com.example.stemplekarte.i18n.Texts;
+
 import java.util.List;
 import java.util.Map;
 
@@ -63,6 +65,11 @@ public class LandingController {
     // birthday (JJJJ-MM-TT) und phone sind optional; ob sie Pflicht sind,
     // sagt der Laden (Shop.signup*). Ein aelteres Formular schickt sie nicht.
     // ref: Empfehlungscode eines Freundes (Kunde wirbt Kunde), optional.
+    /** Kurzform fuer die Texttabelle der Kundenseiten. */
+    private static String t(String lang, String key, Object... vars) {
+        return Texts.t(lang, key, vars);
+    }
+
     public record RegisterRequest(String name, String email, String cardId,
                                   boolean marketingConsent, String birthday, String phone, String ref) {}
 
@@ -75,10 +82,10 @@ public class LandingController {
         String telefon = com.example.stemplekarte.model.Shop.FELD_AUS.equals(shop.getSignupPhone())
                 ? null : com.example.stemplekarte.service.Anmeldedaten.telefon(req.phone());
         if (com.example.stemplekarte.model.Shop.FELD_PFLICHT.equals(shop.getSignupBirthday()) && geburtstag == null) {
-            throw new IllegalArgumentException("Bitte Geburtstag angeben");
+            throw new IllegalArgumentException(t(Texts.sprache(shop), "signup.err_birthday"));
         }
         if (com.example.stemplekarte.model.Shop.FELD_PFLICHT.equals(shop.getSignupPhone()) && telefon == null) {
-            throw new IllegalArgumentException("Bitte Handynummer angeben");
+            throw new IllegalArgumentException(t(Texts.sprache(shop), "signup.err_phone"));
         }
         customerService.registerForCard(
                 req.name(), req.email(), req.cardId(), req.marketingConsent(), geburtstag, telefon, req.ref());
@@ -124,16 +131,17 @@ public class LandingController {
         List<Reward> katalog = rewardService.list(card);
         Reward ziel = RewardService.naechstesZiel(katalog, stand);
 
-        String zielZeile = zielZeileText(ziel, stand);
-        String katalogHtml = katalogHtml(katalog, stand);
+        String lang = Texts.sprache(customer, card.getShop());
+        String zielZeile = zielZeileText(lang, ziel, stand);
+        String katalogHtml = katalogHtml(lang, katalog, stand);
 
         String html = """
                 <!DOCTYPE html>
-                <html lang="de">
+                <html%s>
                 <head>
                     <meta charset="UTF-8">
                     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                    <title>%s \u2014 Punktekarte</title>
+                    <title>%s \u2014 %s</title>
                     <style>
                         * { margin: 0; padding: 0; box-sizing: border-box; }
                         body {
@@ -212,14 +220,14 @@ public class LandingController {
                             </div>
                         </div>
                         <div class="customer-name">\uD83D\uDC64 %s</div>
-                        <div class="stand-label">Punktestand</div>
+                        <div class="stand-label">%s</div>
                         <div class="stand" id="stand">%s</div>
                         <div class="ziel" id="ziel">%s</div>
-                        <div class="katalog-titel">Pr\u00e4mien</div>
+                        <div class="katalog-titel">%s</div>
                         <div id="katalog">%s</div>
                         <div class="wallet-buttons">
                             <a href="%s" class="btn-apple" id="apple-btn">
-                                \uD83C\uDF4E Zu Apple Wallet hinzuf\u00fcgen
+                                %s
                             </a>
                             %s
                             %s
@@ -232,6 +240,9 @@ public class LandingController {
                         // stehen. Deshalb wird hier nur der DOM ausgetauscht.
                         const custId = %s;
                         const cId = %s;
+                        const nextTpl = %s;
+                        const noneText = %s;
+                        const unitText = %s;
 
                         function zeichne(d) {
                             var stand = document.getElementById('stand');
@@ -239,8 +250,8 @@ public class LandingController {
                             var ziel = document.getElementById('ziel');
                             if (ziel) {
                                 ziel.textContent = d.zielName
-                                    ? ('N\u00e4chste Pr\u00e4mie: ' + d.zielName + ' - noch ' + d.fehlendText)
-                                    : 'Noch keine Pr\u00e4mie hinterlegt';
+                                    ? nextTpl.replace('{0}', d.zielName).replace('{1}', d.fehlendText)
+                                    : noneText;
                             }
                             if (Array.isArray(d.katalog)) {
                                 // Aufbau ueber die DOM-Schnittstelle, NICHT ueber
@@ -266,7 +277,7 @@ public class LandingController {
                                         name.textContent = r.name;
                                         var cost = document.createElement('span');
                                         cost.className = 'reward-cost';
-                                        cost.textContent = r.costText + ' Punkte';
+                                        cost.textContent = r.costText + ' ' + unitText;
                                         head.appendChild(name);
                                         head.appendChild(cost);
 
@@ -318,7 +329,7 @@ public class LandingController {
                 </body>
                 </html>
                 """.formatted(
-                escapeHtml(shopName), safeCssColor(bgColor),
+                Texts.htmlAttrs(lang), escapeHtml(shopName), t(lang, "points.title"), safeCssColor(bgColor),
                 // Logo-URL steht in einem Attribut mit einfachen
                 // Anfuehrungszeichen - ein Apostroph darin bricht daraus aus.
                 // escapeHtml ersetzt ihn durch &#39;.
@@ -326,19 +337,22 @@ public class LandingController {
                         : "<img src='" + escapeHtml(logoUrl) + "' class='shop-logo' alt='Logo'>",
                 escapeHtml(shopName),
                 escapeHtml(customer.getName()),
+                t(lang, "points.balance"),
                 PointsMath.formatiere(stand),
                 zielZeile,
+                t(lang, "points.rewards"),
                 katalogHtml,
-                escapeHtml(applePassUrl),
+                escapeHtml(applePassUrl), t(lang, "card.apple"),
                 googleSaveUrl.isBlank() ? ""
                         : "<a href='" + escapeHtml(googleSaveUrl) + "' class='btn-google' id='google-btn'>" +
-                                "\uD83E\uDD16 Zu Google Wallet hinzuf\u00fcgen</a>",
-                stufenZeile(card, cc) + bewertungsLinks(card.getShop(), customerId, cardId) + empfehlungsBlock(card, cc)
-                        + demoBlock(card, customerId, cardId),
+                                t(lang, "card.google") + "</a>",
+                stufenZeile(lang, card, cc) + bewertungsLinks(lang, card.getShop(), customerId, cardId)
+                        + empfehlungsBlock(lang, card, cc) + demoBlock(lang, card, customerId, cardId),
                 // Die beiden IDs stehen in JS-Zeichenketten. toJsString
                 // liefert sie inklusive Anfuehrungszeichen - im Vorlagentext
                 // stehen an dieser Stelle deshalb KEINE.
-                toJsString(customerId), toJsString(cardId)
+                toJsString(customerId), toJsString(cardId),
+                toJsString(t(lang, "points.next")), toJsString(t(lang, "points.none")), toJsString(t(lang, "points.unit"))
         );
 
         log.info("Landing-Punktekarte geladen: customerCard={} card={} punkte={}",
@@ -352,25 +366,23 @@ public class LandingController {
 
     /** Die Zeile unter dem Punktestand. Ohne Praemie steht dort kein
      *  erfundenes Ziel, sondern der ehrliche Hinweis. */
-    private String zielZeileText(Reward ziel, long stand) {
-        if (ziel == null) return "Noch keine Pr\u00e4mie hinterlegt";
+    private String zielZeileText(String lang, Reward ziel, long stand) {
+        if (ziel == null) return t(lang, "points.none");
         long fehlend = Math.max(0, ziel.getCostPointsX100() - stand);
         // Der Name kommt vom Laden und landet roh im HTML. Im Katalog
         // darunter wird er escaped - hier fehlte es, und genau diese
         // Asymmetrie ist die Luecke.
         String name = escapeHtml(ziel.getName());
         return fehlend == 0
-                ? name + " ist bereit!"
-                : "N\u00e4chste Pr\u00e4mie: " + name
-                        + " - noch " + PointsMath.formatiere(fehlend);
+                ? t(lang, "points.ready", name)
+                : t(lang, "points.next", name, PointsMath.formatiere(fehlend));
     }
 
     /** Katalog mit Fortschrittsbalken. Der Balken zeigt, wie weit der Stand
      *  auf die jeweilige Praemie zugelaufen ist. */
-    private String katalogHtml(List<Reward> katalog, long stand) {
+    private String katalogHtml(String lang, List<Reward> katalog, long stand) {
         if (katalog.isEmpty()) {
-            return "<div class='leer'>Dieser Laden hat noch keine Pr\u00e4mien "
-                    + "hinterlegt. Deine Punkte sammeln sich trotzdem.</div>";
+            return "<div class='leer'>" + t(lang, "points.empty") + "</div>";
         }
         StringBuilder sb = new StringBuilder();
         for (Reward r : katalog) {
@@ -384,7 +396,8 @@ public class LandingController {
               .append(escapeHtml(r.getName()))
               .append("</span><span class='reward-cost'>")
               .append(PointsMath.formatiere(r.getCostPointsX100()))
-              .append(" Punkte</span></div><div class='bar'><div class='bar-fill' style='width:")
+              .append(" ").append(t(lang, "points.unit"))
+              .append("</span></div><div class='bar'><div class='bar-fill' style='width:")
               .append(prozent)
               .append("%'></div></div></div>");
         }
@@ -421,6 +434,7 @@ public class LandingController {
             CustomerCard cc = customerService.getOrCreateCustomerCard(customerId, cardId);
             Card card = cc.getCard();
             Customer customer = cc.getCustomer();
+            String lang = Texts.sprache(customer, card.getShop());
 
             // Punktekarten haben eine eigene Seite. Der Stempel-Weg darunter
             // bleibt unangetastet - er laeuft in echten Laeden.
@@ -467,11 +481,11 @@ public class LandingController {
 
             String html = """
                     <!DOCTYPE html>
-                    <html lang="de">
+                    <html%s>
                     <head>
                         <meta charset="UTF-8">
                         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                        <title>%s — Treuekarte</title>
+                        <title>%s — %s</title>
                         <style>
                             * { margin: 0; padding: 0; box-sizing: border-box; }
                             body {
@@ -591,13 +605,13 @@ public class LandingController {
                             <div class="customer-name">👤 %s</div>
                             %s
                             <div id="stempel-teil"%s>
-                            <div class="progress">%d von %d Stempeln</div>
+                            <div class="progress">%s</div>
                             <div class="stamps-grid">%s</div>
                             <div class="reward-text">%s</div>
                             </div>
                             <div class="wallet-buttons">
                                 <a href="%s" class="btn-apple" id="apple-btn">
-                                    🍎 Zu Apple Wallet hinzufügen
+                                    %s
                                 </a>
                                 %s
                                 %s
@@ -618,6 +632,9 @@ public class LandingController {
                             // 0 - ein Vergleich nur ueber stamps saehe die Freischaltung
                             // nie. Deshalb das eigene Feld willkommenOffen.
                             let gesperrt = %s;
+                            const progressTpl = %s;
+                            const readyTpl = %s;
+                            const leftTpl = %s;
 
                             function freischalten() {
                                 gesperrt = false;
@@ -641,11 +658,11 @@ public class LandingController {
                                 var grid = document.querySelector('.stamps-grid');
                                 if (grid) grid.innerHTML = h;
                                 var prog = document.querySelector('.progress');
-                                if (prog) prog.textContent = shown + ' von ' + threshold + ' Stempeln';
+                                if (prog) prog.textContent = progressTpl.replace('{0}', shown).replace('{1}', threshold);
                                 var rw = document.querySelector('.reward-text');
                                 if (rw) rw.textContent = (n >= threshold)
-                                    ? '🎉 ' + rewardText + ' verfügbar!'
-                                    : 'Noch ' + (threshold - n) + ' Stempel bis: ' + rewardText;
+                                    ? readyTpl.replace('{0}', rewardText)
+                                    : leftTpl.replace('{0}', threshold - n).replace('{1}', rewardText);
                             }
 
                             async function check() {
@@ -695,28 +712,30 @@ public class LandingController {
                     </body>
                     </html>
                     """.formatted(
-                    escapeHtml(shopName), safeCssColor(bgColor),
+                    Texts.htmlAttrs(lang), escapeHtml(shopName), t(lang, "stamp.title"), safeCssColor(bgColor),
                     logoUrl.isBlank() ? ""
                             : "<img src='" + escapeHtml(logoUrl) + "' class='shop-logo' alt='Logo'>",
                     escapeHtml(shopName),
                     escapeHtml(customer.getName()),
-                    willkommenBox(cc),
+                    willkommenBox(lang, cc),
                     cc.isWillkommenOffen() ? " class=\"hidden\"" : "",
-                    stampsShown, threshold,
+                    t(lang, "stamp.progress", stampsShown, threshold),
                     stampsHtml,
-                    stamps >= threshold ? "🎉 " + escapeHtml(card.getRewardText()) + " verfügbar!" :
-                            "Noch " + (threshold - stamps) + " Stempel bis: " + escapeHtml(card.getRewardText()),
-                    escapeHtml(applePassUrl),
+                    stamps >= threshold ? t(lang, "stamp.reward_ready", escapeHtml(card.getRewardText()))
+                            : t(lang, "stamp.reward_left", threshold - stamps, escapeHtml(card.getRewardText())),
+                    escapeHtml(applePassUrl), t(lang, "card.apple"),
                     googleSaveUrl.isBlank() ? ""
                             : "<a href='" + escapeHtml(googleSaveUrl) + "' class='btn-google' id='google-btn'>" +
-                                    "🤖 Zu Google Wallet hinzufügen</a>",
-                    stufenZeile(card, cc) + bewertungsLinks(card.getShop(), customerId, cardId) + empfehlungsBlock(card, cc)
-                        + demoBlock(card, customerId, cardId),
+                                    t(lang, "card.google") + "</a>",
+                    stufenZeile(lang, card, cc) + bewertungsLinks(lang, card.getShop(), customerId, cardId)
+                        + empfehlungsBlock(lang, card, cc) + demoBlock(lang, card, customerId, cardId),
                     // Parameter fuer das JS: custId, cId, threshold, rewardText (als JS-String), stamps
                     toJsString(customerId), toJsString(cardId), threshold,
                     toJsString(card.getRewardText()), stamps,
                     // Nur true oder false - nichts vom Laden landet hier im JS.
-                    String.valueOf(cc.isWillkommenOffen())
+                    String.valueOf(cc.isWillkommenOffen()),
+                    toJsString(t(lang, "stamp.progress")), toJsString(t(lang, "stamp.reward_ready")),
+                    toJsString(t(lang, "stamp.reward_left"))
             );
 
             log.info("Landing-Karte geladen: customerCard={} card={} stamps={} threshold={}",
@@ -748,17 +767,18 @@ public class LandingController {
     public ResponseEntity<String> newCustomerPage(@PathVariable String cardId) {
         try {
             Card card = cardService.getById(cardId);
+            String lang = Texts.sprache(card.getShop());
             String shopName = card.getShop().getName();
             String bgColor = farbeVon(card);
             String logoUrl = logoVon(card);
 
             String html = """
                     <!DOCTYPE html>
-                    <html lang="de">
+                    <html%s>
                     <head>
                         <meta charset="UTF-8">
                         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                        <title>%s — Stempelkarte</title>
+                        <title>%s — %s</title>
                         <style>
                             * { margin: 0; padding: 0; box-sizing: border-box; }
                             body {
@@ -860,30 +880,29 @@ public class LandingController {
                             </div>
                             <div class="error" id="error"></div>
                             <div class="form" id="form">
-                                <input type="text" id="name" placeholder="Dein Name" required />
-                                <input type="email" id="email" placeholder="Deine E-Mail" required />
+                                <input type="text" id="name" placeholder="%s" required />
+                                <input type="email" id="email" placeholder="%s" required />
                                 %s
                                 <label class="consent">
                                     <input type="checkbox" id="consent" />
-                                    <span>Ich möchte Angebote von %s per E-Mail erhalten.
-                                          Abmeldung jederzeit über den Link in jeder Mail möglich.</span>
+                                    <span>%s</span>
                                 </label>
                                 <button class="btn" onclick="getCard()">
-                                    Karte holen 🎴
+                                    %s
                                 </button>
                             </div>
                             <div class="success" id="success">
                                 <div class="success-icon">📧</div>
-                                <div class="success-title">Fast geschafft!</div>
-                                <div class="success-text">
-                                    Wir haben dir eine E-Mail geschickt.<br>
-                                    Klick auf den Link darin, um deine Stempelkarte
-                                    direkt aufs Handy zu bekommen.
-                                </div>
+                                <div class="success-title">%s</div>
+                                <div class="success-text">%s</div>
                             </div>
                             %s
                         </div>
                         <script>
+                            const errFields = %s;
+                            const errBirthday = %s;
+                            const errPhone = %s;
+                            const errGeneric = %s;
                             // Empfehlungslink eines Freundes (?ref=CODE) ins Feld, falls es eins gibt.
                             (function () {
                                 const p = new URLSearchParams(location.search).get('ref')
@@ -905,17 +924,17 @@ public class LandingController {
 
                                 if (!name || !email) {
                                     errorEl.style.display = 'block'
-                                    errorEl.textContent = 'Bitte Name und E-Mail eingeben'
+                                    errorEl.textContent = errFields
                                     return
                                 }
                                 if (bEl && bEl.dataset.required === '1' && !birthday) {
                                     errorEl.style.display = 'block'
-                                    errorEl.textContent = 'Bitte Geburtstag angeben'
+                                    errorEl.textContent = errBirthday
                                     return
                                 }
                                 if (pEl && pEl.dataset.required === '1' && !phone) {
                                     errorEl.style.display = 'block'
-                                    errorEl.textContent = 'Bitte Handynummer angeben'
+                                    errorEl.textContent = errPhone
                                     return
                                 }
 
@@ -932,7 +951,7 @@ public class LandingController {
                                     })
                                     if (!res.ok) {
                                         // Der Server sagt, was fehlt (Geburtstag, Nummer) - das anzeigen.
-                                        let msg = 'Fehler - bitte nochmal versuchen'
+                                        let msg = errGeneric
                                         try { const j = await res.json(); if (j && j.error) msg = j.error } catch (e2) {}
                                         throw new Error(msg)
                                     }
@@ -944,22 +963,27 @@ public class LandingController {
                                     document.getElementById('success').style.display = 'block'
                                 } catch(e) {
                                     errorEl.style.display = 'block'
-                                    errorEl.textContent = (e && e.message) ? e.message : 'Fehler - bitte nochmal versuchen'
+                                    errorEl.textContent = (e && e.message) ? e.message : errGeneric
                                 }
                             }
                         </script>
                     </body>
                     </html>
                     """.formatted(
-                    escapeHtml(shopName), safeCssColor(bgColor),
+                    Texts.htmlAttrs(lang), escapeHtml(shopName), t(lang, "signup.title"), safeCssColor(bgColor),
                     logoUrl.isBlank() ? ""
                             : "<img src='" + escapeHtml(logoUrl) + "' class='logo' alt='Logo'>",
                     escapeHtml(shopName),
-                    anmeldeTitel(card),
-                    anmeldeText(card),
-                    anmeldeFelder(card.getShop()) + empfehlungsFeld(card),
-                    escapeHtml(shopName),
-                    bewertungsLink(card.getShop()),
+                    anmeldeTitel(lang, card),
+                    anmeldeText(lang, card),
+                    t(lang, "signup.name"), t(lang, "signup.email"),
+                    anmeldeFelder(lang, card.getShop()) + empfehlungsFeld(lang, card),
+                    t(lang, "signup.consent", escapeHtml(shopName)),
+                    t(lang, "signup.button"),
+                    t(lang, "signup.sent_title"), t(lang, "signup.sent_text"),
+                    bewertungsLink(lang, card.getShop()),
+                    toJsString(t(lang, "signup.err_fields")), toJsString(t(lang, "signup.err_birthday")),
+                    toJsString(t(lang, "signup.err_phone")), toJsString(t(lang, "signup.err_generic")),
                     // cardId steht in einer JS-Zeichenkette - toJsString
                     // liefert die Anfuehrungszeichen mit.
                     toJsString(cardId)
@@ -979,12 +1003,16 @@ public class LandingController {
      * ihren eigenen CSS-Bloecken nichts Neues lernen muessen.
      */
     static String bewertungsLink(com.example.stemplekarte.model.Shop shop) {
+        return bewertungsLink(Texts.STANDARD, shop);
+    }
+
+    static String bewertungsLink(String lang, com.example.stemplekarte.model.Shop shop) {
         String url = shop != null ? shop.getGoogleReviewUrl() : null;
         if (url == null || url.isBlank()) return "";
         return "<a href='" + escapeHtml(url) + "' target='_blank' rel='noopener' class='review-link' "
                 + "style='display:block;margin-top:14px;text-align:center;font-size:14px;"
                 + "color:inherit;opacity:.85;text-decoration:underline'>"
-                + "⭐ Bewerte uns bei Google</a>";
+                + t(lang, "card.review_google") + "</a>";
     }
 
     /**
@@ -993,13 +1021,17 @@ public class LandingController {
      * IDs sind Server-IDs, stehen aber in einem Attribut - escapeHtml.
      */
     static String bewertungsLinks(com.example.stemplekarte.model.Shop shop, String customerId, String cardId) {
-        String google = bewertungsLink(shop);
+        return bewertungsLinks(Texts.STANDARD, shop, customerId, cardId);
+    }
+
+    static String bewertungsLinks(String lang, com.example.stemplekarte.model.Shop shop, String customerId, String cardId) {
+        String google = bewertungsLink(lang, shop);
         if (shop == null || !shop.isRueckmeldungAktiv()) return google;
         String rueck = "<a href='/bewertung/" + escapeHtml(customerId) + "/" + escapeHtml(cardId)
                 + "' class='review-link' "
                 + "style='display:block;margin-top:14px;text-align:center;font-size:14px;"
                 + "color:inherit;opacity:.85;text-decoration:underline'>"
-                + "💬 Wie war's? Sag es " + escapeHtml(shop.getName()) + "</a>";
+                + t(lang, "card.feedback", escapeHtml(shop.getName())) + "</a>";
         return rueck + google;
     }
 
@@ -1025,14 +1057,15 @@ public class LandingController {
                         .format(cc.getCreatedAt().atZone(java.time.ZoneId.of("Europe/Berlin")))
                 : "";
         int besuche = cc.getStamps();
+        String lang = Texts.sprache(customer, card.getShop());
 
         String html = """
                 <!DOCTYPE html>
-                <html lang="de">
+                <html%s>
                 <head>
                     <meta charset="UTF-8">
                     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                    <title>%s — Mitgliedskarte</title>
+                    <title>%s — %s</title>
                     <style>
                         * { margin: 0; padding: 0; box-sizing: border-box; }
                         body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: #f5f5f7;
@@ -1063,28 +1096,28 @@ public class LandingController {
                                 <div class="card-name">%s</div>
                             </div>
                         </div>
-                        <div class="mitglied-label">Mitglied</div>
+                        <div class="mitglied-label">%s</div>
                         <div class="mitglied-name">%s</div>
-                        <div class="zeile"><span>Mitglied seit</span><b>%s</b></div>
-                        <div class="zeile"><span>Besuche</span><b id="besuche">%d</b></div>
-                        <a href="%s" class="btn btn-apple">🍎 Zu Apple Wallet hinzufügen</a>
+                        <div class="zeile"><span>%s</span><b>%s</b></div>
+                        <div class="zeile"><span>%s</span><b id="besuche">%d</b></div>
+                        <a href="%s" class="btn btn-apple">%s</a>
                         %s
                         %s
                     </div>
                 </body>
                 </html>
                 """.formatted(
-                escapeHtml(shopName), safeCssColor(bgColor),
+                Texts.htmlAttrs(lang), escapeHtml(shopName), t(lang, "member.title"), safeCssColor(bgColor),
                 logoUrl.isBlank() ? ""
                         : "<img src='" + escapeHtml(logoUrl) + "' class='shop-logo' alt='Logo'>",
-                escapeHtml(shopName), escapeHtml(card.getName()),
-                escapeHtml(customer.getName()), seit, besuche,
-                escapeHtml(applePassUrl),
+                escapeHtml(shopName), escapeHtml(card.getName()), t(lang, "member.label"),
+                escapeHtml(customer.getName()), t(lang, "member.since"), seit, t(lang, "member.visits"), besuche,
+                escapeHtml(applePassUrl), t(lang, "card.apple"),
                 googleSaveUrl.isBlank() ? ""
                         : "<a href='" + escapeHtml(googleSaveUrl) + "' class='btn btn-google' id='google-btn'>" +
-                                "🤖 Zu Google Wallet hinzufügen</a>",
-                stufenZeile(card, cc) + bewertungsLinks(card.getShop(), customerId, cardId)
-                        + demoBlock(card, customerId, cardId)
+                                t(lang, "card.google") + "</a>",
+                stufenZeile(lang, card, cc) + bewertungsLinks(lang, card.getShop(), customerId, cardId)
+                        + demoBlock(lang, card, customerId, cardId)
         );
         log.info("Landing-Mitgliedskarte geladen: customerCard={} card={} besuche={}", cc.getId(), cardId, besuche);
         return ResponseEntity.ok(mitKontrast(html, bgColor, card.getShop().getNameColor()));
@@ -1107,19 +1140,18 @@ public class LandingController {
         }
         String applePassUrl = baseUrl + "/api/customer/" + customerId + "/card/" + cardId + "/apple-pass";
         int rest = cc.getPaketRest();
+        String lang = Texts.sprache(customer, card.getShop());
         String hinweis = rest > 0
                 ? ""
-                : "<div class='leer'>" + (cc.getPaketeGekauft() > 0
-                        ? "Dein Paket ist aufgebraucht. Ein neues gibt's an der Kasse."
-                        : "Noch kein Paket geladen. Dein erstes Paket gibt's an der Kasse.") + "</div>";
+                : "<div class='leer'>" + t(lang, cc.getPaketeGekauft() > 0 ? "package.used_up" : "package.none") + "</div>";
 
         String html = """
                 <!DOCTYPE html>
-                <html lang="de">
+                <html%s>
                 <head>
                     <meta charset="UTF-8">
                     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                    <title>%s — 10er-Karte</title>
+                    <title>%s — %s</title>
                     <style>
                         * { margin: 0; padding: 0; box-sizing: border-box; }
                         body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: #f5f5f7;
@@ -1153,34 +1185,34 @@ public class LandingController {
                                 <div class="card-name">%s</div>
                             </div>
                         </div>
-                        <div class="rest-label">Noch übrig</div>
+                        <div class="rest-label">%s</div>
                         <div class="rest" id="rest">%d</div>
                         <div class="rest-einheit">%s</div>
                         %s
-                        <div class="zeile"><span>Paket</span><b>%s</b></div>
-                        <div class="zeile"><span>Genutzt</span><b id="besuche">%d</b></div>
-                        <div class="zeile"><span>Name</span><b>%s</b></div>
-                        <a href="%s" class="btn btn-apple">🍎 Zu Apple Wallet hinzufügen</a>
+                        <div class="zeile"><span>%s</span><b>%s</b></div>
+                        <div class="zeile"><span>%s</span><b id="besuche">%d</b></div>
+                        <div class="zeile"><span>%s</span><b>%s</b></div>
+                        <a href="%s" class="btn btn-apple">%s</a>
                         %s
                         %s
                     </div>
                 </body>
                 </html>
                 """.formatted(
-                escapeHtml(shopName), safeCssColor(bgColor),
+                Texts.htmlAttrs(lang), escapeHtml(shopName), t(lang, "package.title"), safeCssColor(bgColor),
                 logoUrl.isBlank() ? ""
                         : "<img src='" + escapeHtml(logoUrl) + "' class='shop-logo' alt='Logo'>",
-                escapeHtml(shopName), escapeHtml(card.getName()),
+                escapeHtml(shopName), escapeHtml(card.getName()), t(lang, "package.left"),
                 rest, escapeHtml(card.getPaketEinheit()),
                 hinweis,
-                escapeHtml(card.paketText()), cc.getStamps(),
-                escapeHtml(customer.getName()),
-                escapeHtml(applePassUrl),
+                t(lang, "package.package"), escapeHtml(card.paketText()), t(lang, "package.used"), cc.getStamps(),
+                t(lang, "package.name"), escapeHtml(customer.getName()),
+                escapeHtml(applePassUrl), t(lang, "card.apple"),
                 googleSaveUrl.isBlank() ? ""
                         : "<a href='" + escapeHtml(googleSaveUrl) + "' class='btn btn-google' id='google-btn'>" +
-                                "🤖 Zu Google Wallet hinzufügen</a>",
-                stufenZeile(card, cc) + bewertungsLinks(card.getShop(), customerId, cardId)
-                        + demoBlock(card, customerId, cardId)
+                                t(lang, "card.google") + "</a>",
+                stufenZeile(lang, card, cc) + bewertungsLinks(lang, card.getShop(), customerId, cardId)
+                        + demoBlock(lang, card, customerId, cardId)
         );
         log.info("Landing-10er-Karte geladen: customerCard={} card={} rest={}", cc.getId(), cardId, rest);
         return ResponseEntity.ok(mitKontrast(html, bgColor, card.getShop().getNameColor()));
@@ -1191,33 +1223,36 @@ public class LandingController {
      * /api/public/demo/stempel, was an der Kasse passieren wuerde, zeigt die
      * Meldung und laedt die Seite neu. Nur bei Demo-Laeden im Markup.
      */
-    static String demoBlock(Card card, String customerId, String cardId) {
+    static String demoBlock(String lang, Card card, String customerId, String cardId) {
         if (card == null || card.getShop() == null || !card.getShop().isDemo()) return "";
+        // Knopftext und Fehlermeldung als data-Attribute: so landet kein
+        // uebersetzter Text (mit Apostroph) roh im Inline-JS.
+        String next = escapeHtml(t(lang, "card.demo_next"));
         return "<div class='demo' style='margin-top:18px;padding:14px;border-radius:12px;"
                 + "background:rgba(255,255,255,.14);text-align:center;font-size:14px'>"
-                + "<div style='font-weight:600;margin-bottom:6px'>🧪 Demo</div>"
-                + "<div style='opacity:.9;margin-bottom:10px'>Spiel die Kasse: ein Tipp = ein Besuch im Laden.</div>"
+                + "<div style='font-weight:600;margin-bottom:6px'>" + t(lang, "card.demo_title") + "</div>"
+                + "<div style='opacity:.9;margin-bottom:10px'>" + t(lang, "card.demo_text") + "</div>"
                 + "<button type='button' id='demo-btn' data-cid='" + escapeHtml(customerId) + "' data-card='"
-                + escapeHtml(cardId) + "' "
+                + escapeHtml(cardId) + "' data-next='" + next + "' data-err='" + escapeHtml(t(lang, "card.demo_error")) + "' "
                 + "onclick=\"var b=this;b.disabled=true;b.textContent='…';"
                 + "fetch('/api/public/demo/stempel',{method:'POST',headers:{'Content-Type':'application/json'},"
                 + "body:JSON.stringify({customerId:b.dataset.cid,cardId:b.dataset.card})})"
                 + ".then(function(r){return r.json()}).then(function(j){"
-                + "var m=document.getElementById('demo-msg');m.textContent=j.message||j.error||'Fehler';"
-                + "if(j.action){setTimeout(function(){location.reload()},1500)}else{b.disabled=false;b.textContent='Nächster Schritt'}"
-                + "}).catch(function(){b.disabled=false;b.textContent='Nächster Schritt'})\" "
+                + "var m=document.getElementById('demo-msg');m.textContent=j.message||j.error||b.dataset.err;"
+                + "if(j.action){setTimeout(function(){location.reload()},1500)}else{b.disabled=false;b.textContent=b.dataset.next}"
+                + "}).catch(function(){b.disabled=false;b.textContent=b.dataset.next})\" "
                 + "style='border:0;border-radius:8px;padding:9px 14px;font-size:14px;font-weight:600;"
-                + "cursor:pointer;background:rgba(255,255,255,.92);color:#222'>Nächster Schritt</button>"
+                + "cursor:pointer;background:rgba(255,255,255,.92);color:#222'>" + next + "</button>"
                 + "<div id='demo-msg' style='margin-top:8px;font-size:13px;opacity:.9'></div>"
                 + "</div>";
     }
 
     /** Status-Zeile (Bronze, Silber, Gold) auf der Kartenseite, nur bei Karten mit Stufen. */
-    static String stufenZeile(Card card, CustomerCard cc) {
+    static String stufenZeile(String lang, Card card, CustomerCard cc) {
         com.example.stemplekarte.service.Stufen.Stufe s = com.example.stemplekarte.service.Stufen.von(card, cc);
         if (s == null) return "";
         return "<div class='stufe' style='margin-top:14px;text-align:center;font-size:14px;opacity:.9'>"
-                + "🏅 Dein Status: <b>"
+                + t(lang, "card.status") + "<b>"
                 + escapeHtml(com.example.stemplekarte.service.Stufen.text(
                         s, com.example.stemplekarte.service.Stufen.besuche(card, cc)))
                 + "</b></div>";
@@ -1228,9 +1263,13 @@ public class LandingController {
      * eingeschalteter Empfehlung. Das JS der Seite fuellt es aus ?ref=.
      */
     static String empfehlungsFeld(Card card) {
+        return empfehlungsFeld(Texts.STANDARD, card);
+    }
+
+    static String empfehlungsFeld(String lang, Card card) {
         if (card == null || !card.isEmpfehlungAktiv()) return "";
         return "<input type='text' id='ref' maxlength='12' autocapitalize='characters' "
-                + "placeholder='Empfehlungscode (optional)' />";
+                + "placeholder='" + escapeHtml(t(lang, "signup.ref")) + "' />";
     }
 
     /**
@@ -1239,22 +1278,23 @@ public class LandingController {
      * Empfehlung und wenn die Karte einen Code hat. Link und Code sind
      * Server-Werte, stehen aber in Attributen - escapeHtml.
      */
-    String empfehlungsBlock(Card card, CustomerCard cc) {
+    String empfehlungsBlock(String lang, Card card, CustomerCard cc) {
         if (!com.example.stemplekarte.service.EmpfehlungService.sichtbar(card, cc)) return "";
         String link = empfehlungService.link(cc);
         return "<div class='empfehlung' style='margin-top:18px;padding:14px;border-radius:12px;"
                 + "background:rgba(255,255,255,.14);text-align:center;font-size:14px'>"
-                + "<div style='font-weight:600;margin-bottom:6px'>👥 Freunde werben</div>"
+                + "<div style='font-weight:600;margin-bottom:6px'>" + t(lang, "card.ref_title") + "</div>"
                 + "<div style='opacity:.9;margin-bottom:8px'>"
                 + escapeHtml(com.example.stemplekarte.service.EmpfehlungService.werbeText(card)) + "</div>"
-                + "<div style='font-size:12px;opacity:.85;margin-bottom:10px'>Dein Code: <b>"
+                + "<div style='font-size:12px;opacity:.85;margin-bottom:10px'>" + t(lang, "card.ref_code") + "<b>"
                 + escapeHtml(cc.getEmpfehlungsCode()) + "</b></div>"
                 + "<button type='button' id='empfehlung-btn' data-link='" + escapeHtml(link) + "' "
+                + "data-copied='" + escapeHtml(t(lang, "card.ref_copied")) + "' "
                 + "onclick=\"var l=this.dataset.link,b=this;"
                 + "if(navigator.share){navigator.share({url:l}).catch(function(){})}"
-                + "else if(navigator.clipboard){navigator.clipboard.writeText(l).then(function(){b.textContent='Link kopiert'})}\" "
+                + "else if(navigator.clipboard){navigator.clipboard.writeText(l).then(function(){b.textContent=b.dataset.copied})}\" "
                 + "style='border:0;border-radius:8px;padding:9px 14px;font-size:14px;font-weight:600;"
-                + "cursor:pointer;background:rgba(255,255,255,.92);color:#222'>Link teilen</button>"
+                + "cursor:pointer;background:rgba(255,255,255,.92);color:#222'>" + escapeHtml(t(lang, "card.ref_share")) + "</button>"
                 + "</div>";
     }
 
@@ -1264,12 +1304,17 @@ public class LandingController {
      * Seite; der Server prueft es trotzdem noch einmal.
      */
     public static String anmeldeFelder(com.example.stemplekarte.model.Shop shop) {
+        return anmeldeFelder(Texts.STANDARD, shop);
+    }
+
+    public static String anmeldeFelder(String lang, com.example.stemplekarte.model.Shop shop) {
         if (shop == null) return "";
+        String optional = t(lang, "signup.optional");
         StringBuilder sb = new StringBuilder();
         String geb = shop.getSignupBirthday();
         if (!com.example.stemplekarte.model.Shop.FELD_AUS.equals(geb)) {
             boolean pflicht = com.example.stemplekarte.model.Shop.FELD_PFLICHT.equals(geb);
-            sb.append("<label class='feld'><span>Geburtstag").append(pflicht ? "" : " (optional)").append("</span>")
+            sb.append("<label class='feld'><span>").append(t(lang, "signup.birthday")).append(pflicht ? "" : optional).append("</span>")
               .append("<input type='date' id='birthday' max='")
               .append(java.time.LocalDate.now(java.time.ZoneId.of("Europe/Berlin")))
               .append("' data-required='").append(pflicht ? "1" : "0").append("' /></label>");
@@ -1277,40 +1322,35 @@ public class LandingController {
         String tel = shop.getSignupPhone();
         if (!com.example.stemplekarte.model.Shop.FELD_AUS.equals(tel)) {
             boolean pflicht = com.example.stemplekarte.model.Shop.FELD_PFLICHT.equals(tel);
-            sb.append("<input type='tel' id='phone' maxlength='30' placeholder='Handynummer")
-              .append(pflicht ? "" : " (optional)")
+            sb.append("<input type='tel' id='phone' maxlength='30' placeholder='")
+              .append(escapeHtml(t(lang, "signup.phone"))).append(pflicht ? "" : optional)
               .append("' data-required='").append(pflicht ? "1" : "0").append("' />");
         }
         return sb.toString();
     }
 
     /** Ohne Angebot steht hier wortgleich der bisherige Text. */
-    static String anmeldeTitel(Card card) {
+    static String anmeldeTitel(String lang, Card card) {
         return card.isWillkommenAktiv()
                 ? "🎁 " + escapeHtml(card.getWillkommenText())
-                : "🎉 Stempelkarte holen!";
+                : t(lang, "signup.headline");
     }
 
-    static String anmeldeText(Card card) {
-        return card.isWillkommenAktiv()
-                ? "Trag deinen Namen und deine E-Mail ein und hol dir die Karte in die Wallet. "
-                        + "Zeig sie an der Kasse, und das Geschenk gehört dir. Danach sammelst du Stempel."
-                : "Trag deinen Namen und deine E-Mail ein und bekomme "
-                        + "die Stempelkarte direkt in deine Wallet!";
+    static String anmeldeText(String lang, Card card) {
+        return t(lang, card.isWillkommenAktiv() ? "signup.text_gift" : "signup.text");
     }
 
     /**
      * Geschenk-Box der gesperrten Kundenseite, leer ohne Sperre. Der Text
      * kommt vom Laden und wird deshalb escaped.
      */
-    static String willkommenBox(CustomerCard cc) {
+    static String willkommenBox(String lang, CustomerCard cc) {
         if (!cc.isWillkommenOffen()) return "";
         String geschenk = cc.getWillkommenText() != null ? cc.getWillkommenText() : Card.WILLKOMMEN_STANDARD;
         return "<div class=\"welcome-box\" id=\"welcome-box\">"
                 + "<div class=\"welcome-icon\">🎁</div>"
                 + "<div class=\"welcome-title\">" + escapeHtml(geschenk) + "</div>"
-                + "<div class=\"welcome-text\">Zeig diese Karte an der Kasse. "
-                + "Danach sammelst du hier deine Stempel.</div>"
+                + "<div class=\"welcome-text\">" + t(lang, "stamp.welcome_text") + "</div>"
                 + "</div>";
     }
 

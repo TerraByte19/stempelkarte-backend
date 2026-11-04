@@ -1,5 +1,6 @@
 package com.example.stemplekarte.service;
 
+import com.example.stemplekarte.i18n.Texts;
 import com.example.stemplekarte.model.Customer;
 import com.example.stemplekarte.model.Shop;
 import jakarta.mail.MessagingException;
@@ -82,40 +83,42 @@ public class EmailService {
                                      String willkommenText) {
         if (customer.getConfirmToken() == null) return; // schon bestätigt
 
+        String lang = Texts.sprache(customer, shop);
         String shopName = shop.getName();
         String confirmUrl = baseUrl + "/mail/confirm?token=" + customer.getConfirmToken()
                 + "&customerId=" + customer.getId() + "&cardId=" + cardId;
         String deleteUrl  = baseUrl + "/mail/delete-request?c=" + customer.getId();
 
         String html = seite(
-                shop,
-                "Ein Klick, und deine Stempelkarte ist auf dem Handy.",
-                textBlock("Deine Stempelkarte bei " + shopName,
-                        "Hallo " + esc(customer.getName()) + ",<br><br>"
-                                + "du hast dich für die digitale Stempelkarte von <b>" + esc(shopName)
-                                + "</b> angemeldet. Bestätige kurz deine E-Mail-Adresse, dann liegt die Karte "
-                                + "in deiner Wallet.")
-                        + willkommenBlock(willkommenText)
-                        + knopfBlock("Stempelkarte aufs Handy holen", confirmUrl,
+                lang, shop,
+                Texts.t(lang, "mail.confirm_preview"),
+                textBlock(Texts.t(lang, "mail.confirm_title", shopName),
+                        Texts.t(lang, "mail.confirm_body", esc(customer.getName()), esc(shopName)))
+                        + willkommenBlock(lang, willkommenText)
+                        + knopfBlock(Texts.t(lang, "mail.confirm_button"), confirmUrl,
                         shop.getColorBackground() != null ? shop.getColorBackground() : STAMPIT_FARBE)
                         + textBlock(null,
                         "<span style=\"font-size:13px;color:#8a8a95\">"
-                                + "Wenn du das nicht warst, ignoriere diese Mail einfach.</span>"),
+                                + Texts.t(lang, "mail.confirm_ignore") + "</span>"),
                 deleteUrl
         );
 
         send(customer.getEmail(), shopName, null,
-                "Deine Stempelkarte – " + shopName, html);
+                Texts.t(lang, "mail.confirm_subject", shopName), html);
     }
 
     /** Leer ohne Geschenk - dann ist die Mail Zeichen fuer Zeichen wie vorher. */
     String willkommenBlock(String willkommenText) {
+        return willkommenBlock(Texts.STANDARD, willkommenText);
+    }
+
+    String willkommenBlock(String lang, String willkommenText) {
         if (willkommenText == null || willkommenText.isBlank()) return "";
         String text = willkommenText.trim();
         // "Erster Kaffee gratis!" soll nicht als "gratis!." enden.
         String ende = text.matches(".*[.!?]$") ? " " : ". ";
-        return textBlock(null, "🎁 <b>Dein Willkommensgeschenk:</b> " + esc(text)
-                + ende + "Zeig die Karte einfach an der Kasse.");
+        return textBlock(null, "🎁 <b>" + Texts.t(lang, "mail.gift_label") + "</b> " + esc(text)
+                + ende + Texts.t(lang, "mail.gift_hint"));
     }
 
     // ── 2. Lösch-Bestätigungs-Mail (Schritt 2, Sicherheits-Mail) ─────────
@@ -124,24 +127,22 @@ public class EmailService {
     @Async
     public void sendDeletionMail(Customer customer) {
         String deleteConfirmUrl = baseUrl + "/mail/delete-confirm?token=" + customer.getDeleteToken();
+        String lang = Texts.sprache(customer, null);
 
         String html = seite(
-                null,
-                "Löschung deiner Daten bestätigen.",
-                textBlock("Löschung bestätigen",
-                        "Hallo " + esc(customer.getName()) + ",<br><br>"
-                                + "du hast die Löschung deiner Daten angefordert. <b>Achtung:</b> Damit werden "
-                                + "dein Konto, alle Stempelkarten und alle gesammelten Stempel unwiderruflich "
-                                + "gelöscht.")
-                        + knopfBlock("Meine Daten endgültig löschen", deleteConfirmUrl, "#c0392b")
+                lang, null,
+                Texts.t(lang, "mail.delete_preview"),
+                textBlock(Texts.t(lang, "mail.delete_title"),
+                        Texts.t(lang, "mail.delete_body", esc(customer.getName())))
+                        + knopfBlock(Texts.t(lang, "mail.delete_button"), deleteConfirmUrl, "#c0392b")
                         + textBlock(null,
                         "<span style=\"font-size:13px;color:#8a8a95\">"
-                                + "Wenn du das nicht warst, ignoriere diese Mail - dann passiert nichts.</span>"),
+                                + Texts.t(lang, "mail.delete_ignore") + "</span>"),
                 null
         );
 
         send(customer.getEmail(), "StampIT", null,
-                "Löschung bestätigen – StampIT", html);
+                Texts.t(lang, "mail.delete_subject"), html);
     }
 
     // ── 3. Newsletter / Werbe-Mail eines Ladens ──────────────────────────
@@ -169,6 +170,7 @@ public class EmailService {
     // zurueck, wenn der Mailserver die Mail angenommen hat.
     public boolean sendNewsletterMail(Shop shop, String replyTo,
                                       NewsletterInhalt inhalt, NewsletterEmpfaenger e) {
+        String lang = Texts.sprache(shop);
         String shopName = shop.getName();
         String farbe = (shop.getColorBackground() != null) ? shop.getColorBackground() : STAMPIT_FARBE;
 
@@ -187,7 +189,7 @@ public class EmailService {
         if (inhalt.bilderUeberText()) inneres.append(bilder).append(text);
         else inneres.append(text).append(bilder);
 
-        inneres.append(stempelstand(e, farbe));
+        inneres.append(stempelstand(lang, e, farbe));
 
         // Knopf nur, wenn der Laden Text UND Ziel gesetzt hat.
         if (inhalt.knopfText() != null && !inhalt.knopfText().isBlank()
@@ -196,13 +198,13 @@ public class EmailService {
         }
 
         String html = seite(
-                shop,
+                lang, shop,
                 inhalt.ueberschrift() != null && !inhalt.ueberschrift().isBlank()
                         ? inhalt.ueberschrift() : inhalt.text(),
                 inneres.toString(),
                 e.deleteUrl(),
                 "<a href=\"" + attr(e.unsubscribeUrl()) + "\" style=\"color:#8a8a95\">"
-                        + "Keine Angebote mehr von " + esc(shopName) + " erhalten (abmelden)</a>"
+                        + Texts.t(lang, "mail.unsubscribe", esc(shopName)) + "</a>"
         );
 
         return send(e.email(), shopName, replyTo, inhalt.subject(), html);
@@ -212,7 +214,7 @@ public class EmailService {
      * "Dein Stand: 7 von 10 Stempeln". Der Grund, warum diese Mail nicht
      * wie Werbung wirkt: sie sagt dem Gast etwas ueber ihn selbst.
      */
-    private String stempelstand(NewsletterEmpfaenger e, String farbe) {
+    private String stempelstand(String lang, NewsletterEmpfaenger e, String farbe) {
         if (e.benoetigt() <= 0) return "";
         int stand = Math.min(e.stempel(), e.benoetigt());
         int fehlen = e.benoetigt() - stand;
@@ -220,16 +222,16 @@ public class EmailService {
         String zweiteZeile;
         if (fehlen == 0) {
             zweiteZeile = (e.belohnung() != null && !e.belohnung().isBlank())
-                    ? esc(e.belohnung()) + " wartet auf dich."
-                    : "Deine Belohnung wartet auf dich.";
+                    ? Texts.t(lang, "mail.stand_ready_named", esc(e.belohnung()))
+                    : Texts.t(lang, "mail.stand_ready");
         } else if (e.belohnung() != null && !e.belohnung().isBlank()) {
-            zweiteZeile = "Noch " + fehlen + " bis: " + esc(e.belohnung()) + ".";
+            zweiteZeile = Texts.t(lang, "mail.stand_left_named", fehlen, esc(e.belohnung()));
         } else {
-            zweiteZeile = "Noch " + fehlen + " bis zur Belohnung.";
+            zweiteZeile = Texts.t(lang, "mail.stand_left", fehlen);
         }
 
-        return infoBlock("Dein Stand: <b style=\"color:" + attr(farbe) + ";\">"
-                + stand + " von " + e.benoetigt() + " Stempeln</b><br>"
+        return infoBlock(Texts.t(lang, "mail.stand") + "<b style=\"color:" + attr(farbe) + ";\">"
+                + Texts.t(lang, "mail.stand_of", stand, e.benoetigt()) + "</b><br>"
                 + "<span style=\"font-size:14px;color:#70707c;\">" + zweiteZeile + "</span>");
     }
 
@@ -263,7 +265,8 @@ public class EmailService {
                     + "Deine Kunden, Karten und Stempel bleiben erhalten. "
                     + "Melde dich bei uns, dann richten wir deinen Tarif ein und alles läuft ohne Pause weiter.";
         }
-        String html = seite(null, ueberschrift,
+        // Mail an den Laden, bisher nur Deutsch.
+        String html = seite(Texts.STANDARD, null, ueberschrift,
                 textBlock(ueberschrift, text) + knopfBlock("Zum Dashboard", dashboardUrl, STAMPIT_FARBE),
                 null);
         return send(shop.getEmail(), "StampIT", null, betreff, html);
@@ -361,19 +364,22 @@ public class EmailService {
      * vorschauzeile ist der Text, den die Inbox neben dem Betreff anzeigt.
      * Ohne den zeigt sie den Anfang des Fliesstextes - oft "Hallo Alex,".
      */
-    private String seite(Shop shop, String vorschauzeile, String inhalt,
+    private String seite(String lang, Shop shop, String vorschauzeile, String inhalt,
                          String deleteUrl, String... extraFooter) {
         StringBuilder fuss = new StringBuilder();
-        fuss.append("Diese Mail wurde über StampIT (digitale Stempelkarten) versendet.");
+        fuss.append(Texts.t(lang, "mail.footer"));
         for (String zeile : extraFooter) {
             fuss.append("<br>").append(zeile);
         }
         if (deleteUrl != null) {
             fuss.append("<br><a href=\"").append(attr(deleteUrl)).append("\" style=\"color:#8a8a95\">")
-                    .append("Ich möchte mein Konto und meine Daten löschen</a>");
+                    .append(Texts.t(lang, "mail.footer_delete")).append("</a>");
         }
 
-        return "<!doctype html><html lang=\"de\"><head><meta charset=\"utf-8\">"
+        // Gmail wirft das html-Element weg: die Leserichtung muss deshalb
+        // auch an den Tabellen stehen.
+        String dir = Texts.isRtl(lang) ? " dir=\"rtl\"" : "";
+        return "<!doctype html><html" + Texts.htmlAttrs(lang) + "><head><meta charset=\"utf-8\">"
                 + "<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">"
                 // Haelt Gmail und Apple Mail davon ab, die Mail im Dark Mode
                 // selbst umzufaerben - sonst weisse Bilder auf invertiertem Text.
@@ -381,9 +387,9 @@ public class EmailService {
                 + "<meta name=\"supported-color-schemes\" content=\"light only\">"
                 + "</head><body style=\"margin:0;padding:0;background:#ececed;\">"
                 + vorschau(vorschauzeile)
-                + "<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\" "
+                + "<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\"" + dir + " "
                 + "style=\"background:#ececed;\"><tr><td align=\"center\" style=\"padding:20px 10px;\">"
-                + "<table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\" "
+                + "<table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\"" + dir + " "
                 + "style=\"width:100%;max-width:600px;background:#ffffff;border-radius:16px;"
                 + "overflow:hidden;font-family:" + SCHRIFT + ";\">"
                 + markenband(shop)

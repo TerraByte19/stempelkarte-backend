@@ -1,5 +1,7 @@
 package com.example.stemplekarte.controller;
 
+import com.example.stemplekarte.i18n.Texts;
+import com.example.stemplekarte.model.Customer;
 import com.example.stemplekarte.model.CustomerCard;
 import com.example.stemplekarte.repository.CustomerCardRepository;
 import com.example.stemplekarte.repository.CustomerRepository;
@@ -50,10 +52,12 @@ public class PublicEmailController {
     public ResponseEntity<String> confirm(@RequestParam String token,
                                           @RequestParam(value = "customerId", required = false) String customerId,
                                           @RequestParam(value = "cardId", required = false) String cardId) {
-        customerRepository.findByConfirmToken(token).ifPresent(c -> {
+        java.util.Optional<Customer> kunde = customerRepository.findByConfirmToken(token);
+        kunde.ifPresent(c -> {
             c.confirmEmail();
             customerRepository.save(c);
         });
+        String lang = Texts.sprache(kunde.orElse(null), null);
 
         if (customerId != null && !customerId.isBlank() && cardId != null && !cardId.isBlank()) {
             return ResponseEntity.status(302)
@@ -61,22 +65,21 @@ public class PublicEmailController {
                     .body("");
         }
 
-        return page("✅", "E-Mail bestätigt",
-                "Danke! Deine E-Mail-Adresse ist bestätigt. Du kannst dieses Fenster schließen.");
+        return page(lang, "✅", Texts.t(lang, "page.confirmed_title"), Texts.t(lang, "page.confirmed_text"));
     }
 
     // ── 2. Löschung anfordern (Schritt 1: löst die Sicherheits-Mail aus) ──
     @GetMapping("/delete-request")
     public ResponseEntity<String> deleteRequest(@RequestParam("c") String customerId) {
-        customerRepository.findById(customerId).ifPresent(c -> {
+        java.util.Optional<Customer> kunde = customerRepository.findById(customerId);
+        kunde.ifPresent(c -> {
             c.startDeletion();
             customerRepository.save(c);
             emailService.sendDeletionMail(c);
         });
         // Immer dieselbe Antwort — verrät nicht, ob das Konto existiert
-        return page("📧", "Bestätigungs-Mail gesendet",
-                "Falls ein Konto zu dieser Anfrage existiert, haben wir eine E-Mail mit einem "
-                        + "Bestätigungs-Link geschickt. Erst nach Klick auf diesen Link werden die Daten gelöscht.");
+        String lang = Texts.sprache(kunde.orElse(null), null);
+        return page(lang, "📧", Texts.t(lang, "page.delete_sent_title"), Texts.t(lang, "page.delete_sent_text"));
     }
 
     // ── 3. Löschung endgültig bestätigen (Schritt 2) ─────────────────────
@@ -84,12 +87,12 @@ public class PublicEmailController {
     public ResponseEntity<String> deleteConfirm(@RequestParam String token) {
         return customerRepository.findByDeleteToken(token)
                 .map(c -> {
+                    String lang = Texts.sprache(c, null);
                     customerService.deleteCustomerData(c.getId());
-                    return page("🗑️", "Daten gelöscht",
-                            "Dein Konto, alle Stempelkarten und alle gespeicherten Daten wurden gelöscht.");
+                    return page(lang, "🗑️", Texts.t(lang, "page.deleted_title"), Texts.t(lang, "page.deleted_text"));
                 })
-                .orElseGet(() -> page("⚠️", "Link ungültig",
-                        "Dieser Lösch-Link ist ungültig oder wurde bereits verwendet."));
+                .orElseGet(() -> page(Texts.STANDARD, "⚠️", Texts.t(Texts.STANDARD, "page.invalid_title"),
+                        Texts.t(Texts.STANDARD, "page.delete_invalid_text")));
     }
 
     // ── 4. Vom Newsletter eines Ladens abmelden ──────────────────────────
@@ -110,17 +113,17 @@ public class PublicEmailController {
                                 k.revokeMarketingConsent();
                                 customerCardRepository.save(k);
                             });
-                    return page("✅", "Abgemeldet",
-                            "Du erhältst keine Angebote mehr von "
-                                    + esc(cc.getCard().getShop().getName())
-                                    + ". Deine Stempelkarte funktioniert ganz normal weiter.");
+                    String lang = Texts.sprache(cc.getCustomer(), cc.getCard().getShop());
+                    return page(lang, "✅", Texts.t(lang, "page.unsub_title"),
+                            Texts.t(lang, "page.unsub_text", esc(cc.getCard().getShop().getName())));
                 })
-                .orElseGet(() -> page("⚠️", "Link ungültig", "Dieser Abmelde-Link ist ungültig."));
+                .orElseGet(() -> page(Texts.STANDARD, "⚠️", Texts.t(Texts.STANDARD, "page.invalid_title"),
+                        Texts.t(Texts.STANDARD, "page.unsub_invalid_text")));
     }
 
     // ── kleine HTML-Antwortseite ─────────────────────────────────────────
-    private ResponseEntity<String> page(String icon, String title, String text) {
-        String html = "<!doctype html><html lang=\"de\"><head><meta charset=\"utf-8\">"
+    private ResponseEntity<String> page(String lang, String icon, String title, String text) {
+        String html = "<!doctype html><html" + Texts.htmlAttrs(lang) + "><head><meta charset=\"utf-8\">"
                 + "<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">"
                 + "<title>" + esc(title) + " – StampIT</title></head>"
                 + "<body style=\"margin:0;min-height:100vh;display:flex;align-items:center;"

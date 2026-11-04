@@ -89,6 +89,11 @@ public class CustomerService {
                 .orElseThrow(() -> new NoSuchElementException("Karte nicht gefunden: " + cardId));
 
         Customer customer = getOrCreate(name, email);
+        // Sprache des Ladens merken, aber nur beim allerersten Anmelden: wer
+        // schon eine Karte bei einem deutschen Laden hat, bleibt deutsch.
+        if (customer.getLanguage() == null || customer.getLanguage().isBlank()) {
+            customer.setLanguage(com.example.stemplekarte.i18n.Texts.sprache(card.getShop()));
+        }
 
         // Jede Kartenanmeldung verlangt eine frische Mail-Bestätigung:
         // emailConfirmed zurücksetzen + neuen Token vergeben, damit der

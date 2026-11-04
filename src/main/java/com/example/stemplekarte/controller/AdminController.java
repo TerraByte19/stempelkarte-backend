@@ -476,6 +476,26 @@ public class AdminController {
         return ResponseEntity.ok(Map.of("id", shop.getId(), "apiFreigeschaltet", shop.isApiFreigeschaltet()));
     }
 
+    public record SpracheRequest(String language) {}
+
+    /**
+     * Sprache der Kundenseiten und Mails eines Ladens nachtraeglich setzen
+     * (de, en, ar, tr). Gilt fuer neue Kunden; wer sich schon angemeldet hat,
+     * behaelt seine Sprache (Customer.language).
+     */
+    @PostMapping("/shops/{shopId}/sprache")
+    public ResponseEntity<Map<String, Object>> setSprache(@PathVariable String shopId, @RequestBody SpracheRequest req) {
+        Shop shop = shopRepo.findById(shopId).orElse(null);
+        if (shop == null) {
+            return ResponseEntity.status(404).body(Map.of("error", "Shop nicht gefunden"));
+        }
+        String language = com.example.stemplekarte.i18n.Texts.norm(req.language());
+        shop.setLanguage(language);
+        shopRepo.save(shop);
+        log.info("[ADMIN] Sprache laden={} language={}", shop.getId(), language);
+        return ResponseEntity.ok(Map.of("id", shop.getId(), "language", language));
+    }
+
     public record TarifRequest(String tarif) {}
 
     /**
@@ -613,10 +633,9 @@ public class AdminController {
         try {
             int maxTokens = req.maxTokens() > 0 ? req.maxTokens() : 3;
             // Sprache wird HIER einmal festgelegt und ist danach nicht mehr
-            // aenderbar (bewusst - der Laden bleibt in einer Sprache). de|ar|tr,
-            // alles andere -> de.
-            String roh = req.language() == null ? "" : req.language().trim().toLowerCase(java.util.Locale.ROOT);
-            String language = java.util.Set.of("ar", "tr").contains(roh) ? roh : "de";
+            // aenderbar (bewusst - der Laden bleibt in einer Sprache). Gilt fuer
+            // die Kundenseiten und Mails dieses Ladens (i18n.Texts).
+            String language = com.example.stemplekarte.i18n.Texts.norm(req.language());
 
             Shop shop = shopService.register(req.email(), req.password(), req.name(), maxTokens);
             shop.setLanguage(language);

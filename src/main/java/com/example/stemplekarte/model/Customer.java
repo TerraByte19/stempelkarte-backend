@@ -36,6 +36,11 @@ public class Customer {
     @Column(name = "delete_token", length = 64)
     private String deleteToken;
 
+    // Sprache der Kundenseiten und Mails (i18n.Texts): beim Anmelden vom
+    // Laden uebernommen, danach stabil. Null (Altbestand) = Sprache des Ladens.
+    @Column(name = "language", length = 5)
+    private String language;
+
     // Geburtstag und Handynummer liegen bewusst NICHT hier, sondern an der
     // CustomerCard: der Kunde ist ladenuebergreifend (eine E-Mail, ein
     // Datensatz), die Angaben macht er aber gegenueber EINEM Laden.
@@ -58,6 +63,11 @@ public class Customer {
     private static String newToken() {
         return UUID.randomUUID().toString().replace("-", "");
     }
+
+    public String getLanguage() { return language; }
+
+    /** Nur beim ersten Anmelden gesetzt (leer bleibt leer, wenn lang null ist). */
+    public void setLanguage(String lang) { this.language = lang; }
 
     /** Für Bestandskunden, die noch keinen Token haben (alte Datensätze). */
     public void ensureConfirmToken() {
