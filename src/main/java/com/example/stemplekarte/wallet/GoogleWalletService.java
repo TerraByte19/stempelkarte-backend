@@ -414,10 +414,9 @@ public class GoogleWalletService {
     }
 
     private void createOrUpdateObject(CustomerCard cc, String classId, String objectId) throws Exception {
-        // Konstanter QR-Inhalt: nur cid + cardId (kein Zeitstempel), damit sich
-        // das QR-Bild nicht bei jedem Update aendert. Der Scanner liest nur cid/cardId.
-        String qrValue = "{\"cid\":\"" + cc.getCustomer().getId() +
-                "\",\"cardId\":\"" + cc.getCard().getId() + "\"}";
+        // Konstanter, kurzer QR-Inhalt "SK:<Kundenkarte>" (QrPayload.fuer).
+        // Alte Karten mit {"cid","cardId"} liest der Scanner weiter.
+        String qrValue = com.example.stemplekarte.service.QrPayload.fuer(cc);
 
         Card card = cc.getCard();
 

@@ -228,7 +228,7 @@ public class CustomerService {
     /** ortId: Filiale (ShopOrt.id), in der gescannt wurde - nur fuers Protokoll. Null = Hauptstandort. */
     @Transactional
     public ScanResult processScan(String qrPayload, Shop shop, int count, String staffLabel, String ortId) {
-        QrPayload qr = QrPayload.parse(qrPayload);
+        QrPayload qr = QrPayload.parse(qrPayload, customerCardRepo);
         String customerId = qr.customerId();
         String cardId = qr.cardId();
 
@@ -373,7 +373,7 @@ public class CustomerService {
      */
     @Transactional
     public CustomerCard willkommenEinloesen(String qrPayload, Shop shop) {
-        QrPayload qr = QrPayload.parse(qrPayload);
+        QrPayload qr = QrPayload.parse(qrPayload, customerCardRepo);
 
         Card card = cardRepo.findById(qr.cardId())
                 .orElseThrow(() -> new NoSuchElementException("Karte nicht gefunden"));
@@ -405,7 +405,7 @@ public class CustomerService {
      */
     @Transactional
     public CustomerCard resetCard(String qrPayload, Shop shop) {
-        QrPayload qr = QrPayload.parse(qrPayload);
+        QrPayload qr = QrPayload.parse(qrPayload, customerCardRepo);
         String customerId = qr.customerId();
         String cardId = qr.cardId();
 

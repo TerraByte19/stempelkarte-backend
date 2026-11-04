@@ -173,11 +173,10 @@ public class ApplePassService {
         String fgColor = farben[1];
         String labelColor = farben[2];
 
-        // Konstanter QR-Inhalt: nur cid + cardId. Kein Zeitstempel mehr, damit
-        // sich das QR-Bild nicht bei jedem Scan aendert (der Scanner liest nur
-        // cid/cardId). Stabileres Bild = besseres Caching bei Apple.
-        String qrPayload = "{\"cid\":\"%s\",\"cardId\":\"%s\"}"
-                .formatted(cc.getCustomer().getId(), card.getId());
+        // Konstanter, kurzer QR-Inhalt "SK:<Kundenkarte>" (QrPayload.fuer):
+        // kleiner Code mit groben Punkten, aendert sich nie. Alte Karten mit
+        // {"cid","cardId"} liest der Scanner weiter.
+        String qrPayload = com.example.stemplekarte.service.QrPayload.fuer(cc);
 
         String templatePath = templateGenerator.generateTemplate(cc);
 

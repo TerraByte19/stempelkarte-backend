@@ -1,45 +1,71 @@
 package com.example.stemplekarte.service;
 
+import com.example.stemplekarte.model.Card;
+import com.example.stemplekarte.model.Customer;
+import com.example.stemplekarte.model.CustomerCard;
+import com.example.stemplekarte.repository.CustomerCardRepository;
 import org.junit.jupiter.api.Test;
+
+import java.util.NoSuchElementException;
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
-/**
- * Das Parsen des QR-Inhalts lag zweimal wortgleich in CustomerService und
- * wird vom Punkte-Dienst ein drittes Mal gebraucht. Dieser Test haelt fest,
- * dass die gemeinsame Fassung sich genau wie die alten Kopien verhaelt -
- * besonders bei den Fehlerfaellen, denn deren Meldung sieht das Personal
- * im Scanner.
- */
+/** Kurzer QR "SK:<Kundenkarte>" und der alte lange bleiben beide lesbar. */
 class QrPayloadTest {
 
-    @Test
-    void liestKundeUndKarte() {
-        QrPayload p = QrPayload.parse("{\"cid\":\"CUST-1\",\"cardId\":\"CARD-9\"}");
-        assertThat(p.customerId()).isEqualTo("CUST-1");
-        assertThat(p.cardId()).isEqualTo("CARD-9");
+    private final CustomerCardRepository repo = mock(CustomerCardRepository.class);
+
+    private CustomerCard karte() {
+        Customer kunde = mock(Customer.class);
+        when(kunde.getId()).thenReturn("CUST-1");
+        Card card = mock(Card.class);
+        when(card.getId()).thenReturn("CARD-1");
+        CustomerCard cc = mock(CustomerCard.class);
+        when(cc.getId()).thenReturn("CC-1A2B3C4D");
+        when(cc.getCustomer()).thenReturn(kunde);
+        when(cc.getCard()).thenReturn(card);
+        return cc;
     }
 
     @Test
-    void zusaetzlicheFelderStoerenNicht() {
-        // Aeltere Karten hatten einen Zeitstempel im QR. Die liegen noch in
-        // echten Wallets und muessen weiter lesbar sein.
-        QrPayload p = QrPayload.parse("{\"cid\":\"CUST-1\",\"cardId\":\"CARD-9\",\"ts\":123}");
-        assertThat(p.cardId()).isEqualTo("CARD-9");
+    void kurz_istKleinUndFindetDieKarte() {
+        CustomerCard cc = karte();
+        String inhalt = QrPayload.fuer(cc);
+        assertThat(inhalt).isEqualTo("SK:CC-1A2B3C4D");
+        // Nur Grossbuchstaben, Ziffern und ":-": QR im Alphanumerik-Modus, kleinste Stufe.
+        assertThat(inhalt).matches("[0-9A-Z:-]+");
+
+        when(repo.findById("CC-1A2B3C4D")).thenReturn(Optional.of(cc));
+        assertThat(QrPayload.parse(inhalt, repo)).isEqualTo(new QrPayload("CUST-1", "CARD-1"));
+        // Handscanner mit Leerzeichen oder kleinem Praefix.
+        assertThat(QrPayload.parse("  sk:CC-1A2B3C4D\n", repo)).isEqualTo(new QrPayload("CUST-1", "CARD-1"));
     }
 
     @Test
-    void keinJson_meldetUngueltigenQr() {
-        assertThatThrownBy(() -> QrPayload.parse("kein json"))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("Ungueltiger QR-Code");
+    void lang_wirdWeiterGelesen_ohneDatenbank() {
+        assertThat(QrPayload.parse("{\"cid\":\"CUST-9\",\"cardId\":\"CARD-9\"}", repo))
+                .isEqualTo(new QrPayload("CUST-9", "CARD-9"));
+        verify(repo, never()).findById(anyString());
     }
 
     @Test
-    void fehlendeKartenId_meldetFehlendeId() {
-        assertThatThrownBy(() -> QrPayload.parse("{\"cid\":\"CUST-1\"}"))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("Karten-ID");
+    void kurz_unbekanntOderKaputt() {
+        when(repo.findById("CC-00000000")).thenReturn(Optional.empty());
+        assertThatThrownBy(() -> QrPayload.parse("SK:CC-00000000", repo))
+                .isInstanceOf(NoSuchElementException.class);
+        assertThatThrownBy(() -> QrPayload.parse("SK:", repo))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> QrPayload.parse("SK:{\"x\":1}", repo))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> QrPayload.parse("hallo", repo))
+                .isInstanceOf(IllegalArgumentException.class);
+        verify(repo, never()).findById("");
     }
 }

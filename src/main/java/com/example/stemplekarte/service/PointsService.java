@@ -134,7 +134,7 @@ public class PointsService {
 
     @Transactional(readOnly = true)
     public PointsState state(String qrPayload, Shop shop) {
-        QrPayload qr = QrPayload.parse(qrPayload);
+        QrPayload qr = QrPayload.parse(qrPayload, customerCardRepo);
         Card card = ladeKarte(qr.cardId(), shop);
         CustomerCard cc = ladeKundenkarte(qr, card);
 
@@ -182,7 +182,7 @@ public class PointsService {
             throw new IllegalArgumentException(
                     "Betrag muss groesser als null sein. Fuer einen Abzug die Korrektur benutzen.");
         }
-        QrPayload qr = QrPayload.parse(qrPayload);
+        QrPayload qr = QrPayload.parse(qrPayload, customerCardRepo);
         Card card = ladePunktekarte(qr.cardId(), shop);
         CustomerCard cc = ladeKundenkarte(qr, card);
 
@@ -224,7 +224,7 @@ public class PointsService {
     /** ortId: Filiale (ShopOrt.id) fuers Protokoll, null = Hauptstandort. */
     @Transactional
     public PointsResult redeem(String qrPayload, Shop shop, String rewardId, String staffLabel, String ortId) {
-        QrPayload qr = QrPayload.parse(qrPayload);
+        QrPayload qr = QrPayload.parse(qrPayload, customerCardRepo);
         Card card = ladePunktekarte(qr.cardId(), shop);
         CustomerCard cc = ladeKundenkarte(qr, card);
 
@@ -283,7 +283,7 @@ public class PointsService {
                     "Korrektur braucht entweder einen Betrag oder eine Punktzahl, nicht beides");
         }
 
-        QrPayload qr = QrPayload.parse(qrPayload);
+        QrPayload qr = QrPayload.parse(qrPayload, customerCardRepo);
         Card card = ladePunktekarte(qr.cardId(), shop);
         CustomerCard cc = ladeKundenkarte(qr, card);
 
@@ -307,7 +307,7 @@ public class PointsService {
 
     @Transactional
     public PointsResult undo(String qrPayload, Shop shop, String bookingId, String staffLabel) {
-        QrPayload qr = QrPayload.parse(qrPayload);
+        QrPayload qr = QrPayload.parse(qrPayload, customerCardRepo);
         Card card = ladePunktekarte(qr.cardId(), shop);
         CustomerCard cc = ladeKundenkarte(qr, card);
 

@@ -99,7 +99,7 @@ public class PaketService {
     /** Scanner: Karte per QR. Dieselben Sperren wie beim Stempeln. */
     @Transactional
     public CustomerCard aufladen(String qrPayload, Shop shop, String staffLabel) {
-        QrPayload qr = QrPayload.parse(qrPayload);
+        QrPayload qr = QrPayload.parse(qrPayload, customerCardRepo);
         Card card = cardRepo.findById(qr.cardId())
                 .orElseThrow(() -> new NoSuchElementException("Karte nicht gefunden"));
         if (!card.getShop().getId().equals(shop.getId())) {
