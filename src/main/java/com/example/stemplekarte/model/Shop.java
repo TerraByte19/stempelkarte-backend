@@ -230,9 +230,14 @@ public class Shop {
     private String tarif;
 
     // Gratis-Testphase: bis wann. Null = keine (bezahlt oder Bestandsladen).
-    // Nach Ablauf wird nichts gesperrt; Dashboard und Admin zeigen es nur an.
+    // Nach Ablauf sind Scanner und Nachrichten gesperrt (TarifPruefung).
     @Column(name = "test_bis")
     private Instant testBis;
+
+    // Welche Erinnerungs-Mail zur Testphase schon raus ist
+    // (TestphaseErinnerungService): null = keine, 1 = "endet bald", 2 = "vorbei".
+    @Column(name = "test_mail_stufe")
+    private Integer testMailStufe;
 
     // Demo-Laden fuer die Website: Besucher holen sich eine Karte und
     // stempeln sich selbst (DemoService). Vom Admin gesetzt. Null = nein.
@@ -607,8 +612,14 @@ public class Shop {
     /** Null = Testphase vorbei und bezahlt (Admin). */
     public void setTestBis(Instant bis) {
         this.testBis = bis;
+        // Neues Ende = neue Erinnerungen (z. B. nach einer Verlaengerung).
+        this.testMailStufe = null;
         this.updatedAt = Instant.now();
     }
+
+    public int getTestMailStufe() { return testMailStufe == null ? 0 : testMailStufe; }
+
+    public void setTestMailStufe(int stufe) { this.testMailStufe = stufe; }
 
     /**
      * Angefangene Tage bis zum Ende: 1 = endet heute bzw. in weniger als

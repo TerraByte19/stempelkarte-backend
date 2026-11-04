@@ -15,4 +15,6 @@ public interface ShopRepository extends JpaRepository<Shop, String> {
 
     // Demo-Laeden fuer die Website (DemoService).
     java.util.List<Shop> findByDemoTrue();
+
+    java.util.List<Shop> findByTestBisNotNull();
 }

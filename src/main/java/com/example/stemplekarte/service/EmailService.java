@@ -233,6 +233,42 @@ public class EmailService {
                 + "<span style=\"font-size:14px;color:#70707c;\">" + zweiteZeile + "</span>");
     }
 
+    // ── 4. Testphase: endet bald / ist vorbei (an den Laden) ─────────────
+
+    /**
+     * Erinnerung an den Laden. vorbei=false: endet am {bis}, vorbei=true:
+     * Scanner und Nachrichten sind jetzt gesperrt. Beides sagt klar, dass
+     * nichts geloescht wird. Nicht @Async: der Laeufer merkt sich nur eine
+     * Mail, die wirklich rausging.
+     */
+    public boolean sendTestphaseMail(Shop shop, java.time.Instant bis, boolean vorbei, String dashboardUrl) {
+        String datum = java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy")
+                .withZone(java.time.ZoneId.of("Europe/Berlin")).format(bis);
+        String hallo = "Hallo " + esc(shop.getName()) + ",<br><br>";
+        String ueberschrift;
+        String text;
+        String betreff;
+        if (vorbei) {
+            betreff = "Deine Gratis-Testphase ist vorbei – StampIT";
+            ueberschrift = "Deine Testphase ist vorbei";
+            text = hallo + "deine 14 Tage gratis sind seit dem " + datum + " vorbei. "
+                    + "Scanner und Nachrichten sind jetzt gesperrt, bis dein Tarif eingerichtet ist.<br><br>"
+                    + "<b>Deine Kunden, Karten und Stempel bleiben vollständig erhalten.</b> "
+                    + "Melde dich bei uns, dann geht es sofort weiter.";
+        } else {
+            betreff = "Deine Gratis-Testphase endet am " + datum + " – StampIT";
+            ueberschrift = "Noch wenige Tage gratis";
+            text = hallo + "deine Gratis-Testphase endet am <b>" + datum + "</b>. "
+                    + "Danach sind Scanner und Nachrichten gesperrt, bis dein Tarif eingerichtet ist.<br><br>"
+                    + "Deine Kunden, Karten und Stempel bleiben erhalten. "
+                    + "Melde dich bei uns, dann richten wir deinen Tarif ein und alles läuft ohne Pause weiter.";
+        }
+        String html = seite(null, ueberschrift,
+                textBlock(ueberschrift, text) + knopfBlock("Zum Dashboard", dashboardUrl, STAMPIT_FARBE),
+                null);
+        return send(shop.getEmail(), "StampIT", null, betreff, html);
+    }
+
     // ── intern ────────────────────────────────────────────────────────────
 
     /**

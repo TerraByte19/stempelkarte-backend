@@ -67,3 +67,4 @@ Der Status ist bewusst nicht 403, weil `src/api.js` im Frontend bei 403 ausloggt
 - **Admin:** `POST /api/admin/shops/{id}/test` mit `{tage}`. 0 = bezahlt, 1 bis 90 = ab heute verlängern. Die Admin-Liste zeigt `testBis` und `testTage`.
 - `/api/shop/me` liefert `testBis`, `testTage` (verbleibende Tage, 0 = vorbei) und `testVorbei`. `/api/shop/tarif` liefert `testVorbei`.
 - **Frontend (gebaut):** Admin-Auswahl „Test: X T / Test vorbei / Als bezahlt markieren / +7 / +14“. Dashboard-Streifen: blau mit Resttagen, rot wenn vorbei.
+- **Erinnerungs-Mail** (TestphaseErinnerungService, alle 30 Minuten, nur 9 bis 20 Uhr Berlin): 3 Tage vor dem Ende „endet am …“, nach dem Ende „ist vorbei“. Jede nur einmal, gemerkt in `Shop.testMailStufe` (Spalte `test_mail_stufe`). Es zählt nur eine Mail, die der Mailserver angenommen hat. Verlängert der Admin, beginnt es von vorn. Knopf „Zum Dashboard“ (`FRONTEND_URL` + /dashboard).
