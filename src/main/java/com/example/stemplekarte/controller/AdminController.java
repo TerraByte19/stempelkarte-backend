@@ -613,10 +613,10 @@ public class AdminController {
         try {
             int maxTokens = req.maxTokens() > 0 ? req.maxTokens() : 3;
             // Sprache wird HIER einmal festgelegt und ist danach nicht mehr
-            // aenderbar (bewusst - der Laden bleibt in einer Sprache). de|ar,
+            // aenderbar (bewusst - der Laden bleibt in einer Sprache). de|ar|tr,
             // alles andere -> de.
-            String language = "ar".equalsIgnoreCase(
-                    req.language() == null ? "" : req.language().trim()) ? "ar" : "de";
+            String roh = req.language() == null ? "" : req.language().trim().toLowerCase(java.util.Locale.ROOT);
+            String language = java.util.Set.of("ar", "tr").contains(roh) ? roh : "de";
 
             Shop shop = shopService.register(req.email(), req.password(), req.name(), maxTokens);
             shop.setLanguage(language);
