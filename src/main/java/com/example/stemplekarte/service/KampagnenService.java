@@ -332,6 +332,16 @@ public class KampagnenService {
      */
     void aktiviere(Kampagne k, Instant jetzt) {
         List<CustomerCard> empf = tx.execute(status -> {
+            // Inzwischen auf Basic gewechselt: nicht senden, als fertig mit 0 abschliessen.
+            Shop laden = shopRepo.findById(k.getShop().getId()).orElse(null);
+            if (laden != null && !TarifPruefung.darf(laden, com.example.stemplekarte.model.Tarif.Funktion.KAMPAGNEN)) {
+                k.aktivieren(0);
+                k.kontrollgruppe(0);
+                k.beenden(jetzt);
+                kampagneRepo.save(k);
+                log.info("[KAMPAGNE] {} nicht gesendet: Tarif ohne Kampagnen", k.getId());
+                return List.<CustomerCard>of();
+            }
             List<CustomerCard> e = empfaenger(k.getShop(), Zielgruppe.von(k.getGruppe()), jetzt);
             // -1 war der Merker "Kontrollgruppe gewuenscht" beim Planen.
             boolean kontrollgruppe = k.getKontrolleEmpfaenger() < 0;

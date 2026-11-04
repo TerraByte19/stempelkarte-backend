@@ -153,6 +153,19 @@ class AutoNachrichtenServiceTest {
     }
 
     @Test
+    void basic_einschaltenGesperrt_ausschaltenGeht_laeuferUeberspringt() {
+        when(shop.getTarif()).thenReturn(com.example.stemplekarte.model.Tarif.BASIC);
+        when(autoRepo.findByShopAndTyp(shop, "WILLKOMMEN")).thenReturn(Optional.empty());
+        assertThatThrownBy(() -> dienst.einstellen("SHOP-1", AutoNachrichtTyp.WILLKOMMEN, true, ""))
+                .isInstanceOf(TarifPruefung.Gesperrt.class);
+        assertThat(dienst.einstellen("SHOP-1", AutoNachrichtTyp.WILLKOMMEN, false, "").aktiv()).isFalse();
+
+        when(autoRepo.findAktive()).thenReturn(List.of(aktiv(AutoNachrichtTyp.ZWEITER_BESUCH, null)));
+        assertThat(dienst.lauf(um11)).isZero();
+        verify(kampagnen, never()).starte(any(), anyString(), anyString());
+    }
+
+    @Test
     void fastVoll_rundenMerkerNurAufDerKarte() {
         when(autoRepo.findAktive()).thenReturn(List.of(aktiv(AutoNachrichtTyp.FAST_VOLL, null)));
         Kampagne k = kampagne(AutoNachrichtTyp.FAST_VOLL);

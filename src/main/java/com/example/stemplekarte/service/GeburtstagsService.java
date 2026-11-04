@@ -67,6 +67,8 @@ public class GeburtstagsService {
         int gestartet = 0;
         for (Shop shop : shopRepo.findAll()) {
             if (!shop.isActive() || !shop.isGeburtstagsgrussAktiv()) continue;
+            // Geburtstagsgruss zaehlt zu den automatischen Nachrichten (ab Pro).
+            if (!TarifPruefung.darf(shop, com.example.stemplekarte.model.Tarif.Funktion.AUTO_NACHRICHTEN)) continue;
             if (heute.equals(geprueft.get(shop.getId()))) continue;
             try {
                 if (kampagneRepo.existsByShopAndGruppeAndErstelltAmGreaterThanEqual(

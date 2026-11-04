@@ -100,6 +100,9 @@ public class KampagnenController {
                     + "werden dann zum Zeitpunkt bestimmt. Der Versand laeuft im Hintergrund.")
     @PostMapping
     public KampagneItem starte(@RequestBody KampagneRequest req, Authentication auth) {
+        Shop shop = currentShop(auth);
+        com.example.stemplekarte.service.TarifPruefung.pruefe(shop,
+                com.example.stemplekarte.model.Tarif.Funktion.KAMPAGNEN);
         Instant geplant = null;
         if (req.geplantAm() != null && !req.geplantAm().isBlank()) {
             try {
@@ -108,7 +111,7 @@ public class KampagnenController {
                 throw new IllegalArgumentException("Ungültiger Zeitpunkt");
             }
         }
-        return KampagneItem.von(kampagnenService.starte(currentShop(auth), req.text(), req.gruppe(), geplant,
+        return KampagneItem.von(kampagnenService.starte(shop, req.text(), req.gruppe(), geplant,
                 Boolean.TRUE.equals(req.kontrollgruppe())), null);
     }
 

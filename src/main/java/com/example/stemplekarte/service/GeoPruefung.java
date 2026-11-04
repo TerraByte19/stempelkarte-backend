@@ -94,9 +94,9 @@ public class GeoPruefung {
                 art = GeoVorfall.Art.OHNE_ORT;
             } else {
                 long naechster = distanzMeter(shop.getLatitude(), shop.getLongitude(), scanLat, scanLon);
-                if (ortRepo != null && shop.getMaxOrte() > 0) {
+                if (ortRepo != null && OrteService.erlaubt(shop) > 0) {
                     // Nur die vom Tarif erlaubten Orte zaehlen (gleiche Regel wie im Pass).
-                    int erlaubt = shop.getMaxOrte();
+                    int erlaubt = OrteService.erlaubt(shop);
                     int n = 0;
                     for (com.example.stemplekarte.model.ShopOrt o : ortRepo.findByShopOrderByCreatedAtAsc(shop)) {
                         if (n++ >= erlaubt) break;

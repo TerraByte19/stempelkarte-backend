@@ -66,6 +66,8 @@ public class TagesangebotService {
         if (text.length() > Shop.TAGESANGEBOT_MAX) {
             throw new IllegalArgumentException("Das Angebot darf höchstens " + Shop.TAGESANGEBOT_MAX + " Zeichen haben");
         }
+        shopRepo.findById(shopId).ifPresent(s ->
+                TarifPruefung.pruefe(s, com.example.stemplekarte.model.Tarif.Funktion.TAGESANGEBOT));
         Instant bis = jetzt.atZone(ZONE).toLocalDate().plusDays(1).atStartOfDay(ZONE).toInstant();
         Shop shop = speichern(shopId, text, jetzt, bis);
         int empfaenger = 0;

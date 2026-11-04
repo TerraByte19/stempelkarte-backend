@@ -73,6 +73,13 @@ class GeburtstagsgrussTest {
     }
 
     @Test
+    void basic_keinGruss() {
+        when(shop.getTarif()).thenReturn(com.example.stemplekarte.model.Tarif.BASIC);
+        assertThat(dienst.lauf(um10)).isZero();
+        verify(kampagnen, never()).starte(any(), anyString(), anyString());
+    }
+
+    @Test
     void heuteSchonInDerDatenbank_keinZweiter() {
         when(kampagneRepo.existsByShopAndGruppeAndErstelltAmGreaterThanEqual(eq(shop), eq("GEBURTSTAG_HEUTE"), any()))
                 .thenReturn(true);

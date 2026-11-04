@@ -221,7 +221,22 @@ public class ShopController {
         map.put("birthdayGreetingEnabled", shop.isGeburtstagsgrussAktiv());
         map.put("birthdayGreetingText", shop.getBirthdayGreetingText());
         map.put("birthdayGreetingDefault", Shop.GEBURTSTAG_STANDARD);
+        map.put("tarif", shop.getTarif().name());
+        // Testphase: null = keine, 0 = vorbei (nichts gesperrt, nur Hinweis).
+        map.put("testBis", shop.getTestBis() != null ? shop.getTestBis().toString() : null);
+        map.put("testTage", shop.testTageUebrig(java.time.Instant.now()));
+        map.put("testVorbei", com.example.stemplekarte.service.TarifPruefung.testVorbei(shop, java.time.Instant.now()));
         return map;
+    }
+
+    @Operation(summary = "Tarif, Kundengrenze und welche Funktionen enthalten sind",
+            description = "grenzeErreicht = Basic-Laden hat 100 Kunden oder mehr: nur ein Hinweis, "
+                    + "es wird nichts gesperrt. funktionen: false = ab Pro.")
+    @GetMapping("/tarif")
+    public com.example.stemplekarte.service.TarifPruefung.Stand tarif(Authentication auth) {
+        Shop shop = currentShop(auth);
+        return com.example.stemplekarte.service.TarifPruefung.stand(shop,
+                customerCardRepo.countDistinctCustomersByShop(shop));
     }
 
     public record GeburtstagRequest(boolean enabled, String text) {}
@@ -736,6 +751,8 @@ public class ShopController {
                                                   NewsletterRequest req,
                                                   Authentication auth) {
         Shop shop = currentShop(auth);
+        com.example.stemplekarte.service.TarifPruefung.pruefe(shop,
+                com.example.stemplekarte.model.Tarif.Funktion.NEWSLETTER);
 
         // Test-Versand geht NUR an die eigene Shop-E-Mail, wird NICHT im
         // Verlauf gespeichert und zählt nicht als echter Kunden-Versand.
@@ -765,6 +782,8 @@ public class ShopController {
                                               NewsletterRequest req,
                                               Authentication auth) {
         Shop shop = currentShop(auth);
+        com.example.stemplekarte.service.TarifPruefung.pruefe(shop,
+                com.example.stemplekarte.model.Tarif.Funktion.NEWSLETTER);
 
         int alle = newsletterService.empfaenger(shop).size();
         // Double-Opt-In: nur an bestätigte E-Mails senden (gesetzlich Pflicht)

@@ -37,8 +37,8 @@ public class ApiKeyController {
     @GetMapping
     public Map<String, Object> liste(Authentication auth) {
         Shop shop = currentShop(auth);
-        List<ApiKeyService.Eintrag> keys = shop.isApiFreigeschaltet() ? dienst.liste(shop) : List.of();
-        return Map.of("freigeschaltet", shop.isApiFreigeschaltet(), "keys", keys, "max", ApiKeyService.MAX_JE_LADEN);
+        List<ApiKeyService.Eintrag> keys = shop.isApiAktiv() ? dienst.liste(shop) : List.of();
+        return Map.of("freigeschaltet", shop.isApiAktiv(), "keys", keys, "max", ApiKeyService.MAX_JE_LADEN);
     }
 
     public record AnlegenRequest(String label) {}
@@ -55,6 +55,6 @@ public class ApiKeyController {
     public Map<String, Object> widerrufen(@PathVariable String id, Authentication auth) {
         Shop shop = currentShop(auth);
         dienst.widerrufen(shop, id);
-        return Map.of("freigeschaltet", shop.isApiFreigeschaltet(), "keys", dienst.liste(shop), "max", ApiKeyService.MAX_JE_LADEN);
+        return Map.of("freigeschaltet", shop.isApiAktiv(), "keys", dienst.liste(shop), "max", ApiKeyService.MAX_JE_LADEN);
     }
 }

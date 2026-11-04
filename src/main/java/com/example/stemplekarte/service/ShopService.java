@@ -39,6 +39,9 @@ public class ShopService {
                 name,
                 maxTokens
         );
+        // Jeder neue Laden startet mit 14 Tagen gratis; der Admin markiert ihn
+        // danach als bezahlt (testBis = null) oder verlaengert.
+        shop.setTestBis(java.time.Instant.now().plus(java.time.Duration.ofDays(Shop.TEST_TAGE)));
         Shop saved = shopRepo.save(shop);
         staffTokenRepo.save(StaffToken.create(saved, "Standard-Mitarbeiter"));
         return saved;
@@ -183,6 +186,7 @@ public class ShopService {
             throw new IllegalArgumentException("Text darf hoechstens 160 Zeichen haben");
         }
         Shop shop = getById(shopId);
+        if (enabled) TarifPruefung.pruefe(shop, com.example.stemplekarte.model.Tarif.Funktion.AUTO_NACHRICHTEN);
         shop.updateGeburtstagsgruss(enabled, t);
         return shopRepo.save(shop);
     }

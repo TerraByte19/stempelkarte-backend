@@ -55,6 +55,7 @@ public class OrteService {
             throw new IllegalArgumentException("Ungültige Koordinaten");
         }
         Shop shop = shopRepo.findById(shopId).orElseThrow(() -> new NoSuchElementException("Shop nicht gefunden"));
+        TarifPruefung.pruefe(shop, com.example.stemplekarte.model.Tarif.Funktion.FILIALEN);
         int erlaubt = erlaubt(shop);
         if (erlaubt == 0) {
             throw new IllegalArgumentException("Weitere Orte sind in deinem Tarif nicht enthalten.");
@@ -66,8 +67,9 @@ public class OrteService {
         return liste(shop);
     }
 
-    /** Vom Admin freigeschaltete Anzahl, nie mehr als Apple zulaesst. */
+    /** Vom Admin freigeschaltete Anzahl, nie mehr als Apple zulaesst. Basic: keine. */
     public static int erlaubt(Shop shop) {
+        if (!TarifPruefung.darf(shop, com.example.stemplekarte.model.Tarif.Funktion.FILIALEN)) return 0;
         return Math.min(MAX_WEITERE, shop.getMaxOrte());
     }
 

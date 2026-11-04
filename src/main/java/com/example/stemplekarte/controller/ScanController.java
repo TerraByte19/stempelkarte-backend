@@ -121,6 +121,8 @@ public class ScanController {
         }
 
         Shop shop = ((StaffTokenFilter.StaffPrincipal) auth.getPrincipal()).staff().getShop();
+        // Gratis-Testphase vorbei: kein Stempel (Laeden ohne Testphase: nie).
+        com.example.stemplekarte.service.TarifPruefung.pruefeTestphase(shop);
 
         // Ohne Ladenort laeuft die Geo-Pruefung ins Leere - dann ist das
         // Stempeln selbst der Hebel, der fehlt.
@@ -217,6 +219,7 @@ public class ScanController {
         }
         var staff = ((StaffTokenFilter.StaffPrincipal) auth.getPrincipal()).staff();
         Shop shop = staff.getShop();
+        com.example.stemplekarte.service.TarifPruefung.pruefeTestphase(shop);
         if (!com.example.stemplekarte.service.StandortPflicht.darfScannen(shop, java.time.Instant.now())) {
             log.warn("[SCAN] GESPERRT laden={} grund=kein_standort", shop.getId());
             throw new ResponseStatusException(HttpStatus.FORBIDDEN,
@@ -267,6 +270,7 @@ public class ScanController {
         // echten Laeden und bleibt dafuer unangetastet.
         var staff = ((StaffTokenFilter.StaffPrincipal) auth.getPrincipal()).staff();
         Shop shop = staff.getShop();
+        com.example.stemplekarte.service.TarifPruefung.pruefeTestphase(shop);
         if (!com.example.stemplekarte.service.StandortPflicht.darfScannen(shop, java.time.Instant.now())) {
             log.warn("[SCAN] GESPERRT laden={} grund=kein_standort", shop.getId());
             throw new ResponseStatusException(HttpStatus.FORBIDDEN,

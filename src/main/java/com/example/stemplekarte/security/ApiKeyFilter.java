@@ -42,7 +42,7 @@ public class ApiKeyFilter extends OncePerRequestFilter {
         if (header != null && !header.isBlank()) {
             repo.findAktivByHash(ApiKeyService.hash(header.trim())).ifPresent(key -> {
                 Shop shop = key.getShop();
-                if (shop == null || !shop.isActive() || !shop.isApiFreigeschaltet()) return;
+                if (shop == null || !shop.isActive() || !shop.isApiAktiv()) return;
                 var auth = new UsernamePasswordAuthenticationToken(
                         new ApiPrincipal(shop, key.getLabel()), null,
                         List.of(new SimpleGrantedAuthority("ROLE_API")));

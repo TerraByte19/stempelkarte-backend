@@ -699,7 +699,7 @@ public class ApplePassService {
             // Nur so viele, wie der Tarif erlaubt: senkt der Admin die Zahl,
             // verschwinden die hinteren Orte aus dem Pass, ohne dass jemand
             // sie loeschen muss.
-            int erlaubt = Math.min(MAX_ORTE - 1, shop.getMaxOrte());
+            int erlaubt = Math.min(MAX_ORTE - 1, com.example.stemplekarte.service.OrteService.erlaubt(shop));
             for (com.example.stemplekarte.model.ShopOrt o : ortRepo.findByShopOrderByCreatedAtAsc(shop)) {
                 if (orte.size() >= MAX_ORTE || orte.size() > erlaubt) break;
                 orte.add(PKLocation.builder()

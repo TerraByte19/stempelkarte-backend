@@ -2,7 +2,6 @@ package com.example.stemplekarte.service;
 
 import com.example.stemplekarte.config.AppProperties;
 import com.example.stemplekarte.model.Card;
-import com.example.stemplekarte.model.Customer;
 import com.example.stemplekarte.model.CustomerCard;
 import com.example.stemplekarte.model.ScanResult;
 import com.example.stemplekarte.model.Shop;
@@ -14,7 +13,6 @@ import com.example.stemplekarte.wallet.GoogleWalletService;
 import com.example.stemplekarte.wallet.WalletNotifier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -37,8 +35,8 @@ import java.util.regex.Pattern;
  * passieren wuerde: Geschenk einloesen, Stempel, Einkauf buchen, Paket
  * aufladen.
  *
- * Testkarten, die aelter als eine Woche sind, raeumt der Dienst nachts weg
- * (Kunde mit, wenn er sonst keine Karte hat).
+ * Geloescht wird hier nie automatisch, auch keine Testkarten: Loeschen
+ * macht nur der Admin von Hand (User-Entscheidung 2026-11-04).
  */
 @Service
 public class DemoService {
@@ -48,7 +46,6 @@ public class DemoService {
 
     static final int MAX_JE_KARTE_UND_TAG = 30;
     static final Duration MIN_ABSTAND = Duration.ofSeconds(3);
-    static final int AUFRAEUMEN_TAGE = 7;
     static final long DEMO_BETRAG_CENTS = 1250;
     static final String DEMO_LABEL = "Demo";
 
@@ -174,44 +171,5 @@ public class DemoService {
             }
             zeiten.addLast(jetzt);
         }
-    }
-
-    // ── Aufraeumen ──────────────────────────────────────────────────────
-
-    @Scheduled(cron = "0 20 4 * * *", zone = "Europe/Berlin")
-    public void aufraeumen() {
-        try {
-            int n = aufraeumen(Instant.now());
-            if (n > 0) log.info("[DEMO] {} Testkarten aufgeräumt", n);
-        } catch (Exception e) {
-            log.warn("[DEMO] Aufräumen abgebrochen: {}", e.getMessage());
-        }
-    }
-
-    /** Testkarten aelter als AUFRAEUMEN_TAGE loeschen; den Kunden mit, wenn er sonst keine Karte hat. */
-    @Transactional
-    public int aufraeumen(Instant jetzt) {
-        Instant grenze = jetzt.minus(Duration.ofDays(AUFRAEUMEN_TAGE));
-        int geloescht = 0;
-        for (Shop shop : shopRepo.findByDemoTrue()) {
-            for (Card card : cardRepo.findByShop(shop)) {
-                for (CustomerCard cc : customerCardRepo.findByCard(card)) {
-                    if (cc.getCreatedAt() == null || !cc.getCreatedAt().isBefore(grenze)) continue;
-                    Customer kunde = cc.getCustomer();
-                    boolean andere = kunde != null && customerCardRepo.findByCustomer(kunde).stream()
-                            .anyMatch(k -> k.getCard() != null && k.getCard().getShop() != null
-                                    && !k.getCard().getShop().isDemo());
-                    if (kunde != null && !andere) {
-                        customerService.deleteCustomerData(kunde.getId());
-                    } else {
-                        appleDeviceRepo.deleteBySerialNumber(cc.getId());
-                        customerCardRepo.delete(cc);
-                    }
-                    takt.remove(cc.getId());
-                    geloescht++;
-                }
-            }
-        }
-        return geloescht;
     }
 }

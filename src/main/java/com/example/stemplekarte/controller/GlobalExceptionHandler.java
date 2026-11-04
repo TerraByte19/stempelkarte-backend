@@ -39,6 +39,25 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("error", msg));
     }
 
+    // Funktion nicht im Tarif (Basic): 402 mit code, damit das Frontend
+    // "Ab Pro" zeigen kann. Bewusst NICHT 403: darauf loggt das Frontend
+    // (src/api.js) den Laden aus.
+    @ExceptionHandler(com.example.stemplekarte.service.TarifPruefung.Gesperrt.class)
+    public ResponseEntity<Map<String, String>> handleTarif(com.example.stemplekarte.service.TarifPruefung.Gesperrt e) {
+        return ResponseEntity.status(HttpStatus.PAYMENT_REQUIRED).body(Map.of(
+                "error", e.getMessage(),
+                "code", "TARIF",
+                "funktion", e.getFunktion().name()));
+    }
+
+    // Gratis-Testphase vorbei: Scanner und Laden-Seiten zeigen die Meldung.
+    @ExceptionHandler(com.example.stemplekarte.service.TarifPruefung.TestVorbei.class)
+    public ResponseEntity<Map<String, String>> handleTestVorbei(com.example.stemplekarte.service.TarifPruefung.TestVorbei e) {
+        return ResponseEntity.status(HttpStatus.PAYMENT_REQUIRED).body(Map.of(
+                "error", e.getMessage(),
+                "code", "TEST_VORBEI"));
+    }
+
     @ExceptionHandler(IllegalStateException.class)
     public ResponseEntity<Map<String, String>> handleConflict(IllegalStateException e) {
         return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(Map.of("error", e.getMessage()));

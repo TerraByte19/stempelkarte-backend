@@ -260,6 +260,26 @@ class AutomationTest {
     }
 
     @Test
+    void basic_anlegenGesperrt_pausierenGeht_laeuferUeberspringt() {
+        when(shop.getTarif()).thenReturn(com.example.stemplekarte.model.Tarif.BASIC);
+        assertThatThrownBy(() -> dienst.anlegen("SHOP-1", new AutomationService.Anfrage("x", "NACH_ANMELDUNG", 1, null, null, "t", null)))
+                .isInstanceOf(TarifPruefung.Gesperrt.class);
+
+        Automation a = auto(AutomationAusloeser.KEIN_BESUCH_SEIT, 30);
+        when(automationRepo.findByIdAndShop(a.getId(), shop)).thenReturn(Optional.of(a));
+        assertThatThrownBy(() -> dienst.aendern("SHOP-1", a.getId(), new AutomationService.Anfrage("y", null, null, null, null, null, null)))
+                .isInstanceOf(TarifPruefung.Gesperrt.class);
+        assertThat(dienst.aendern("SHOP-1", a.getId(), new AutomationService.Anfrage(null, null, null, null, null, null, false)).aktiv()).isFalse();
+
+        Automation laufend = auto(AutomationAusloeser.KEIN_BESUCH_SEIT, 30);
+        when(automationRepo.findByAktivTrue()).thenReturn(List.of(laufend));
+        CustomerCard faellig = karteMitBesuch(anna, 2, um11.minus(Duration.ofDays(40)));
+        when(ccRepo.findKampagnenBasis(shop)).thenReturn(List.of(faellig));
+        assertThat(dienst.lauf(um11)).isZero();
+        verify(kampagnen, never()).starteFuer(any(), anyString(), any(), anyString());
+    }
+
+    @Test
     void lauf_niemandFaellig_keineKampagne_pausiertNicht() {
         Automation a = auto(AutomationAusloeser.STEMPEL_STAND, 9);
         when(automationRepo.findByAktivTrue()).thenReturn(List.of(a));

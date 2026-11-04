@@ -107,6 +107,7 @@ public class AutomationService {
     @Transactional
     public Eintrag anlegen(String shopId, Anfrage f) {
         Shop shop = shopRepo.findById(shopId).orElseThrow(() -> new NoSuchElementException("Shop nicht gefunden"));
+        TarifPruefung.pruefe(shop, com.example.stemplekarte.model.Tarif.Funktion.AUTOMATIONEN);
         if (automationRepo.countByShop(shop) >= MAX_JE_LADEN) {
             throw new IllegalArgumentException("Höchstens " + MAX_JE_LADEN + " Automationen je Laden");
         }
@@ -123,6 +124,10 @@ public class AutomationService {
     @Transactional
     public Eintrag aendern(String shopId, String id, Anfrage f) {
         Shop shop = shopRepo.findById(shopId).orElseThrow(() -> new NoSuchElementException("Shop nicht gefunden"));
+        // Ohne Tarif nur ausschalten (aktiv=false), sonst nichts aendern.
+        if (!Boolean.FALSE.equals(f.aktiv())) {
+            TarifPruefung.pruefe(shop, com.example.stemplekarte.model.Tarif.Funktion.AUTOMATIONEN);
+        }
         Automation a = automationRepo.findByIdAndShop(id, shop)
                 .orElseThrow(() -> new NoSuchElementException("Automation nicht gefunden"));
         AutomationAusloeser ausloeser = f.ausloeser() != null
@@ -302,6 +307,7 @@ public class AutomationService {
         for (Automation a : automationRepo.findByAktivTrue()) {
             Shop shop = a.getShop();
             if (shop == null || !shop.isActive()) continue;
+            if (!TarifPruefung.darf(shop, com.example.stemplekarte.model.Tarif.Funktion.AUTOMATIONEN)) continue;
             if (heute.equals(geprueft.get(a.getId()))) continue;
             try {
                 if (kampagneRepo.existsByAutomationIdAndErstelltAmGreaterThanEqual(a.getId(), tagesbeginn)) {

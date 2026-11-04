@@ -78,6 +78,7 @@ public class BewertungsErinnerungService {
         int gestartet = 0;
         for (Shop shop : shopRepo.findAll()) {
             if (!shop.isActive() || shop.getBewertungErinnerungAb() <= 0) continue;
+            if (TarifPruefung.testVorbei(shop, java.time.Instant.now())) continue;
             if (shop.getGoogleReviewUrl() == null || shop.getGoogleReviewUrl().isBlank()) continue;
             if (heute.equals(geprueft.get(shop.getId()))) continue;
             try {

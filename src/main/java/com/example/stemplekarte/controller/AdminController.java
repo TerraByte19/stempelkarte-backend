@@ -194,6 +194,10 @@ public class AdminController {
                     com.example.stemplekarte.service.StandortPflicht.hatStandort(shop));
             map.put("maxOrte", shop.getMaxOrte());
             map.put("apiFreigeschaltet", shop.isApiFreigeschaltet());
+            map.put("tarif", shop.getTarif().name());
+            map.put("kundenGrenze", shop.getTarif().kundenGrenze());
+            map.put("testBis", shop.getTestBis() != null ? shop.getTestBis().toString() : null);
+            map.put("testTage", shop.testTageUebrig(java.time.Instant.now()));
             map.put("demo", shop.isDemo());
             return map;
         }).toList();
@@ -470,6 +474,63 @@ public class AdminController {
         shopRepo.save(shop);
         log.info("[ADMIN] Schnittstelle laden={} frei={}", shop.getId(), req.freigeschaltet());
         return ResponseEntity.ok(Map.of("id", shop.getId(), "apiFreigeschaltet", shop.isApiFreigeschaltet()));
+    }
+
+    public record TarifRequest(String tarif) {}
+
+    /**
+     * Tarif setzen: BASIC, PRO oder KETTE. Basic sperrt Kampagnen,
+     * Auto-Nachrichten, Automationen, Tagesangebot, Newsletter, API und
+     * Filialen (siehe model.Tarif). Einstellungen bleiben gespeichert und
+     * laufen nach einem Wechsel zurueck auf Pro weiter.
+     * hinweis: was sich fuer den Laden sofort aendert, damit der Admin nicht
+     * aus Versehen einer Filiale das Scannen nimmt.
+     */
+    @PostMapping("/shops/{shopId}/tarif")
+    public ResponseEntity<Map<String, Object>> setTarif(@PathVariable String shopId, @RequestBody TarifRequest req) {
+        Shop shop = shopRepo.findById(shopId).orElse(null);
+        if (shop == null) {
+            return ResponseEntity.status(404).body(Map.of("error", "Shop nicht gefunden: " + shopId));
+        }
+        com.example.stemplekarte.model.Tarif tarif = com.example.stemplekarte.model.Tarif.von(req.tarif());
+        shop.setTarif(tarif);
+        shopRepo.save(shop);
+        log.info("[ADMIN] Tarif laden={} tarif={}", shop.getId(), tarif);
+        Map<String, Object> out = new HashMap<>();
+        out.put("id", shop.getId());
+        out.put("tarif", tarif.name());
+        out.put("kundenGrenze", tarif.kundenGrenze());
+        if (tarif == com.example.stemplekarte.model.Tarif.BASIC && shop.getMaxOrte() > 0) {
+            out.put("hinweis", "Basic hat nur einen Standort: weitere Orte zählen nicht mehr, "
+                    + "Scans dort werden wie außerhalb des Ladens behandelt.");
+        }
+        return ResponseEntity.ok(out);
+    }
+
+    public record TestRequest(int tage) {}
+
+    /**
+     * Testphase: tage = 0 heisst bezahlt (Testphase weg), sonst laeuft sie ab
+     * heute noch so viele Tage (verlaengern). Hoechstens 90.
+     */
+    @PostMapping("/shops/{shopId}/test")
+    public ResponseEntity<Map<String, Object>> setTest(@PathVariable String shopId, @RequestBody TestRequest req) {
+        Shop shop = shopRepo.findById(shopId).orElse(null);
+        if (shop == null) {
+            return ResponseEntity.status(404).body(Map.of("error", "Shop nicht gefunden: " + shopId));
+        }
+        if (req.tage() < 0 || req.tage() > 90) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Erlaubt sind 0 bis 90 Tage"));
+        }
+        java.time.Instant jetzt = java.time.Instant.now();
+        shop.setTestBis(req.tage() == 0 ? null : jetzt.plus(java.time.Duration.ofDays(req.tage())));
+        shopRepo.save(shop);
+        log.info("[ADMIN] Testphase laden={} tage={}", shop.getId(), req.tage());
+        Map<String, Object> out = new HashMap<>();
+        out.put("id", shop.getId());
+        out.put("testBis", shop.getTestBis() != null ? shop.getTestBis().toString() : null);
+        out.put("testTage", shop.testTageUebrig(jetzt));
+        return ResponseEntity.ok(out);
     }
 
     public record DemoRequest(boolean demo) {}

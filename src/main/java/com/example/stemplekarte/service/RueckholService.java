@@ -83,6 +83,7 @@ public class RueckholService {
         Instant jetzt = Instant.now();
         for (Shop shop : shopRepo.findAll()) {
             if (!shop.isActive() || !shop.isRueckholAktiv()) continue;
+            if (TarifPruefung.testVorbei(shop, java.time.Instant.now())) continue;
             try {
                 verschicke(shop, jetzt);
             } catch (Exception e) {

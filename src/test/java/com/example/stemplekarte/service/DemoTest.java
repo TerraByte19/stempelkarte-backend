@@ -33,7 +33,7 @@ import static org.mockito.Mockito.when;
 
 /**
  * Demo-Karten: nur Demo-Laeden, jeder Schritt macht das Naechste an der
- * Kasse, Drossel je Karte, Aufraeumen nach einer Woche.
+ * Kasse, Drossel je Karte, nie automatisch loeschen.
  */
 class DemoTest {
 
@@ -166,29 +166,12 @@ class DemoTest {
     }
 
     @Test
-    void aufraeumen_nachEinerWoche_kundeMitWennSonstNichts() {
-        CustomerCard alt = CustomerCard.create(kunde, karte);
-        CustomerCard frisch = CustomerCard.create(mock(Customer.class), karte);
-        // createdAt laesst sich nicht setzen: alt per Mock.
-        CustomerCard altMock = mock(CustomerCard.class);
-        when(altMock.getId()).thenReturn("CC-ALT");
-        when(altMock.getCreatedAt()).thenReturn(JETZT.minus(Duration.ofDays(8)));
-        when(altMock.getCustomer()).thenReturn(kunde);
-        when(ccRepo.findByCard(karte)).thenReturn(List.of(altMock, frisch));
-        when(ccRepo.findByCustomer(kunde)).thenReturn(List.of(altMock));
-
-        assertThat(dienst.aufraeumen(JETZT)).isEqualTo(1);
-        verify(customerService).deleteCustomerData("CUST-1");
-        verify(ccRepo, never()).delete(any());
-
-        // Hat noch eine echte Karte woanders: nur die Demo-Karte weg.
-        Shop echt = mock(Shop.class);
-        Card echteKarte = Card.create(echt, "Echt", "x", 10, "x");
-        CustomerCard echteCc = CustomerCard.create(kunde, echteKarte);
-        when(ccRepo.findByCustomer(kunde)).thenReturn(List.of(altMock, echteCc));
-        assertThat(dienst.aufraeumen(JETZT)).isEqualTo(1);
-        verify(ccRepo).delete(altMock);
-        verify(geraete).deleteBySerialNumber("CC-ALT");
-        assertThat(alt.getCreatedAt()).isNotNull();
+    void loeschtNieAutomatisch() {
+        // Kein nächtlicher Lauf: Löschen macht nur der Admin von Hand.
+        for (var m : DemoService.class.getDeclaredMethods()) {
+            assertThat(m.isAnnotationPresent(org.springframework.scheduling.annotation.Scheduled.class))
+                    .as(m.getName()).isFalse();
+        }
+        verify(customerService, never()).deleteCustomerData(anyString());
     }
 }

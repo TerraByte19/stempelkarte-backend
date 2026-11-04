@@ -156,6 +156,8 @@ public class WebhookService {
      */
     public void melde(Shop shop, String typ, Map<String, Object> daten) {
         if (shop == null || shop.getWebhookUrl() == null || shop.getWebhookUrl().isBlank()) return;
+        // Schnittstelle aus (Admin oder Tarif Basic): keine Ereignisse mehr.
+        if (!shop.isApiAktiv()) return;
         try {
             Instant jetzt = Instant.now();
             String id = "WH-" + UUID.randomUUID().toString().substring(0, 12).toUpperCase();
@@ -296,6 +298,7 @@ public class WebhookService {
         }
         pruefeZiel(url);
         Shop shop = shopRepo.findById(shopId).orElseThrow(() -> new NoSuchElementException("Shop nicht gefunden"));
+        TarifPruefung.pruefe(shop, com.example.stemplekarte.model.Tarif.Funktion.API);
         if (!shop.isApiFreigeschaltet()) throw new IllegalStateException(ApiKeyService.NICHT_FREIGESCHALTET);
         String secret = null;
         if (neuesGeheimnis || shop.getWebhookSecret() == null) {

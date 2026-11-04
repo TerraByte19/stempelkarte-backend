@@ -224,6 +224,16 @@ public class Shop {
     @Column(name = "api_freigeschaltet")
     private Boolean apiFreigeschaltet;
 
+    // Tarif (model.Tarif): BASIC, PRO oder KETTE, vom Admin gesetzt.
+    // Null = Tarif.STANDARD (Pro), damit Bestandslaeden nichts verlieren.
+    @Column(name = "tarif", length = 10)
+    private String tarif;
+
+    // Gratis-Testphase: bis wann. Null = keine (bezahlt oder Bestandsladen).
+    // Nach Ablauf wird nichts gesperrt; Dashboard und Admin zeigen es nur an.
+    @Column(name = "test_bis")
+    private Instant testBis;
+
     // Demo-Laden fuer die Website: Besucher holen sich eine Karte und
     // stempeln sich selbst (DemoService). Vom Admin gesetzt. Null = nein.
     @Column(name = "demo")
@@ -584,6 +594,50 @@ public class Shop {
         this.apiFreigeschaltet = frei;
         this.updatedAt = Instant.now();
     }
+
+    /** Schnittstelle nutzbar: vom Admin freigeschaltet UND im Tarif enthalten. */
+    public boolean isApiAktiv() { return isApiFreigeschaltet() && getTarif().erlaubt(Tarif.Funktion.API); }
+
+    // ── Testphase ───────────────────────────────────────────────────────
+
+    public static final int TEST_TAGE = 14;
+
+    public Instant getTestBis() { return testBis; }
+
+    /** Null = Testphase vorbei und bezahlt (Admin). */
+    public void setTestBis(Instant bis) {
+        this.testBis = bis;
+        this.updatedAt = Instant.now();
+    }
+
+    /**
+     * Angefangene Tage bis zum Ende: 1 = endet heute bzw. in weniger als
+     * 24 Stunden, 0 = vorbei, null = keine Testphase.
+     */
+    public Integer testTageUebrig(Instant jetzt) {
+        if (testBis == null) return null;
+        long sek = java.time.Duration.between(jetzt, testBis).getSeconds();
+        if (sek <= 0) return 0;
+        return (int) Math.min(Integer.MAX_VALUE, (sek + 86_399) / 86_400);
+    }
+
+    // ── Tarif ───────────────────────────────────────────────────────────
+
+    public Tarif getTarif() {
+        if (tarif == null || tarif.isBlank()) return Tarif.STANDARD;
+        try {
+            return Tarif.valueOf(tarif);
+        } catch (IllegalArgumentException e) {
+            return Tarif.STANDARD;
+        }
+    }
+
+    /** Vom Admin. */
+    public void setTarif(Tarif t) {
+        this.tarif = t.name();
+        this.updatedAt = Instant.now();
+    }
+
 
     public String getWebhookUrl() { return webhookUrl; }
     public String getWebhookSecret() { return webhookSecret; }

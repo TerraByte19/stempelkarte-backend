@@ -95,6 +95,8 @@ public class AutoNachrichtenService {
             throw new IllegalArgumentException("Der Text darf höchstens " + AutoNachricht.TEXT_MAX + " Zeichen haben");
         }
         Shop shop = shopRepo.findById(shopId).orElseThrow(() -> new NoSuchElementException("Shop nicht gefunden"));
+        // Ausschalten geht immer, Einschalten nur mit Tarif.
+        if (aktiv) TarifPruefung.pruefe(shop, com.example.stemplekarte.model.Tarif.Funktion.AUTO_NACHRICHTEN);
         Instant jetzt = Instant.now();
         AutoNachricht a = autoRepo.findByShopAndTyp(shop, typ.name())
                 .orElseGet(() -> AutoNachricht.neu(shop, typ.name(), jetzt));
@@ -124,6 +126,7 @@ public class AutoNachrichtenService {
         for (AutoNachricht a : autoRepo.findAktive()) {
             Shop shop = a.getShop();
             if (shop == null || !shop.isActive()) continue;
+            if (!TarifPruefung.darf(shop, com.example.stemplekarte.model.Tarif.Funktion.AUTO_NACHRICHTEN)) continue;
             AutoNachrichtTyp typ;
             try {
                 typ = AutoNachrichtTyp.von(a.getTyp());

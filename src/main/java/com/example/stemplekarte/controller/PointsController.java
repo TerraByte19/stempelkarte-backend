@@ -76,6 +76,7 @@ public class PointsController {
     @PostMapping("/earn")
     public PointsResponse earn(@Valid @RequestBody EarnRequest req, Authentication auth) {
         Staff staff = staffAus(auth);
+        com.example.stemplekarte.service.TarifPruefung.pruefeTestphase(staff.shop());
         pruefeStandort(staff, req.lat(), req.lon());
         var ergebnis = service.earn(req.qrPayload(), staff.shop(), req.amountCents(), staff.label(),
                 ortFuer(staff, req.lat(), req.lon()));
@@ -99,6 +100,7 @@ public class PointsController {
     @PostMapping("/correct")
     public PointsResponse correct(@Valid @RequestBody CorrectRequest req, Authentication auth) {
         Staff staff = staffAus(auth);
+        com.example.stemplekarte.service.TarifPruefung.pruefeTestphase(staff.shop());
         nurMitarbeiter(staff);
         pruefeStandort(staff, req.lat(), req.lon());
         var ergebnis = service.correct(req.qrPayload(), staff.shop(),

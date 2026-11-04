@@ -63,6 +63,7 @@ public class ApiKeyService {
     @Transactional
     public Neu anlegen(String shopId, String labelRoh) {
         Shop shop = shopRepo.findById(shopId).orElseThrow(() -> new NoSuchElementException("Shop nicht gefunden"));
+        TarifPruefung.pruefe(shop, com.example.stemplekarte.model.Tarif.Funktion.API);
         if (!shop.isApiFreigeschaltet()) throw new IllegalStateException(NICHT_FREIGESCHALTET);
         String label = labelRoh == null ? "" : labelRoh.replaceAll("\\p{Cntrl}", " ").trim();
         if (label.isEmpty()) label = "Schlüssel";

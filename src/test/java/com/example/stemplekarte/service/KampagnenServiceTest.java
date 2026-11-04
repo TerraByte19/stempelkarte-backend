@@ -356,6 +356,17 @@ class KampagnenServiceTest {
     }
 
     @Test
+    void faellig_aberInzwischenBasic_nichtGesendet() {
+        when(shop.getTarif()).thenReturn(com.example.stemplekarte.model.Tarif.BASIC);
+        basis(kundenkarte());
+        Kampagne k = Kampagne.starte(shop, "Happy Hour", Zielgruppe.ALLE, 1, jetzt.minusSeconds(600), jetzt.minusSeconds(1));
+        dienst.aktiviere(k, jetzt);
+        assertThat(k.getStatus()).isEqualTo(Kampagne.FERTIG);
+        assertThat(k.getEmpfaenger()).isZero();
+        verify(empfaengerRepo, never()).saveAll(any());
+    }
+
+    @Test
     void faellig_niemandDa_gleichFertig() {
         basis();
         Kampagne k = Kampagne.starte(shop, "x", Zielgruppe.ALLE, 3, jetzt.minusSeconds(600), jetzt.minusSeconds(1));
