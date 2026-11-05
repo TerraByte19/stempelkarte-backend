@@ -107,10 +107,13 @@ public class CustomerService {
         Card card = cardRepo.findById(cardId)
                 .orElseThrow(() -> new NoSuchElementException("Karte nicht gefunden: " + cardId));
 
+        // Sprache des Ladens merken, aber nur fuer einen NEUEN Kunden: wer
+        // schon eine Karte bei einem deutschen Laden hat (Altbestand ohne
+        // Sprache), bleibt dort deutsch - auch wenn er sich jetzt bei einem
+        // tuerkischen Laden anmeldet. Ohne Eintrag gilt je Laden dessen Sprache.
+        boolean neuerKunde = customerRepo.findByEmail(email.toLowerCase().trim()).isEmpty();
         Customer customer = getOrCreate(name, email);
-        // Sprache des Ladens merken, aber nur beim allerersten Anmelden: wer
-        // schon eine Karte bei einem deutschen Laden hat, bleibt deutsch.
-        if (customer.getLanguage() == null || customer.getLanguage().isBlank()) {
+        if (neuerKunde && (customer.getLanguage() == null || customer.getLanguage().isBlank())) {
             customer.setLanguage(com.example.stemplekarte.i18n.Texts.sprache(card.getShop()));
         }
 

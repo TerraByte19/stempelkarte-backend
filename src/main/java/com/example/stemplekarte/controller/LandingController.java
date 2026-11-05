@@ -116,10 +116,17 @@ public class LandingController {
      * Mail - die Antwort traegt gleich den Link zur Karte.
      */
     @PostMapping("/karte-neu/register-google")
-    public Map<String, Object> registerMitGoogle(@RequestBody GoogleRegisterRequest req) {
+    public Map<String, Object> registerMitGoogle(@RequestBody GoogleRegisterRequest req,
+                                                 jakarta.servlet.http.HttpServletRequest http) {
         if (googleAnmeldung == null || !googleAnmeldung.aktiv()) {
             throw new IllegalArgumentException("Anmeldung mit Google ist nicht eingerichtet");
         }
+        // Offener Endpunkt mit einer Anfrage an Google dahinter: je Adresse begrenzen.
+        String forwarded = http != null ? http.getHeader("X-Forwarded-For") : null;
+        String ip = (forwarded != null && !forwarded.isBlank())
+                ? forwarded.split(",")[0].trim()
+                : (http != null ? http.getRemoteAddr() : null);
+        googleAnmeldung.drossel(ip, java.time.Instant.now());
         com.example.stemplekarte.model.Shop shop = cardService.getById(req.cardId()).getShop();
         Zusatz z = zusatz(shop, req.birthday(), req.phone());
         com.example.stemplekarte.service.GoogleAnmeldung.Profil p = googleAnmeldung.pruefe(req.credential());

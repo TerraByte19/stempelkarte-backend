@@ -39,6 +39,12 @@ public class GoogleAnmeldung {
 
     public record Profil(String email, String name) {}
 
+    // Hoechstens so viele Versuche je IP in 10 Minuten: jeder Versuch ist
+    // eine Anfrage an Google, die bis zu 8 Sekunden dauern kann.
+    static final int MAX_JE_IP = 20;
+    private static final Duration FENSTER = Duration.ofMinutes(10);
+    private final java.util.Map<String, java.util.Deque<java.time.Instant>> versuche = new java.util.concurrent.ConcurrentHashMap<>();
+
     private final String clientId;
     private final HttpClient http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(8)).build();
 
@@ -52,6 +58,22 @@ public class GoogleAnmeldung {
 
     public String clientId() {
         return clientId;
+    }
+
+    /** Wirft bei zu vielen Versuchen von derselben Adresse. */
+    public void drossel(String ip, java.time.Instant jetzt) {
+        String key = (ip == null || ip.isBlank()) ? "?" : ip;
+        java.util.Deque<java.time.Instant> zeiten = versuche.computeIfAbsent(key, k -> new java.util.ArrayDeque<>());
+        synchronized (zeiten) {
+            java.time.Instant grenze = jetzt.minus(FENSTER);
+            while (!zeiten.isEmpty() && zeiten.peekFirst().isBefore(grenze)) zeiten.pollFirst();
+            if (zeiten.size() >= MAX_JE_IP) {
+                throw new IllegalArgumentException("Zu viele Versuche. Bitte in ein paar Minuten noch einmal.");
+            }
+            zeiten.addLast(jetzt);
+        }
+        // Alte Adressen nicht ewig behalten.
+        if (versuche.size() > 5000) versuche.clear();
     }
 
     /** IllegalArgumentException (400) mit Klartext, wenn das Token nicht passt. */

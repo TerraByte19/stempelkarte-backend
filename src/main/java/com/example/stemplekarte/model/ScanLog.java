@@ -16,7 +16,9 @@ import java.util.UUID;
 @Table(name = "scan_logs",
         indexes = {
                 @Index(name = "idx_scanlog_shop_time", columnList = "shop_id, scanned_at"),
-                @Index(name = "idx_scanlog_card", columnList = "card_id")
+                @Index(name = "idx_scanlog_card", columnList = "card_id"),
+                // Letzter Scan einer Kundenkarte (Sperrzeit am Tablet, KioskService)
+                @Index(name = "idx_scanlog_kunde", columnList = "shop_id, customer_id, card_id, scanned_at")
         })
 public class ScanLog {
 

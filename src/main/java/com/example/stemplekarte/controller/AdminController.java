@@ -489,7 +489,12 @@ public class AdminController {
         if (shop == null) {
             return ResponseEntity.status(404).body(Map.of("error", "Shop nicht gefunden"));
         }
-        String language = com.example.stemplekarte.i18n.Texts.norm(req.language());
+        String roh = req.language() == null ? "" : req.language().trim().toLowerCase(java.util.Locale.ROOT);
+        if (!com.example.stemplekarte.i18n.Texts.SPRACHEN.contains(roh)) {
+            return ResponseEntity.badRequest().body(Map.of("error",
+                    "Sprache muss de, en, ar oder tr sein"));
+        }
+        String language = roh;
         shop.setLanguage(language);
         shopRepo.save(shop);
         log.info("[ADMIN] Sprache laden={} language={}", shop.getId(), language);

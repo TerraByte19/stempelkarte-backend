@@ -66,7 +66,7 @@ class GoogleAnmeldeSeiteTest {
         google("");
         assertThat(controller.newCustomerPage("CARD-1").getBody()).doesNotContain("gsi/client");
         assertThatThrownBy(() -> controller.registerMitGoogle(
-                new LandingController.GoogleRegisterRequest("gutes-token", "CARD-1", false, null, null, null)))
+                new LandingController.GoogleRegisterRequest("gutes-token", "CARD-1", false, null, null, null), null))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 
@@ -87,11 +87,11 @@ class GoogleAnmeldeSeiteTest {
                 anyBoolean(), isNull(), isNull(), isNull())).thenReturn(cc);
 
         Map<String, Object> out = controller.registerMitGoogle(
-                new LandingController.GoogleRegisterRequest("gutes-token", "CARD-1", true, null, null, null));
+                new LandingController.GoogleRegisterRequest("gutes-token", "CARD-1", true, null, null, null), null);
         assertThat(out).containsEntry("status", "ok").containsEntry("url", "/karte/CUST-9/CARD-1");
 
         assertThatThrownBy(() -> controller.registerMitGoogle(
-                new LandingController.GoogleRegisterRequest("falsch", "CARD-1", true, null, null, null)))
+                new LandingController.GoogleRegisterRequest("falsch", "CARD-1", true, null, null, null), null))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 }
