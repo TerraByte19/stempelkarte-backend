@@ -45,7 +45,7 @@ class WalletSprachenTest {
     @Test
     void stempelkarte_tuerkisch_labelsUndMitteilung() {
         Card card = Card.create(laden("tr"), "Kahve", "x", 10, "Bir kahve bedava");
-        CustomerCard cc = CustomerCard.create(kunde(null), card);
+        CustomerCard cc = CustomerCard.create(kunde("tr"), card);
         cc.addStamp();
 
         PKGenericPass pass = dienst().baueFelder(card, cc, false);
@@ -67,8 +67,8 @@ class WalletSprachenTest {
     }
 
     @Test
-    void deutsch_wieBisher() {
-        Card card = Card.create(laden(null), "Kaffee", "x", 10, "Gratis Kaffee");
+    void deutsch_wieBisher_auchBeiTuerkischemLaden() {
+        Card card = Card.create(laden("tr"), "Kaffee", "x", 10, "Gratis Kaffee");
         CustomerCard cc = CustomerCard.create(kunde(null), card);
         for (int i = 0; i < 10; i++) cc.addStamp();
         PKGenericPass pass = dienst().baueFelder(card, cc, false);
@@ -84,12 +84,12 @@ class WalletSprachenTest {
     void mitgliedUndPaket_arabisch() {
         Shop shop = laden("ar");
         Card mitglied = Card.createMember(shop, "Üye", "x");
-        PKGenericPass m = dienst().baueFelder(mitglied, CustomerCard.create(kunde(null), mitglied), false);
+        PKGenericPass m = dienst().baueFelder(mitglied, CustomerCard.create(kunde("ar"), mitglied), false);
         assertThat(m.getHeaderFields().get(0).getLabel()).isEqualTo(Texts.t("ar", "pass.visits_label"))
                 .isNotEqualTo("BESUCHE");
 
         Card paket = Card.createPackage(shop, "10er", "x", 10, "Kurse");
-        CustomerCard cc = CustomerCard.create(kunde(null), paket);
+        CustomerCard cc = CustomerCard.create(kunde("ar"), paket);
         PKGenericPass p = dienst().baueFelder(paket, cc, false);
         assertThat(p.getHeaderFields().get(0).getLabel()).isEqualTo(Texts.t("ar", "pass.left_label"));
         assertThat(p.getHeaderFields().get(0).getChangeMessage()).contains("%@");
@@ -99,7 +99,7 @@ class WalletSprachenTest {
     @Test
     void googleMitteilung_tuerkisch() {
         Card card = Card.create(laden("tr"), "Kahve", "x", 8, "Bir kahve bedava");
-        CustomerCard cc = CustomerCard.create(kunde(null), card);
+        CustomerCard cc = CustomerCard.create(kunde("tr"), card);
         cc.addStamp();
         String[] text = GoogleWalletService.meldungText(cc, GoogleWalletService.Meldung.STEMPEL);
         assertThat(text[0]).isEqualTo(Texts.t("tr", "gw.stamp_header", "Kahve Köşesi")).doesNotContain("Neuer Stempel");

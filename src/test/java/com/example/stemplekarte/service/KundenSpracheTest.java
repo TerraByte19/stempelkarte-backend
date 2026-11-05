@@ -20,9 +20,8 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 /**
- * Sprache des Kunden: ein neuer Kunde bekommt die Sprache des Ladens, ein
- * bestehender Kunde (auch einer ohne Eintrag aus der Zeit davor) wird durch
- * eine zweite Anmeldung woanders NICHT umgestellt.
+ * Sprache des Kunden: Standard Deutsch (kein Eintrag). Nur was der Kunde
+ * auf der Seite waehlt, wird gespeichert; der Laden bestimmt nichts.
  */
 class KundenSpracheTest {
 
@@ -45,11 +44,17 @@ class KundenSpracheTest {
     }
 
     @Test
-    void neuerKunde_bekommtDieSpracheDesLadens() {
+    void neuerKunde_ohneWahl_bleibtDeutsch_mitWahlSeineSprache() {
         CustomerRepository repo = mock(CustomerRepository.class);
         when(repo.findByEmail(anyString())).thenReturn(Optional.empty());
-        CustomerCard cc = dienst(repo, karteVon("tr")).registerForCard("Ayşe", "ayse@example.com", "CARD-1", false, null, null, null);
-        assertThat(cc.getCustomer().getLanguage()).isEqualTo("tr");
+        CustomerCard ohne = dienst(repo, karteVon("tr")).registerForCard("Ayşe", "ayse@example.com", "CARD-1", false, null, null, null);
+        assertThat(ohne.getCustomer().getLanguage()).isNull();
+        assertThat(com.example.stemplekarte.i18n.Texts.sprache(ohne.getCustomer(), null)).isEqualTo("de");
+
+        CustomerCard mit = dienst(repo, karteVon("de")).registerForCard("Ayşe", "ayse@example.com", "CARD-1", false, null, null, null, "tr");
+        assertThat(mit.getCustomer().getLanguage()).isEqualTo("tr");
+        CustomerCard kaputt = dienst(repo, karteVon("de")).registerForCard("Ayşe", "ayse@example.com", "CARD-1", false, null, null, null, "xx");
+        assertThat(kaputt.getCustomer().getLanguage()).isNull();
     }
 
     @Test
@@ -62,12 +67,19 @@ class KundenSpracheTest {
     }
 
     @Test
-    void kundeMitSprache_behaeltSie() {
+    void kundeMitSprache_behaeltSie_ausserErWaehltNeu() {
         Customer alt = Customer.create("Alex", "alex@example.com");
         alt.setLanguage("de");
         CustomerRepository repo = mock(CustomerRepository.class);
         when(repo.findByEmail(anyString())).thenReturn(Optional.of(alt));
-        dienst(repo, karteVon("ar")).registerForCard("Alex", "alex@example.com", "CARD-1", false, null, null, null);
+        CustomerService s = dienst(repo, karteVon("ar"));
+        s.registerForCard("Alex", "alex@example.com", "CARD-1", false, null, null, null);
         assertThat(alt.getLanguage()).isEqualTo("de");
+        s.registerForCard("Alex", "alex@example.com", "CARD-1", false, null, null, null, "ar");
+        assertThat(alt.getLanguage()).isEqualTo("ar");
+        s.spracheSetzen(alt, "en");
+        assertThat(alt.getLanguage()).isEqualTo("en");
+        s.spracheSetzen(alt, "xx");
+        assertThat(alt.getLanguage()).isEqualTo("en");
     }
 }

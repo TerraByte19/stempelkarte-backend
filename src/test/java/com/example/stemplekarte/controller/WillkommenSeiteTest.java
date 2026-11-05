@@ -54,7 +54,7 @@ class WillkommenSeiteTest {
 
     private String kundenseite(CustomerCard cc) {
         when(customerService.getOrCreateCustomerCard("CUST-1", "CARD-1")).thenReturn(cc);
-        return controller.landingPage("CUST-1", "CARD-1").getBody();
+        return controller.landingPage("CUST-1", "CARD-1", null).getBody();
     }
 
     @Test
@@ -65,7 +65,7 @@ class WillkommenSeiteTest {
         CustomerCard cc = CustomerCard.create(customer, mitglied);
         cc.addStamp(); cc.addStamp(); cc.addStamp();
         when(customerService.getOrCreateCustomerCard("CUST-1", "CARD-1")).thenReturn(cc);
-        String html = controller.landingPage("CUST-1", "CARD-1").getBody();
+        String html = controller.landingPage("CUST-1", "CARD-1", null).getBody();
         assertThat(html).contains("Mitgliedskarte").contains("Club Nord").contains("Clubkarte")
                 .contains("Ana").contains("Mitglied seit").contains("id=\"besuche\">3<")
                 .contains("apple-pass")
@@ -81,7 +81,7 @@ class WillkommenSeiteTest {
         when(customerService.getOrCreateCustomerCard("CUST-1", "CARD-1")).thenReturn(cc);
 
         // Nie geladen.
-        String html = controller.landingPage("CUST-1", "CARD-1").getBody();
+        String html = controller.landingPage("CUST-1", "CARD-1", null).getBody();
         assertThat(html).contains("10er-Karte").contains("Yoga Nord").contains("id=\"rest\">0<")
                 .contains("Noch kein Paket geladen").contains("10 Kurse").contains("apple-pass")
                 .doesNotContain("Stempel bis").doesNotContain("Karte nicht gefunden");
@@ -89,13 +89,13 @@ class WillkommenSeiteTest {
         // Geladen und drei genutzt.
         cc.paketAufladen(10, java.time.Instant.now());
         cc.paketAbbuchen(3, java.time.Instant.now());
-        html = controller.landingPage("CUST-1", "CARD-1").getBody();
+        html = controller.landingPage("CUST-1", "CARD-1", null).getBody();
         assertThat(html).contains("id=\"rest\">7<").contains("id=\"besuche\">3<")
                 .doesNotContain("aufgebraucht").doesNotContain("kein Paket");
 
         // Aufgebraucht.
         cc.paketAbbuchen(7, java.time.Instant.now());
-        html = controller.landingPage("CUST-1", "CARD-1").getBody();
+        html = controller.landingPage("CUST-1", "CARD-1", null).getBody();
         assertThat(html).contains("id=\"rest\">0<").contains("aufgebraucht");
     }
 
@@ -156,7 +156,7 @@ class WillkommenSeiteTest {
         card.updateWillkommen(true, "Erster Kaffee geht auf uns");
         when(cardService.getById("CARD-1")).thenReturn(card);
 
-        String html = controller.newCustomerPage("CARD-1").getBody();
+        String html = controller.newCustomerPage("CARD-1", null, null).getBody();
 
         assertThat(html).doesNotContain("Karte nicht gefunden");
         assertThat(html).contains("🎁 Erster Kaffee geht auf uns");
@@ -168,7 +168,7 @@ class WillkommenSeiteTest {
     void anmeldeseite_ohneAngebot_wortgleich() {
         when(cardService.getById("CARD-1")).thenReturn(card);
 
-        String html = controller.newCustomerPage("CARD-1").getBody();
+        String html = controller.newCustomerPage("CARD-1", null, null).getBody();
 
         assertThat(html).doesNotContain("Karte nicht gefunden");
         assertThat(html).contains("🎉 Stempelkarte holen!");

@@ -58,16 +58,19 @@ class TextsTest {
     }
 
     @Test
-    void sprache_kundeVorLaden_vorDeutsch() {
+    void sprache_kunde_sonstDeutsch_ladenZaehltNicht() {
         Shop laden = mock(Shop.class);
         when(laden.getLanguageOrDefault()).thenReturn("tr");
         Customer kunde = mock(Customer.class);
         when(kunde.getLanguage()).thenReturn("en");
 
         assertThat(Texts.sprache(kunde, laden)).isEqualTo("en");
-        assertThat(Texts.sprache(null, laden)).isEqualTo("tr");
-        assertThat(Texts.sprache(laden)).isEqualTo("tr");
+        assertThat(Texts.sprache(null, laden)).isEqualTo("de");
+        assertThat(Texts.sprache(laden)).isEqualTo("de");
         assertThat(Texts.sprache(null, null)).isEqualTo("de");
+        assertThat(Texts.gewaehlt("TR")).isEqualTo("tr");
+        assertThat(Texts.gewaehlt("xx")).isNull();
+        assertThat(Texts.gewaehlt(null)).isNull();
         // Mock ohne Stubbing (wie in vielen Tests): null = Deutsch
         assertThat(Texts.sprache(mock(Customer.class), mock(Shop.class))).isEqualTo("de");
     }

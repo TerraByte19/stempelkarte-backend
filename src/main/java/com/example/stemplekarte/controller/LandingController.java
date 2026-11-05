@@ -76,22 +76,27 @@ public class LandingController {
     }
 
     public record RegisterRequest(String name, String email, String cardId,
-                                  boolean marketingConsent, String birthday, String phone, String ref) {}
+                                  boolean marketingConsent, String birthday, String phone, String ref,
+                                  String language) {}
 
     /** Geburtstag und Telefon je nach Ladeneinstellung: aus = ignoriert, Pflicht = muss da sein. */
     private record Zusatz(java.time.LocalDate geburtstag, String telefon) {}
 
     private Zusatz zusatz(com.example.stemplekarte.model.Shop shop, String birthday, String phone) {
+        return zusatz(shop, birthday, phone, Texts.STANDARD);
+    }
+
+    private Zusatz zusatz(com.example.stemplekarte.model.Shop shop, String birthday, String phone, String lang) {
         // Ausgeschaltete Felder werden ignoriert, auch wenn ein alter Tab sie schickt.
         java.time.LocalDate geburtstag = com.example.stemplekarte.model.Shop.FELD_AUS.equals(shop.getSignupBirthday())
                 ? null : com.example.stemplekarte.service.Anmeldedaten.geburtstag(birthday);
         String telefon = com.example.stemplekarte.model.Shop.FELD_AUS.equals(shop.getSignupPhone())
                 ? null : com.example.stemplekarte.service.Anmeldedaten.telefon(phone);
         if (com.example.stemplekarte.model.Shop.FELD_PFLICHT.equals(shop.getSignupBirthday()) && geburtstag == null) {
-            throw new IllegalArgumentException(t(Texts.sprache(shop), "signup.err_birthday"));
+            throw new IllegalArgumentException(t(lang, "signup.err_birthday"));
         }
         if (com.example.stemplekarte.model.Shop.FELD_PFLICHT.equals(shop.getSignupPhone()) && telefon == null) {
-            throw new IllegalArgumentException(t(Texts.sprache(shop), "signup.err_phone"));
+            throw new IllegalArgumentException(t(lang, "signup.err_phone"));
         }
         return new Zusatz(geburtstag, telefon);
     }
@@ -99,9 +104,11 @@ public class LandingController {
     @PostMapping("/karte-neu/register")
     public Map<String, Object> registerForCard(@RequestBody RegisterRequest req) {
         com.example.stemplekarte.model.Shop shop = cardService.getById(req.cardId()).getShop();
-        Zusatz z = zusatz(shop, req.birthday(), req.phone());
+        String lang = seitenSprache(req.language());
+        Zusatz z = zusatz(shop, req.birthday(), req.phone(), lang);
         customerService.registerForCard(
-                req.name(), req.email(), req.cardId(), req.marketingConsent(), z.geburtstag(), z.telefon(), req.ref());
+                req.name(), req.email(), req.cardId(), req.marketingConsent(), z.geburtstag(), z.telefon(), req.ref(),
+                Texts.gewaehlt(req.language()));
         // Jede Anmeldung verlangt jetzt IMMER eine Mail-Bestätigung.
         // Das Frontend zeigt daher immer den "Check deine Mails"-Screen;
         // die Weiterleitung zur Karte passiert erst über den Link in der Mail.
@@ -109,7 +116,7 @@ public class LandingController {
     }
 
     public record GoogleRegisterRequest(String credential, String cardId, boolean marketingConsent,
-                                        String birthday, String phone, String ref) {}
+                                        String birthday, String phone, String ref, String language) {}
 
     /**
      * Anmeldung mit Google: Google hat die Adresse bestaetigt, also keine
@@ -128,10 +135,11 @@ public class LandingController {
                 : (http != null ? http.getRemoteAddr() : null);
         googleAnmeldung.drossel(ip, java.time.Instant.now());
         com.example.stemplekarte.model.Shop shop = cardService.getById(req.cardId()).getShop();
-        Zusatz z = zusatz(shop, req.birthday(), req.phone());
+        Zusatz z = zusatz(shop, req.birthday(), req.phone(), seitenSprache(req.language()));
         com.example.stemplekarte.service.GoogleAnmeldung.Profil p = googleAnmeldung.pruefe(req.credential());
         CustomerCard cc = customerService.registerForCardBestaetigt(
-                p.name(), p.email(), req.cardId(), req.marketingConsent(), z.geburtstag(), z.telefon(), req.ref());
+                p.name(), p.email(), req.cardId(), req.marketingConsent(), z.geburtstag(), z.telefon(), req.ref(),
+                Texts.gewaehlt(req.language()));
         log.info("[GOOGLE] Anmeldung karte={} kunde={}", req.cardId(), cc.getCustomer().getId());
         return Map.of("status", "ok", "url", "/karte/" + cc.getCustomer().getId() + "/" + req.cardId());
     }
@@ -388,7 +396,8 @@ public class LandingController {
                         : "<a href='" + escapeHtml(googleSaveUrl) + "' class='btn-google' id='google-btn'>" +
                                 t(lang, "card.google") + "</a>",
                 stufenZeile(lang, card, cc) + bewertungsLinks(lang, card.getShop(), customerId, cardId)
-                        + empfehlungsBlock(lang, card, cc) + demoBlock(lang, card, customerId, cardId),
+                        + empfehlungsBlock(lang, card, cc) + demoBlock(lang, card, customerId, cardId)
+                        + sprachenLeiste(lang, "/karte/" + customerId + "/" + cardId, null),
                 // Die beiden IDs stehen in JS-Zeichenketten. toJsString
                 // liefert sie inklusive Anfuehrungszeichen - im Vorlagentext
                 // stehen an dieser Stelle deshalb KEINE.
@@ -470,11 +479,14 @@ public class LandingController {
 
     @GetMapping(value = "/karte/{customerId}/{cardId}", produces = MediaType.TEXT_HTML_VALUE)
     public ResponseEntity<String> landingPage(@PathVariable String customerId,
-                                              @PathVariable String cardId) {
+                                              @PathVariable String cardId,
+                                              @RequestParam(value = "lang", required = false) String langParam) {
         try {
             CustomerCard cc = customerService.getOrCreateCustomerCard(customerId, cardId);
             Card card = cc.getCard();
             Customer customer = cc.getCustomer();
+            // Sprachleiste: die Wahl bleibt beim Kunden, auch fuer Wallet und Mails.
+            if (Texts.gewaehlt(langParam) != null) customerService.spracheSetzen(customer, langParam);
             String lang = Texts.sprache(customer, card.getShop());
 
             // Punktekarten haben eine eigene Seite. Der Stempel-Weg darunter
@@ -769,7 +781,8 @@ public class LandingController {
                             : "<a href='" + escapeHtml(googleSaveUrl) + "' class='btn-google' id='google-btn'>" +
                                     t(lang, "card.google") + "</a>",
                     stufenZeile(lang, card, cc) + bewertungsLinks(lang, card.getShop(), customerId, cardId)
-                        + empfehlungsBlock(lang, card, cc) + demoBlock(lang, card, customerId, cardId),
+                        + empfehlungsBlock(lang, card, cc) + demoBlock(lang, card, customerId, cardId)
+                        + sprachenLeiste(lang, "/karte/" + customerId + "/" + cardId, null),
                     // Parameter fuer das JS: custId, cId, threshold, rewardText (als JS-String), stamps
                     toJsString(customerId), toJsString(cardId), threshold,
                     toJsString(card.getRewardText()), stamps,
@@ -805,10 +818,15 @@ public class LandingController {
 
     // Neue Landing-Page für Kunden ohne ID
     @GetMapping(value = "/karte-neu/{cardId}", produces = MediaType.TEXT_HTML_VALUE)
-    public ResponseEntity<String> newCustomerPage(@PathVariable String cardId) {
+    public ResponseEntity<String> newCustomerPage(@PathVariable String cardId,
+                                                  @RequestParam(value = "lang", required = false) String langParam,
+                                                  @RequestParam(value = "ref", required = false) String ref) {
         try {
             Card card = cardService.getById(cardId);
-            String lang = Texts.sprache(card.getShop());
+            // Standard Deutsch; die Leiste oben schaltet um (?lang=), und nur
+            // eine ausdrueckliche Wahl wird beim Kunden gespeichert.
+            String explizit = Texts.gewaehlt(langParam);
+            String lang = explizit != null ? explizit : Texts.STANDARD;
             String shopName = card.getShop().getName();
             String bgColor = farbeVon(card);
             String logoUrl = logoVon(card);
@@ -950,6 +968,7 @@ public class LandingController {
                             const errGeneric = %s;
                             const CARD_ID = %s;
                             const GOOGLE_ERR = %s;
+                            const LANG = %s;
                             // Google-Knopf (nur wenn eingerichtet): Google liefert ein Token,
                             // der Server prueft es und schickt den Link zur Karte.
                             window.onGoogleCredential = async function (r) {
@@ -965,6 +984,7 @@ public class LandingController {
                                         body: JSON.stringify({
                                             credential: r && r.credential,
                                             cardId: CARD_ID,
+                                            language: LANG,
                                             marketingConsent: document.getElementById('consent').checked,
                                             birthday: bEl ? bEl.value : null,
                                             phone: pEl ? pEl.value.trim() : null,
@@ -1021,6 +1041,7 @@ public class LandingController {
                                         body: JSON.stringify({
                                             name, email,
                                             cardId: %s,
+                                            language: LANG,
                                             marketingConsent: consent,
                                             birthday, phone, ref
                                         })
@@ -1052,7 +1073,7 @@ public class LandingController {
                     escapeHtml(shopName),
                     anmeldeTitel(lang, card),
                     anmeldeText(lang, card),
-                    googleBlock(lang),
+                    sprachenLeiste(lang, "/karte-neu/" + cardId, ref) + googleBlock(lang),
                     t(lang, "signup.name"), t(lang, "signup.email"),
                     anmeldeFelder(lang, card.getShop()) + empfehlungsFeld(lang, card),
                     t(lang, "signup.consent", escapeHtml(shopName)),
@@ -1062,6 +1083,7 @@ public class LandingController {
                     toJsString(t(lang, "signup.err_fields")), toJsString(t(lang, "signup.err_birthday")),
                     toJsString(t(lang, "signup.err_phone")), toJsString(t(lang, "signup.err_generic")),
                     toJsString(cardId), toJsString(t(lang, "signup.google_error")),
+                    explizit != null ? toJsString(explizit) : "null",
                     // cardId steht in einer JS-Zeichenkette - toJsString
                     // liefert die Anfuehrungszeichen mit.
                     toJsString(cardId)
@@ -1196,6 +1218,7 @@ public class LandingController {
                                 t(lang, "card.google") + "</a>",
                 stufenZeile(lang, card, cc) + bewertungsLinks(lang, card.getShop(), customerId, cardId)
                         + demoBlock(lang, card, customerId, cardId)
+                        + sprachenLeiste(lang, "/karte/" + customerId + "/" + cardId, null)
         );
         log.info("Landing-Mitgliedskarte geladen: customerCard={} card={} besuche={}", cc.getId(), cardId, besuche);
         return ResponseEntity.ok(mitKontrast(html, bgColor, card.getShop().getNameColor()));
@@ -1291,6 +1314,7 @@ public class LandingController {
                                 t(lang, "card.google") + "</a>",
                 stufenZeile(lang, card, cc) + bewertungsLinks(lang, card.getShop(), customerId, cardId)
                         + demoBlock(lang, card, customerId, cardId)
+                        + sprachenLeiste(lang, "/karte/" + customerId + "/" + cardId, null)
         );
         log.info("Landing-10er-Karte geladen: customerCard={} card={} rest={}", cc.getId(), cardId, rest);
         return ResponseEntity.ok(mitKontrast(html, bgColor, card.getShop().getNameColor()));
@@ -1405,6 +1429,31 @@ public class LandingController {
               .append("' data-required='").append(pflicht ? "1" : "0").append("' />");
         }
         return sb.toString();
+    }
+
+    /** Sprache aus dem Formular, sonst Deutsch (fuer Fehlertexte beim Anmelden). */
+    private static String seitenSprache(String language) {
+        String l = Texts.gewaehlt(language);
+        return l != null ? l : Texts.STANDARD;
+    }
+
+    /**
+     * Leiste DE · EN · AR · TR. Jeder Link laedt dieselbe Seite mit ?lang=;
+     * ref (Empfehlungscode) bleibt dabei erhalten. Inline-Stil, damit die
+     * fuenf Seiten mit ihren eigenen CSS-Bloecken nichts Neues brauchen.
+     */
+    static String sprachenLeiste(String lang, String pfad, String ref) {
+        String aktiv = Texts.norm(lang);
+        StringBuilder sb = new StringBuilder("<div class='sprachen' style='display:flex;gap:14px;justify-content:center;"
+                + "font-size:13px;margin-top:16px;opacity:.9'>");
+        for (String l : Texts.LEISTE) {
+            String url = pfad + "?lang=" + l + (ref != null && !ref.isBlank() ? "&ref=" + escapeHtml(ref) : "");
+            boolean ist = l.equals(aktiv);
+            sb.append("<a href='").append(escapeHtml(url)).append("' hreflang='").append(l)
+              .append("' style='color:inherit;text-decoration:").append(ist ? "none;font-weight:700" : "underline")
+              .append("'>").append(l.toUpperCase(java.util.Locale.ROOT)).append("</a>");
+        }
+        return sb.append("</div>").toString();
     }
 
     /**

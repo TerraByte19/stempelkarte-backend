@@ -42,18 +42,19 @@ class KundenSprachenTest {
 
         shop = mock(Shop.class);
         when(shop.getName()).thenReturn("Kahve Köşesi");
-        when(shop.getLanguageOrDefault()).thenReturn("tr");
         when(shop.isDemo()).thenReturn(true);
         customer = mock(Customer.class);
         when(customer.getName()).thenReturn("Ayşe");
+        when(customer.getLanguage()).thenReturn("tr");
     }
 
     private String kartenseite(Card card) {
         CustomerCard cc = CustomerCard.create(customer, card);
         cc.addStamp();
         when(customerService.getOrCreateCustomerCard("CUST-1", "CARD-1")).thenReturn(cc);
-        String html = controller.landingPage("CUST-1", "CARD-1").getBody();
+        String html = controller.landingPage("CUST-1", "CARD-1", null).getBody();
         assertThat(html).doesNotContain("Karte nicht gefunden");
+        assertThat(html).contains("class='sprachen'").contains("?lang=ar");
         return html;
     }
 
@@ -85,11 +86,16 @@ class KundenSprachenTest {
 
     @Test
     void anmeldeseite_arabisch_rechtsNachLinks() {
-        when(shop.getLanguageOrDefault()).thenReturn("ar");
         Card card = Card.create(shop, "قهوة", "x", 10, "قهوة مجانية");
         when(cardService.getById("CARD-1")).thenReturn(card);
 
-        String html = controller.newCustomerPage("CARD-1").getBody();
+        // Ohne Wahl: Deutsch, mit Leiste
+        String deutsch = controller.newCustomerPage("CARD-1", null, "ABC234").getBody();
+        assertThat(deutsch).contains("<html lang=\"de\" dir=\"ltr\">").contains("placeholder=\"Dein Name\"")
+                .contains("/karte-neu/CARD-1?lang=tr&amp;ref=ABC234").contains("const LANG = null;");
+
+        String html = controller.newCustomerPage("CARD-1", "ar", null).getBody();
+        assertThat(html).contains("const LANG = \"ar\";");
         assertThat(html).contains("<html lang=\"ar\" dir=\"rtl\">");
         assertThat(html).contains(Texts.t("ar", "signup.headline"));
         assertThat(html).contains("placeholder=\"" + Texts.t("ar", "signup.name") + "\"");
@@ -100,6 +106,7 @@ class KundenSprachenTest {
 
     @Test
     void kundeBehaeltSeineSprache_vorDemLaden() {
+        when(shop.getLanguageOrDefault()).thenReturn("tr");
         when(customer.getLanguage()).thenReturn("en");
         String html = kartenseite(Card.create(shop, "Kahve", "x", 10, "Free coffee"));
         assertThat(html).contains("lang=\"en\"").contains("1 of 10 stamps");
@@ -107,7 +114,7 @@ class KundenSprachenTest {
 
     @Test
     void deutscherLaden_wieBisher() {
-        when(shop.getLanguageOrDefault()).thenReturn(null);
+        when(customer.getLanguage()).thenReturn(null);
         String html = kartenseite(Card.create(shop, "Kaffee", "x", 10, "Gratis Kaffee"));
         assertThat(html).contains("<html lang=\"de\" dir=\"ltr\">")
                 .contains("1 von 10 Stempeln").contains("Noch 9 Stempel bis: Gratis Kaffee")

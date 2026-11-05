@@ -100,7 +100,8 @@ class GoogleAnmeldungTest {
         CustomerService service = new CustomerService(customerRepo, cardRepo, ccRepo,
                 mock(AppleDeviceRepository.class), mail, mock(ScanLogRepository.class), mock(EmpfehlungService.class));
 
-        CustomerCard cc = service.registerForCardBestaetigt("Ayşe", "ayse@example.com", card.getId(), true, null, null, null);
+        CustomerCard cc = service.registerForCardBestaetigt("Ayşe", "ayse@example.com", card.getId(), true, null, null, null, "tr");
+        assertThat(cc.getCustomer().getLanguage()).isEqualTo("tr");
 
         assertThat(cc.getCustomer().isEmailConfirmed()).isTrue();
         assertThat(cc.getCustomer().getConfirmToken()).isNull();

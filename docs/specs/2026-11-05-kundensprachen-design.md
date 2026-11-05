@@ -44,3 +44,10 @@ daneben, `node docs/i18n/gen_texts.mjs` mischt sie ein. Tests: `WalletSprachenTe
 - Mails an den Laden (Testphase)
 - Fehlerseite „Karte nicht gefunden“ bei kaputtem Link
 - Scanner-Meldungen (`ScanResult`) für das Personal
+
+## Änderung 2026-11-05 morgens (User): Standard Deutsch, der Kunde schaltet um
+
+- Jeder Kunde startet auf **Deutsch**, egal bei welchem Laden. `Shop.language` spielt für Kundenseiten, Wallet und Mails keine Rolle mehr (im Admin nur noch Anzeige).
+- Anmeldeseite und alle Kartenseiten haben unten eine Leiste **DE · EN · AR · TR** (`?lang=`). Auf der Anmeldeseite wird nur eine ausdrückliche Wahl mitgeschickt (`language` im Formular, sonst `null`) und beim Kunden gespeichert; auf der Kartenseite speichert `?lang=` sofort (`CustomerService.spracheSetzen`).
+- Danach gilt die gespeicherte Sprache für Karte, Wallet-Pass, Mitteilungen und Mails (`Texts.sprache(customer, shop)` = Kunde oder Deutsch).
+- Tests: `KundenSpracheTest`, `KundenSprachenTest` (Leiste, `?lang=ar`, `const LANG`), Wallet-/Kiosk-/Rückhol-Tests setzen die Sprache am Kunden.

@@ -85,7 +85,16 @@ public class CustomerService {
     public CustomerCard registerForCard(String name, String email, String cardId,
                                         boolean marketingConsent,
                                         java.time.LocalDate birthday, String phone, String refCode) {
-        return anmelden(name, email, cardId, marketingConsent, birthday, phone, refCode, false);
+        return anmelden(name, email, cardId, marketingConsent, birthday, phone, refCode, null, false);
+    }
+
+    /** language: vom Kunden auf der Anmeldeseite gewaehlt (de, en, ar, tr) oder null = nichts aendern. */
+    @Transactional
+    public CustomerCard registerForCard(String name, String email, String cardId,
+                                        boolean marketingConsent,
+                                        java.time.LocalDate birthday, String phone, String refCode,
+                                        String language) {
+        return anmelden(name, email, cardId, marketingConsent, birthday, phone, refCode, language, false);
     }
 
     /**
@@ -96,26 +105,32 @@ public class CustomerService {
     @Transactional
     public CustomerCard registerForCardBestaetigt(String name, String email, String cardId,
                                                   boolean marketingConsent,
-                                                  java.time.LocalDate birthday, String phone, String refCode) {
-        return anmelden(name, email, cardId, marketingConsent, birthday, phone, refCode, true);
+                                                  java.time.LocalDate birthday, String phone, String refCode,
+                                                  String language) {
+        return anmelden(name, email, cardId, marketingConsent, birthday, phone, refCode, language, true);
+    }
+
+    /** Sprache des Kunden setzen (Sprachleiste auf der Kartenseite). Unbekannt = nichts. */
+    @Transactional
+    public void spracheSetzen(Customer customer, String language) {
+        String l = com.example.stemplekarte.i18n.Texts.gewaehlt(language);
+        if (customer == null || l == null || l.equals(customer.getLanguage())) return;
+        customer.setLanguage(l);
+        customerRepo.save(customer);
     }
 
     private CustomerCard anmelden(String name, String email, String cardId,
                                   boolean marketingConsent,
                                   java.time.LocalDate birthday, String phone, String refCode,
-                                  boolean bestaetigt) {
+                                  String language, boolean bestaetigt) {
         Card card = cardRepo.findById(cardId)
                 .orElseThrow(() -> new NoSuchElementException("Karte nicht gefunden: " + cardId));
 
-        // Sprache des Ladens merken, aber nur fuer einen NEUEN Kunden: wer
-        // schon eine Karte bei einem deutschen Laden hat (Altbestand ohne
-        // Sprache), bleibt dort deutsch - auch wenn er sich jetzt bei einem
-        // tuerkischen Laden anmeldet. Ohne Eintrag gilt je Laden dessen Sprache.
-        boolean neuerKunde = customerRepo.findByEmail(email.toLowerCase().trim()).isEmpty();
         Customer customer = getOrCreate(name, email);
-        if (neuerKunde && (customer.getLanguage() == null || customer.getLanguage().isBlank())) {
-            customer.setLanguage(com.example.stemplekarte.i18n.Texts.sprache(card.getShop()));
-        }
+        // Sprache nur, wenn der Kunde sie auf der Seite gewaehlt hat. Ohne
+        // Wahl bleibt es, wie es war: neu = Deutsch, bestehend = seine Sprache.
+        String gewaehlt = com.example.stemplekarte.i18n.Texts.gewaehlt(language);
+        if (gewaehlt != null) customer.setLanguage(gewaehlt);
 
         // Jede Kartenanmeldung verlangt eine frische Mail-Bestätigung:
         // emailConfirmed zurücksetzen + neuen Token vergeben, damit der

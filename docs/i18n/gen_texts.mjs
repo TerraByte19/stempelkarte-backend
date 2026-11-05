@@ -94,6 +94,9 @@ public final class Texts {
 
     private Texts() {}
 
+    /** Reihenfolge der Sprachleiste auf den Kundenseiten. */
+    public static final java.util.List<String> LEISTE = java.util.List.of("de", "en", "ar", "tr");
+
     /** Unbekannt oder leer = Deutsch. */
     public static String norm(String lang) {
         if (lang == null) return STANDARD;
@@ -111,16 +114,29 @@ public final class Texts {
         return " lang=\\"" + l + "\\" dir=\\"" + (isRtl(l) ? "rtl" : "ltr") + "\\"";
     }
 
-    /** Kunde vor Laden: wer sich bei einem deutschen Laden angemeldet hat, bleibt deutsch. */
+    /**
+     * Sprache des Kunden, sonst Deutsch. Entscheidung User 2026-11-05: jeder
+     * Kunde startet auf Deutsch und schaltet auf der Anmelde- oder
+     * Kartenseite selbst um (DE, EN, AR, TR); die Wahl bleibt gespeichert.
+     * Shop.language spielt fuer Kundenseiten keine Rolle mehr.
+     */
     public static String sprache(Customer customer, Shop shop) {
         if (customer != null && customer.getLanguage() != null && !customer.getLanguage().isBlank()) {
             return norm(customer.getLanguage());
         }
-        return sprache(shop);
+        return STANDARD;
     }
 
+    /** Ohne Kunden (Anmeldeseite): Deutsch. */
     public static String sprache(Shop shop) {
-        return shop == null ? STANDARD : norm(shop.getLanguageOrDefault());
+        return STANDARD;
+    }
+
+    /** Nur eine der vier Sprachen, sonst null (fuer ?lang= und das Formularfeld). */
+    public static String gewaehlt(String lang) {
+        if (lang == null) return null;
+        String l = lang.trim().toLowerCase(Locale.ROOT);
+        return SPRACHEN.contains(l) ? l : null;
     }
 
     public static String t(String lang, String key, Object... vars) {

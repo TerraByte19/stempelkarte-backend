@@ -53,6 +53,7 @@ class KioskServiceTest {
         card = Card.create(shop, "Kahve", "x", 10, "Bir kahve bedava");
         kunde = mock(Customer.class);
         when(kunde.getId()).thenReturn("CUST-1");
+        when(kunde.getLanguage()).thenReturn("tr");
         ccRepo = mock(CustomerCardRepository.class);
         cardRepo = mock(CardRepository.class);
         logRepo = mock(ScanLogRepository.class);
@@ -118,6 +119,7 @@ class KioskServiceTest {
     void nurStempelkarten() {
         Card punkte = Card.createPoints(shop, "Puan", "x", 100, com.example.stemplekarte.model.PointsRounding.GENAU);
         when(cardRepo.findById("CARD-1")).thenReturn(Optional.of(punkte));
+        karte(0);
         assertThatThrownBy(() -> dienst.pruefe(shop, QR, JETZT))
                 .hasMessage(Texts.t("tr", "kiosk.not_stamp"));
     }
