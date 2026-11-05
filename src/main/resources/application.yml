@@ -51,6 +51,8 @@ stempelkarte:
     auth-secret: ${APPLE_AUTH_SECRET:bitte-im-prod-aendern-mindestens-32-zeichen}
 
   google:
+    # "Mit Google anmelden" beim Kartenholen (GoogleAnmeldung). Leer = kein Knopf.
+    client-id: ${GOOGLE_CLIENT_ID:}
     issuer-id: 3388000000023146979
     class-suffix: stempelkarte_class_v1
     service-account-path: C:/Users/adham/Downloads/stempelkarte-496400-8da6689f7402.json

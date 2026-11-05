@@ -273,6 +273,10 @@ public final class Texts {
         m.put("kiosk.full", "Deine Karte ist voll! Zeig sie dem Personal, dann bekommst du: {0}");
         m.put("kiosk.not_stamp", "Diese Karte bitte beim Personal vorzeigen.");
         m.put("kiosk.welcome", "Hol dir zuerst dein Willkommensgeschenk beim Personal.");
+        m.put("signup.google", "Mit Google anmelden");
+        m.put("signup.google_hint", "Mit Google ohne Bestätigungs-Mail, die Karte ist sofort da.");
+        m.put("signup.or", "oder mit E-Mail");
+        m.put("signup.google_error", "Google-Anmeldung fehlgeschlagen. Nimm den Weg über die E-Mail.");
         return Map.copyOf(m);
     }
 
@@ -474,6 +478,10 @@ public final class Texts {
         m.put("kiosk.full", "Your card is full! Show it to the staff and you get: {0}");
         m.put("kiosk.not_stamp", "Please show this card to the staff.");
         m.put("kiosk.welcome", "First collect your welcome gift from the staff.");
+        m.put("signup.google", "Sign in with Google");
+        m.put("signup.google_hint", "With Google there is no confirmation email, the card is there right away.");
+        m.put("signup.or", "or with email");
+        m.put("signup.google_error", "Google sign-in failed. Use the email option instead.");
         return Map.copyOf(m);
     }
 
@@ -675,6 +683,10 @@ public final class Texts {
         m.put("kiosk.full", "بطاقتك ممتلئة! أظهرها للموظفين لتحصل على: {0}");
         m.put("kiosk.not_stamp", "يرجى إظهار هذه البطاقة للموظفين.");
         m.put("kiosk.welcome", "احصل أولًا على هدية الترحيب من الموظفين.");
+        m.put("signup.google", "تسجيل الدخول عبر Google");
+        m.put("signup.google_hint", "عبر Google لا حاجة إلى رسالة تأكيد، البطاقة جاهزة فورًا.");
+        m.put("signup.or", "أو عبر البريد الإلكتروني");
+        m.put("signup.google_error", "فشل تسجيل الدخول عبر Google. استخدم طريقة البريد الإلكتروني.");
         return Map.copyOf(m);
     }
 
@@ -876,6 +888,10 @@ public final class Texts {
         m.put("kiosk.full", "Kartın doldu! Personele göster, ödülün hazır: {0}");
         m.put("kiosk.not_stamp", "Lütfen bu kartı personele göster.");
         m.put("kiosk.welcome", "Önce hoş geldin hediyeni personelden al.");
+        m.put("signup.google", "Google ile giriş yap");
+        m.put("signup.google_hint", "Google ile onay e-postası gerekmez, kart hemen hazır.");
+        m.put("signup.or", "ya da e-posta ile");
+        m.put("signup.google_error", "Google ile giriş başarısız oldu. E-posta yolunu kullan.");
         return Map.copyOf(m);
     }
 }

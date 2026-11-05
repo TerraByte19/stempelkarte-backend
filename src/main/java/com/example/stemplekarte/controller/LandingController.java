@@ -43,6 +43,11 @@ public class LandingController {
     private final RewardService rewardService;
     private final com.example.stemplekarte.service.EmpfehlungService empfehlungService;
 
+    // "Mit Google anmelden" auf der Anmeldeseite. Optional: ohne Bean (Tests)
+    // oder ohne GOOGLE_CLIENT_ID gibt es den Knopf nicht.
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.example.stemplekarte.service.GoogleAnmeldung googleAnmeldung;
+
     @Value("${stempelkarte.base-url:http://localhost:8080}")
     private String baseUrl;
 
@@ -73,26 +78,55 @@ public class LandingController {
     public record RegisterRequest(String name, String email, String cardId,
                                   boolean marketingConsent, String birthday, String phone, String ref) {}
 
-    @PostMapping("/karte-neu/register")
-    public Map<String, Object> registerForCard(@RequestBody RegisterRequest req) {
-        com.example.stemplekarte.model.Shop shop = cardService.getById(req.cardId()).getShop();
+    /** Geburtstag und Telefon je nach Ladeneinstellung: aus = ignoriert, Pflicht = muss da sein. */
+    private record Zusatz(java.time.LocalDate geburtstag, String telefon) {}
+
+    private Zusatz zusatz(com.example.stemplekarte.model.Shop shop, String birthday, String phone) {
         // Ausgeschaltete Felder werden ignoriert, auch wenn ein alter Tab sie schickt.
         java.time.LocalDate geburtstag = com.example.stemplekarte.model.Shop.FELD_AUS.equals(shop.getSignupBirthday())
-                ? null : com.example.stemplekarte.service.Anmeldedaten.geburtstag(req.birthday());
+                ? null : com.example.stemplekarte.service.Anmeldedaten.geburtstag(birthday);
         String telefon = com.example.stemplekarte.model.Shop.FELD_AUS.equals(shop.getSignupPhone())
-                ? null : com.example.stemplekarte.service.Anmeldedaten.telefon(req.phone());
+                ? null : com.example.stemplekarte.service.Anmeldedaten.telefon(phone);
         if (com.example.stemplekarte.model.Shop.FELD_PFLICHT.equals(shop.getSignupBirthday()) && geburtstag == null) {
             throw new IllegalArgumentException(t(Texts.sprache(shop), "signup.err_birthday"));
         }
         if (com.example.stemplekarte.model.Shop.FELD_PFLICHT.equals(shop.getSignupPhone()) && telefon == null) {
             throw new IllegalArgumentException(t(Texts.sprache(shop), "signup.err_phone"));
         }
+        return new Zusatz(geburtstag, telefon);
+    }
+
+    @PostMapping("/karte-neu/register")
+    public Map<String, Object> registerForCard(@RequestBody RegisterRequest req) {
+        com.example.stemplekarte.model.Shop shop = cardService.getById(req.cardId()).getShop();
+        Zusatz z = zusatz(shop, req.birthday(), req.phone());
         customerService.registerForCard(
-                req.name(), req.email(), req.cardId(), req.marketingConsent(), geburtstag, telefon, req.ref());
+                req.name(), req.email(), req.cardId(), req.marketingConsent(), z.geburtstag(), z.telefon(), req.ref());
         // Jede Anmeldung verlangt jetzt IMMER eine Mail-Bestätigung.
         // Das Frontend zeigt daher immer den "Check deine Mails"-Screen;
         // die Weiterleitung zur Karte passiert erst über den Link in der Mail.
         return Map.of("status", "confirmation_sent");
+    }
+
+    public record GoogleRegisterRequest(String credential, String cardId, boolean marketingConsent,
+                                        String birthday, String phone, String ref) {}
+
+    /**
+     * Anmeldung mit Google: Google hat die Adresse bestaetigt, also keine
+     * Mail - die Antwort traegt gleich den Link zur Karte.
+     */
+    @PostMapping("/karte-neu/register-google")
+    public Map<String, Object> registerMitGoogle(@RequestBody GoogleRegisterRequest req) {
+        if (googleAnmeldung == null || !googleAnmeldung.aktiv()) {
+            throw new IllegalArgumentException("Anmeldung mit Google ist nicht eingerichtet");
+        }
+        com.example.stemplekarte.model.Shop shop = cardService.getById(req.cardId()).getShop();
+        Zusatz z = zusatz(shop, req.birthday(), req.phone());
+        com.example.stemplekarte.service.GoogleAnmeldung.Profil p = googleAnmeldung.pruefe(req.credential());
+        CustomerCard cc = customerService.registerForCardBestaetigt(
+                p.name(), p.email(), req.cardId(), req.marketingConsent(), z.geburtstag(), z.telefon(), req.ref());
+        log.info("[GOOGLE] Anmeldung karte={} kunde={}", req.cardId(), cc.getCustomer().getId());
+        return Map.of("status", "ok", "url", "/karte/" + cc.getCustomer().getId() + "/" + req.cardId());
     }
 
     // Bestehende Kunden-Landing-Page (mit Stempeln)
@@ -862,6 +896,9 @@ public class LandingController {
                                 padding: 8px 0 4px;
                             }
                             .success-icon { font-size: 48px; margin-bottom: 12px; }
+                            .google { display: flex; flex-direction: column; align-items: center; gap: 8px; margin-bottom: 14px; }
+                            .google-hint { font-size: 12px; opacity: 0.85; text-align: center; }
+                            .oder { font-size: 13px; opacity: 0.8; text-align: center; }
                             .success-title { font-size: 18px; font-weight: 700; margin-bottom: 8px; }
                             .success-text { font-size: 14px; opacity: 0.9; line-height: 1.6; }
                         </style>
@@ -880,6 +917,7 @@ public class LandingController {
                             </div>
                             <div class="error" id="error"></div>
                             <div class="form" id="form">
+                                %s
                                 <input type="text" id="name" placeholder="%s" required />
                                 <input type="email" id="email" placeholder="%s" required />
                                 %s
@@ -903,6 +941,37 @@ public class LandingController {
                             const errBirthday = %s;
                             const errPhone = %s;
                             const errGeneric = %s;
+                            const CARD_ID = %s;
+                            const GOOGLE_ERR = %s;
+                            // Google-Knopf (nur wenn eingerichtet): Google liefert ein Token,
+                            // der Server prueft es und schickt den Link zur Karte.
+                            window.onGoogleCredential = async function (r) {
+                                const errorEl = document.getElementById('error')
+                                errorEl.style.display = 'none'
+                                const bEl = document.getElementById('birthday')
+                                const pEl = document.getElementById('phone')
+                                const rEl = document.getElementById('ref')
+                                try {
+                                    const res = await fetch('/karte-neu/register-google', {
+                                        method: 'POST',
+                                        headers: { 'Content-Type': 'application/json' },
+                                        body: JSON.stringify({
+                                            credential: r && r.credential,
+                                            cardId: CARD_ID,
+                                            marketingConsent: document.getElementById('consent').checked,
+                                            birthday: bEl ? bEl.value : null,
+                                            phone: pEl ? pEl.value.trim() : null,
+                                            ref: rEl ? rEl.value.trim() : (new URLSearchParams(location.search).get('ref') || null)
+                                        })
+                                    })
+                                    const j = await res.json().catch(function () { return {} })
+                                    if (!res.ok || !j.url) throw new Error(j.error || GOOGLE_ERR)
+                                    location.href = j.url
+                                } catch (e) {
+                                    errorEl.style.display = 'block'
+                                    errorEl.textContent = (e && e.message) ? e.message : GOOGLE_ERR
+                                }
+                            }
                             // Empfehlungslink eines Freundes (?ref=CODE) ins Feld, falls es eins gibt.
                             (function () {
                                 const p = new URLSearchParams(location.search).get('ref')
@@ -976,6 +1045,7 @@ public class LandingController {
                     escapeHtml(shopName),
                     anmeldeTitel(lang, card),
                     anmeldeText(lang, card),
+                    googleBlock(lang),
                     t(lang, "signup.name"), t(lang, "signup.email"),
                     anmeldeFelder(lang, card.getShop()) + empfehlungsFeld(lang, card),
                     t(lang, "signup.consent", escapeHtml(shopName)),
@@ -984,6 +1054,7 @@ public class LandingController {
                     bewertungsLink(lang, card.getShop()),
                     toJsString(t(lang, "signup.err_fields")), toJsString(t(lang, "signup.err_birthday")),
                     toJsString(t(lang, "signup.err_phone")), toJsString(t(lang, "signup.err_generic")),
+                    toJsString(cardId), toJsString(t(lang, "signup.google_error")),
                     // cardId steht in einer JS-Zeichenkette - toJsString
                     // liefert die Anfuehrungszeichen mit.
                     toJsString(cardId)
@@ -1327,6 +1398,24 @@ public class LandingController {
               .append("' data-required='").append(pflicht ? "1" : "0").append("' />");
         }
         return sb.toString();
+    }
+
+    /**
+     * "Mit Google anmelden" ueber der E-Mail-Anmeldung, nur mit GOOGLE_CLIENT_ID.
+     * Googles Skript rendert den Knopf selbst (g_id_signin) und ruft
+     * window.onGoogleCredential mit dem Token.
+     */
+    String googleBlock(String lang) {
+        if (googleAnmeldung == null || !googleAnmeldung.aktiv()) return "";
+        return "<div class='google'>"
+                + "<script src='https://accounts.google.com/gsi/client' async defer></script>"
+                + "<div id='g_id_onload' data-client_id='" + escapeHtml(googleAnmeldung.clientId())
+                + "' data-callback='onGoogleCredential' data-auto_prompt='false' data-context='signup'></div>"
+                + "<div class='g_id_signin' data-type='standard' data-size='large' data-shape='pill' "
+                + "data-text='continue_with' data-locale='" + Texts.norm(lang) + "'></div>"
+                + "<p class='google-hint'>" + t(lang, "signup.google_hint") + "</p>"
+                + "<div class='oder'>" + t(lang, "signup.or") + "</div>"
+                + "</div>";
     }
 
     /** Ohne Angebot steht hier wortgleich der bisherige Text. */

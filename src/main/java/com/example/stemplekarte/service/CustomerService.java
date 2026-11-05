@@ -85,6 +85,25 @@ public class CustomerService {
     public CustomerCard registerForCard(String name, String email, String cardId,
                                         boolean marketingConsent,
                                         java.time.LocalDate birthday, String phone, String refCode) {
+        return anmelden(name, email, cardId, marketingConsent, birthday, phone, refCode, false);
+    }
+
+    /**
+     * Anmeldung mit Google (GoogleAnmeldung): Google hat die Adresse schon
+     * bestaetigt, also keine Bestaetigungs-Mail und kein Warten - die Karte
+     * ist sofort da. Alles andere wie registerForCard.
+     */
+    @Transactional
+    public CustomerCard registerForCardBestaetigt(String name, String email, String cardId,
+                                                  boolean marketingConsent,
+                                                  java.time.LocalDate birthday, String phone, String refCode) {
+        return anmelden(name, email, cardId, marketingConsent, birthday, phone, refCode, true);
+    }
+
+    private CustomerCard anmelden(String name, String email, String cardId,
+                                  boolean marketingConsent,
+                                  java.time.LocalDate birthday, String phone, String refCode,
+                                  boolean bestaetigt) {
         Card card = cardRepo.findById(cardId)
                 .orElseThrow(() -> new NoSuchElementException("Karte nicht gefunden: " + cardId));
 
@@ -100,7 +119,9 @@ public class CustomerService {
         // Kunde die Karte erst nach Klick auf den Mail-Link bekommt.
         // (Solange unbestätigt, wird der Kunde auch nicht im Newsletter
         // angeschrieben — rechtlich sauber.)
-        customer.requireNewConfirmation();
+        // Mit Google ist die Adresse schon bestaetigt: dann sofort frei.
+        if (bestaetigt) customer.confirmEmail();
+        else customer.requireNewConfirmation();
         customerRepo.save(customer);
 
         CustomerCard cc = customerCardRepo.findByCustomerAndCard(customer, card).orElse(null);
@@ -132,9 +153,11 @@ public class CustomerService {
 
         // Bestätigungs-Mail IMMER verschicken (jede Anmeldung neu).
         // Wer sich nochmal anmeldet, solange das Geschenk offen ist, wird in
-        // der Mail wieder daran erinnert.
-        emailService.sendConfirmationMail(customer, card.getShop(), card.getId(),
-                cc.isWillkommenOffen() ? cc.getWillkommenText() : null);
+        // der Mail wieder daran erinnert. Nicht bei Google: nichts zu bestaetigen.
+        if (!bestaetigt) {
+            emailService.sendConfirmationMail(customer, card.getShop(), card.getId(),
+                    cc.isWillkommenOffen() ? cc.getWillkommenText() : null);
+        }
 
         return cc;
     }
