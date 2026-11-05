@@ -98,7 +98,10 @@ public class GoogleAnmeldung {
         if (email.isBlank()) throw new IllegalArgumentException("Google-Anmeldung fehlgeschlagen");
         String name = info.path("name").asText("").trim();
         if (name.isBlank()) name = info.path("given_name").asText("").trim();
-        if (name.isBlank()) name = email.substring(0, email.indexOf('@'));
+        if (name.isBlank()) {
+            int at = email.indexOf('@');
+            name = at > 0 ? email.substring(0, at) : email;
+        }
         return new Profil(email, name);
     }
 
