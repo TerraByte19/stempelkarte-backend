@@ -19,7 +19,7 @@ import java.util.Set;
 @Service
 public class ScannerMessungService {
 
-    static final Set<String> GEGNER = Set.of("neu", "nimiq", "handy");
+    static final Set<String> GEGNER = ScannerMessung.GEGNER;
     /** Mehr speichert ein Laden pro Tag nicht - Schutz vor Amoklauf eines Geraets. */
     static final int MAX_JE_LADEN_UND_TAG = 2000;
     static final int ZEITRAUM_TAGE = 60;
@@ -48,13 +48,15 @@ public class ScannerMessungService {
 
     /** Zusammenfassung der letzten 60 Tage, je Geraetetyp und Herausforderer. */
     public List<Zeile> zusammenfassung(Instant jetzt) {
-        return zusammenfassung(repo.findByErstelltAmAfterOrderByErstelltAmDesc(jetzt.minus(Duration.ofDays(ZEITRAUM_TAGE))));
+        return zusammenfassung(repo.findTop20000ByErstelltAmAfterOrderByErstelltAmDesc(jetzt.minus(Duration.ofDays(ZEITRAUM_TAGE))));
     }
 
+    private record Gruppe(String geraet, String gegner) {}
+
     static List<Zeile> zusammenfassung(List<ScannerMessung> messungen) {
-        Map<String, List<ScannerMessung>> gruppen = new LinkedHashMap<>();
+        Map<Gruppe, List<ScannerMessung>> gruppen = new LinkedHashMap<>();
         for (ScannerMessung m : messungen) {
-            gruppen.computeIfAbsent(m.geraeteTyp() + "|" + m.getGegner(), k -> new ArrayList<>()).add(m);
+            gruppen.computeIfAbsent(new Gruppe(m.geraeteTyp(), m.getGegner()), k -> new ArrayList<>()).add(m);
         }
         List<Zeile> out = new ArrayList<>();
         for (var e : gruppen.entrySet()) {
@@ -67,8 +69,7 @@ public class ScannerMessungService {
             Integer median = vorspruenge.isEmpty() ? null
                     : vorspruenge.size() % 2 == 1 ? vorspruenge.get(vorspruenge.size() / 2)
                     : (vorspruenge.get(vorspruenge.size() / 2 - 1) + vorspruenge.get(vorspruenge.size() / 2)) / 2;
-            String[] teile = e.getKey().split("\\|", 2);
-            out.add(new Zeile(teile[0], teile[1], l.size(), zuerst, (int) Math.round(100.0 * zuerst / l.size()),
+            out.add(new Zeile(e.getKey().geraet(), e.getKey().gegner(), l.size(), zuerst, (int) Math.round(100.0 * zuerst / l.size()),
                     median, verfehlt, gewechselt, l.get(0).getErstelltAm().toString()));
         }
         out.sort((a, b) -> Long.compare(b.runden(), a.runden()));

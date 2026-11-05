@@ -71,12 +71,12 @@ public class ScannerMessung {
         m.shopId = shopId;
         m.staffLabel = kurz(staffLabel, 100);
         // Nur bekannte Werte und harmlose Zeichen: das landet in der Admin-Tabelle.
-        m.plattform = PLATTFORMEN.contains(plattform) ? plattform : null;
+        m.plattform = plattform != null && PLATTFORMEN.contains(plattform) ? plattform : null;
         m.geraet = kurz(geraet == null ? null : geraet.replaceAll("[^A-Za-z0-9 ._/;:()+,-]", ""), 200);
         m.gegner = gegner;
         m.altMs = altMs;
         m.gegnerMs = gegnerMs;
-        m.aktiv = GEGNER.contains(aktiv) ? aktiv : null;
+        m.aktiv = aktiv != null && GEGNER.contains(aktiv) ? aktiv : null;
         m.erstelltAm = jetzt;
         return m;
     }
