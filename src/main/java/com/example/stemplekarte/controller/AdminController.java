@@ -476,6 +476,16 @@ public class AdminController {
         return ResponseEntity.ok(Map.of("id", shop.getId(), "apiFreigeschaltet", shop.isApiFreigeschaltet()));
     }
 
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.example.stemplekarte.service.ScannerMessungService scannerMessungen;
+
+    /** Stille Scanner-Messung: je Geraetetyp und Herausforderer, letzte 60 Tage. */
+    @GetMapping("/scanner-messung")
+    public List<com.example.stemplekarte.service.ScannerMessungService.Zeile> scannerMessung() {
+        if (scannerMessungen == null) return List.of();
+        return scannerMessungen.zusammenfassung(java.time.Instant.now());
+    }
+
     public record SpracheRequest(String language) {}
 
     /**

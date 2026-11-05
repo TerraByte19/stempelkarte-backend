@@ -44,6 +44,10 @@ public class ScanController {
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private com.example.stemplekarte.service.KioskService kiosk;
 
+    // Stille Scanner-Messung (lib/scannerWahl im Frontend). Optional wie oben.
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.example.stemplekarte.service.ScannerMessungService messungen;
+
     /** Filiale fuers Protokoll: Zuordnung des Zugangs, sonst Geraeteort, sonst Hauptstandort. */
     private String ortFuer(com.example.stemplekarte.model.StaffToken staff, Shop shop, Double lat, Double lon) {
         return filialen != null ? filialen.ortFuer(staff, shop, lat, lon) : staff.getOrtId();
@@ -77,6 +81,22 @@ public class ScanController {
         out.put("label", staff.getLabel());
         out.put("shopName", staff.getShop().getName());
         return out;
+    }
+
+    public record MessungRequest(String gegner, Integer altMs, Integer gegnerMs, String aktiv,
+                                 String plattform, String geraet) {}
+
+    @Operation(summary = "Eine Runde der stillen Scanner-Messung melden",
+            description = "Keine Kundendaten: nur Geraet, Herausforderer und Zeiten. Erfordert X-Staff-Token.")
+    @PostMapping("/messung")
+    public java.util.Map<String, Object> messung(@RequestBody MessungRequest req, Authentication auth) {
+        if (auth == null || !(auth.getPrincipal() instanceof StaffTokenFilter.StaffPrincipal p)) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Kein gueltiger Staff-Token");
+        }
+        boolean ok = messungen != null && messungen.annehmen(p.staff().getShop().getId(), p.staff().getLabel(),
+                req.plattform(), req.geraet(), req.gegner(), req.altMs(), req.gegnerMs(), req.aktiv(),
+                java.time.Instant.now()) != null;
+        return java.util.Map.of("ok", ok);
     }
 
     public record StateRequest(@NotBlank String qrPayload) {}
