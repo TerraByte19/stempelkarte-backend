@@ -59,6 +59,9 @@ public class ScannerMessung {
     @Column(name = "erstellt_am", nullable = false)
     private Instant erstelltAm;
 
+    public static final java.util.Set<String> PLATTFORMEN = java.util.Set.of("ios", "android", "andere");
+    public static final java.util.Set<String> GEGNER = java.util.Set.of("neu", "nimiq", "handy");
+
     protected ScannerMessung() {}
 
     public static ScannerMessung create(String shopId, String staffLabel, String plattform, String geraet,
@@ -67,12 +70,13 @@ public class ScannerMessung {
         m.id = "SM-" + UUID.randomUUID().toString().substring(0, 12).toUpperCase(Locale.ROOT);
         m.shopId = shopId;
         m.staffLabel = kurz(staffLabel, 100);
-        m.plattform = kurz(plattform, 20);
-        m.geraet = kurz(geraet, 200);
+        // Nur bekannte Werte und harmlose Zeichen: das landet in der Admin-Tabelle.
+        m.plattform = PLATTFORMEN.contains(plattform) ? plattform : null;
+        m.geraet = kurz(geraet == null ? null : geraet.replaceAll("[^A-Za-z0-9 ._/;:()+,-]", ""), 200);
         m.gegner = gegner;
         m.altMs = altMs;
         m.gegnerMs = gegnerMs;
-        m.aktiv = kurz(aktiv, 10);
+        m.aktiv = GEGNER.contains(aktiv) ? aktiv : null;
         m.erstelltAm = jetzt;
         return m;
     }

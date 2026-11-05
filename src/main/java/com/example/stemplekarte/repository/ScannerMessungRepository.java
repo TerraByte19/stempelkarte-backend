@@ -8,7 +8,8 @@ import java.util.List;
 
 public interface ScannerMessungRepository extends JpaRepository<ScannerMessung, String> {
 
-    List<ScannerMessung> findByErstelltAmAfterOrderByErstelltAmDesc(Instant after);
+    /** Begrenzt: mehr als 20000 Zeilen braucht die Zusammenfassung nicht, und mehr soll nicht in den Speicher. */
+    List<ScannerMessung> findTop20000ByErstelltAmAfterOrderByErstelltAmDesc(Instant after);
 
     long countByShopIdAndErstelltAmAfter(String shopId, Instant after);
 }
