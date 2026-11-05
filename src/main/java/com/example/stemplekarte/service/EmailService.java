@@ -141,7 +141,7 @@ public class EmailService {
                 null
         );
 
-        send(customer.getEmail(), "StampIT", null,
+        send(customer.getEmail(), "Stampit", null,
                 Texts.t(lang, "mail.delete_subject"), html);
     }
 
@@ -251,14 +251,14 @@ public class EmailService {
         String text;
         String betreff;
         if (vorbei) {
-            betreff = "Deine Gratis-Testphase ist vorbei – StampIT";
+            betreff = "Deine Gratis-Testphase ist vorbei – Stampit";
             ueberschrift = "Deine Testphase ist vorbei";
             text = hallo + "deine 14 Tage gratis sind seit dem " + datum + " vorbei. "
                     + "Scanner und Nachrichten sind jetzt gesperrt, bis dein Tarif eingerichtet ist.<br><br>"
                     + "<b>Deine Kunden, Karten und Stempel bleiben vollständig erhalten.</b> "
                     + "Melde dich bei uns, dann geht es sofort weiter.";
         } else {
-            betreff = "Deine Gratis-Testphase endet am " + datum + " – StampIT";
+            betreff = "Deine Gratis-Testphase endet am " + datum + " – Stampit";
             ueberschrift = "Noch wenige Tage gratis";
             text = hallo + "deine Gratis-Testphase endet am <b>" + datum + "</b>. "
                     + "Danach sind Scanner und Nachrichten gesperrt, bis dein Tarif eingerichtet ist.<br><br>"
@@ -269,7 +269,7 @@ public class EmailService {
         String html = seite(Texts.STANDARD, null, ueberschrift,
                 textBlock(ueberschrift, text) + knopfBlock("Zum Dashboard", dashboardUrl, STAMPIT_FARBE),
                 null);
-        return send(shop.getEmail(), "StampIT", null, betreff, html);
+        return send(shop.getEmail(), "Stampit", null, betreff, html);
     }
 
     // ── intern ────────────────────────────────────────────────────────────
@@ -421,7 +421,7 @@ public class EmailService {
                 ? shop.getColorBackground() : STAMPIT_FARBE;
         String vordergrund = (shop != null && shop.getColorForeground() != null)
                 ? shop.getColorForeground() : "#FFFFFF";
-        String name = (shop != null) ? shop.getName() : "StampIT";
+        String name = (shop != null) ? shop.getName() : "Stampit";
         String logoUrl = (shop != null) ? shop.getLogoUrl() : null;
 
         StringBuilder b = new StringBuilder();

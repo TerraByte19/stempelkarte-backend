@@ -40,9 +40,20 @@ public final class Stufen {
 
     /** "Silber · noch 8 Besuche bis Gold" bzw. "Gold · 27 Besuche". */
     public static String text(Stufe s, int besuche) {
-        if (s.hoechste()) return s.name() + " · " + besuche + (besuche == 1 ? " Besuch" : " Besuche");
+        return text(com.example.stemplekarte.i18n.Texts.STANDARD, s, besuche);
+    }
+
+    public static String text(String lang, Stufe s, int besuche) {
+        var T = com.example.stemplekarte.i18n.Texts.class;
+        if (s.hoechste()) {
+            return besuche == 1
+                    ? com.example.stemplekarte.i18n.Texts.t(lang, "tier.top_one", s.name())
+                    : com.example.stemplekarte.i18n.Texts.t(lang, "tier.top", s.name(), besuche);
+        }
         int fehlen = Math.max(1, s.naechsteAb() - besuche);
-        return s.name() + " · noch " + fehlen + (fehlen == 1 ? " Besuch" : " Besuche") + " bis " + s.naechsteName();
+        return fehlen == 1
+                ? com.example.stemplekarte.i18n.Texts.t(lang, "tier.next_one", s.name(), s.naechsteName())
+                : com.example.stemplekarte.i18n.Texts.t(lang, "tier.next", s.name(), fehlen, s.naechsteName());
     }
 
     // ── Einstellung ─────────────────────────────────────────────────────

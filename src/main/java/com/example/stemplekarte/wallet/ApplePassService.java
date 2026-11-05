@@ -1,5 +1,7 @@
 package com.example.stemplekarte.wallet;
 
+import com.example.stemplekarte.i18n.Texts;
+
 import com.example.stemplekarte.config.AppProperties;
 import com.example.stemplekarte.model.Card;
 import com.example.stemplekarte.model.CustomerCard;
@@ -285,7 +287,7 @@ public class ApplePassService {
             var punkte = baueFelderPunkte(card, cc);
             nachrichtFeld(punkte, card.getShop(), cc);
             rueckmeldungFeld(punkte, card, cc);
-            tagesangebotFeld(punkte, card.getShop());
+            tagesangebotFeld(punkte, card.getShop(), cc);
             empfehlungFeld(punkte, card, cc);
             statusFeld(punkte, card, cc);
             return punkte.build();
@@ -296,7 +298,7 @@ public class ApplePassService {
             var mitglied = baueFelderMitglied(cc);
             nachrichtFeld(mitglied, card.getShop(), cc);
             rueckmeldungFeld(mitglied, card, cc);
-            tagesangebotFeld(mitglied, card.getShop());
+            tagesangebotFeld(mitglied, card.getShop(), cc);
             statusFeld(mitglied, card, cc);
             return mitglied.build();
         }
@@ -306,7 +308,7 @@ public class ApplePassService {
             var paket = baueFelderPaket(card, cc);
             nachrichtFeld(paket, card.getShop(), cc);
             rueckmeldungFeld(paket, card, cc);
-            tagesangebotFeld(paket, card.getShop());
+            tagesangebotFeld(paket, card.getShop(), cc);
             statusFeld(paket, card, cc);
             return paket.build();
         }
@@ -318,14 +320,15 @@ public class ApplePassService {
             var gesperrt = baueFelderGesperrt(card, cc, grid);
             nachrichtFeld(gesperrt, card.getShop(), cc);
             rueckmeldungFeld(gesperrt, card, cc);
-            tagesangebotFeld(gesperrt, card.getShop());
+            tagesangebotFeld(gesperrt, card.getShop(), cc);
             empfehlungFeld(gesperrt, card, cc);
             statusFeld(gesperrt, card, cc);
             return gesperrt.build();
         }
 
+        String lang = Texts.sprache(cc.getCustomer(), card.getShop());
         int threshold = card.getRewardThreshold();
-        String reward = rewardText(cc.getStamps(), threshold, card.getRewardText());
+        String reward = rewardText(lang, cc.getStamps(), threshold, card.getRewardText());
 
         // Fortschritts-Verhältnis als String bauen (z.B. "3/10"). Gedeckelt,
         // weil ein nachtraeglich gesenkter Schwellwert sonst "10/5" anzeigt.
@@ -334,18 +337,18 @@ public class ApplePassService {
         // Countdown fuer das grosse Mittelfeld: wie viele Stempel noch bis zur Belohnung.
         // Zaehlt 10 -> 9 -> ... -> 1 runter, danach "Bereit!".
         int remaining = Math.max(0, threshold - cc.getStamps());
-        String countdownLabel = remaining > 0 ? "Stempel bis \u2193" : "BELOHNUNG";
-        String countdownValue = remaining > 0 ? String.valueOf(remaining) : "Bereit! \uD83C\uDF89";
+        String countdownLabel = remaining > 0 ? Texts.t(lang, "pass.countdown_label") : Texts.t(lang, "pass.reward_label");
+        String countdownValue = remaining > 0 ? String.valueOf(remaining) : Texts.t(lang, "pass.ready");
 
         // Push-Nachricht fürs Handy beim Stempelstand-Update.
         // %@ ersetzt Apple durch den neuen Stempelstand (stampRatio).
         // istFrischFreigeschaltet ist bei jeder Karte ohne Willkommensgeschenk
         // false - fuer sie bleibt der Text wie er war.
         String changeMsg = (cc.getStamps() >= threshold)
-                ? "\uD83C\uDF89 " + card.getRewardText() + " verdient! Neue Karte: %@"
+                ? Texts.t(lang, "pass.msg_reward", card.getRewardText())
                 : cc.istFrischFreigeschaltet()
-                        ? "\uD83C\uDF89 Karte freigeschaltet! Stempel: %@"
-                        : "Update! Dein Stempelstand: %@";
+                        ? Texts.t(lang, "pass.msg_unlocked")
+                        : Texts.t(lang, "pass.msg_update");
 
         var genericPass = PKGenericPass.builder()
                 .passType(PKPassType.PKStoreCard);
@@ -353,30 +356,30 @@ public class ApplePassService {
         if (grid) {
             genericPass
                     .headerFieldBuilder(PKField.builder()
-                            .key("stamps").label("STEMPEL")
+                            .key("stamps").label(Texts.t(lang, "pass.stamps_label"))
                             .value(stampRatio)
                             .changeMessage(changeMsg))
                     .secondaryFieldBuilder(PKField.builder()
-                            .key("reward").label("BELOHNUNG").value(reward))
+                            .key("reward").label(Texts.t(lang, "pass.reward_label")).value(reward))
                     .auxiliaryFieldBuilder(PKField.builder()
-                            .key("name").label("KUNDE").value(cc.getCustomer().getName()));
+                            .key("name").label(Texts.t(lang, "pass.customer_label")).value(cc.getCustomer().getName()));
         } else {
             genericPass
                     .headerFieldBuilder(PKField.builder()
-                            .key("stamps-header").label("STEMPEL")
+                            .key("stamps-header").label(Texts.t(lang, "pass.stamps_label"))
                             .value(stampRatio)
                             .changeMessage(changeMsg))
                     .primaryFieldBuilder(PKField.builder()
                             .key("stamps-big").label(countdownLabel).value(countdownValue))
                     .secondaryFieldBuilder(PKField.builder()
-                            .key("reward").label("BELOHNUNG").value(reward))
+                            .key("reward").label(Texts.t(lang, "pass.reward_label")).value(reward))
                     .auxiliaryFieldBuilder(PKField.builder()
-                            .key("name").label("KUNDE").value(cc.getCustomer().getName()));
+                            .key("name").label(Texts.t(lang, "pass.customer_label")).value(cc.getCustomer().getName()));
         }
 
         nachrichtFeld(genericPass, card.getShop(), cc);
         rueckmeldungFeld(genericPass, card, cc);
-        tagesangebotFeld(genericPass, card.getShop());
+        tagesangebotFeld(genericPass, card.getShop(), cc);
         empfehlungFeld(genericPass, card, cc);
         statusFeld(genericPass, card, cc);
         return genericPass.build();
@@ -395,26 +398,27 @@ public class ApplePassService {
      * gleich, sonst meldet iOS nichts.
      */
     private PKGenericPassBuilder baueFelderPaket(Card card, CustomerCard cc) {
+        String lang = Texts.sprache(cc.getCustomer(), card.getShop());
         int rest = cc.getPaketRest();
         String einheit = card.getPaketEinheit();
         String changeMsg = rest <= 0
-                ? "Paket aufgebraucht (%@ übrig). Ein neues Paket gibt's an der Kasse!"
+                ? Texts.t(lang, "pass.msg_package_empty")
                 : cc.paketFrischAufgeladen()
-                        ? "Paket aufgeladen! Noch %@ " + einheit + " übrig"
-                        : "Abgebucht! Noch %@ " + einheit + " übrig";
+                        ? Texts.t(lang, "pass.msg_package_loaded", einheit)
+                        : Texts.t(lang, "pass.msg_package_debit", einheit);
         return PKGenericPass.builder()
                 .passType(PKPassType.PKStoreCard)
                 .headerFieldBuilder(PKField.builder()
-                        .key("rest-header").label("ÜBRIG")
+                        .key("rest-header").label(Texts.t(lang, "pass.left_label"))
                         .value(String.valueOf(rest))
                         .changeMessage(changeMsg))
                 .primaryFieldBuilder(PKField.builder()
-                        .key("rest-big").label(rest > 0 ? "NOCH ÜBRIG" : "PAKET")
-                        .value(rest > 0 ? String.valueOf(rest) : "Leer"))
+                        .key("rest-big").label(Texts.t(lang, rest > 0 ? "pass.left_big_label" : "pass.package_label"))
+                        .value(rest > 0 ? String.valueOf(rest) : Texts.t(lang, "pass.package_empty")))
                 .secondaryFieldBuilder(PKField.builder()
-                        .key("paket").label("PAKET").value(card.paketText()))
+                        .key("paket").label(Texts.t(lang, "pass.package_label")).value(card.paketText()))
                 .auxiliaryFieldBuilder(PKField.builder()
-                        .key("name").label("KUNDE").value(cc.getCustomer().getName()));
+                        .key("name").label(Texts.t(lang, "pass.customer_label")).value(cc.getCustomer().getName()));
     }
 
     private PKGenericPassBuilder baueFelderMitglied(CustomerCard cc) {
@@ -423,18 +427,19 @@ public class ApplePassService {
                         .format(cc.getCreatedAt().atZone(java.time.ZoneId.of("Europe/Berlin")))
                 : "";
         String nummer = cc.getId() != null && cc.getId().startsWith("CC-") ? cc.getId().substring(3) : cc.getId();
+        String lang = Texts.sprache(cc.getCustomer(), cc.getCard() != null ? cc.getCard().getShop() : null);
         return PKGenericPass.builder()
                 .passType(PKPassType.PKStoreCard)
                 .headerFieldBuilder(PKField.builder()
-                        .key("visits-header").label("BESUCHE")
+                        .key("visits-header").label(Texts.t(lang, "pass.visits_label"))
                         .value(String.valueOf(cc.getStamps()))
-                        .changeMessage("Besuch erfasst! Du hast jetzt %@ Besuche"))
+                        .changeMessage(Texts.t(lang, "pass.msg_visit")))
                 .primaryFieldBuilder(PKField.builder()
-                        .key("member-name").label("MITGLIED").value(cc.getCustomer().getName()))
+                        .key("member-name").label(Texts.t(lang, "pass.member_label")).value(cc.getCustomer().getName()))
                 .secondaryFieldBuilder(PKField.builder()
-                        .key("member-since").label("MITGLIED SEIT").value(seit))
+                        .key("member-since").label(Texts.t(lang, "pass.member_since_label")).value(seit))
                 .auxiliaryFieldBuilder(PKField.builder()
-                        .key("member-no").label("NR.").value(nummer != null ? nummer : ""));
+                        .key("member-no").label(Texts.t(lang, "pass.member_no_label")).value(nummer != null ? nummer : ""));
     }
 
     /**
@@ -445,10 +450,11 @@ public class ApplePassService {
     private void statusFeld(PKGenericPassBuilder pass, Card card, CustomerCard cc) {
         com.example.stemplekarte.service.Stufen.Stufe s = com.example.stemplekarte.service.Stufen.von(card, cc);
         if (s == null) return;
+        String lang = Texts.sprache(cc.getCustomer(), card.getShop());
         pass.backFieldBuilder(PKField.builder()
-                .key("status").label("STATUS")
+                .key("status").label(Texts.t(lang, "pass.status_label"))
                 .value(com.example.stemplekarte.service.Stufen.text(
-                        s, com.example.stemplekarte.service.Stufen.besuche(card, cc))));
+                        lang, s, com.example.stemplekarte.service.Stufen.besuche(card, cc))));
     }
 
     /**
@@ -458,9 +464,10 @@ public class ApplePassService {
      */
     private void empfehlungFeld(PKGenericPassBuilder pass, Card card, CustomerCard cc) {
         if (!com.example.stemplekarte.service.EmpfehlungService.sichtbar(card, cc)) return;
+        String lang = Texts.sprache(cc.getCustomer(), card.getShop());
         pass.backFieldBuilder(PKField.builder()
-                .key("empfehlen").label("FREUNDE WERBEN")
-                .value(com.example.stemplekarte.service.EmpfehlungService.werbeText(card) + " Dein Link: "
+                .key("empfehlen").label(Texts.t(lang, "pass.referral_label"))
+                .value(com.example.stemplekarte.service.EmpfehlungService.werbeText(lang, card) + " " + Texts.t(lang, "pass.referral_link")
                         + com.example.stemplekarte.service.EmpfehlungService.linkFuer(
                                 props.baseUrl(), card.getId(), cc.getEmpfehlungsCode())));
     }
@@ -471,12 +478,13 @@ public class ApplePassService {
      * kennt. Ohne changeMessage: die Mitteilung kommt ueber das
      * Nachrichtenfeld der Kampagne "Heute: ...", sonst klingelt es doppelt.
      */
-    private void tagesangebotFeld(PKGenericPassBuilder pass, Shop shop) {
+    private void tagesangebotFeld(PKGenericPassBuilder pass, Shop shop, CustomerCard cc) {
         if (shop == null || !shop.hatTagesangebotFeld()) return;
+        String lang = Texts.sprache(cc.getCustomer(), shop);
         String angebot = shop.tagesangebot(java.time.Instant.now());
         pass.backFieldBuilder(PKField.builder()
-                .key("heute").label("HEUTE")
-                .value(angebot != null ? angebot : "Heute kein besonderes Angebot."));
+                .key("heute").label(Texts.t(lang, "pass.today_label"))
+                .value(angebot != null ? angebot : Texts.t(lang, "pass.today_none")));
     }
 
     /**
@@ -489,9 +497,10 @@ public class ApplePassService {
         Shop shop = card.getShop();
         if (shop == null || !shop.isRueckmeldungAktiv()) return;
         if (cc.getCustomer() == null || cc.getCustomer().getId() == null) return;
+        String lang = Texts.sprache(cc.getCustomer(), shop);
         pass.backFieldBuilder(PKField.builder()
-                .key("feedback").label("RÜCKMELDUNG")
-                .value("Wie war dein Besuch? Sag es uns: "
+                .key("feedback").label(Texts.t(lang, "pass.feedback_label"))
+                .value(Texts.t(lang, "pass.feedback_text")
                         + props.baseUrl() + "/bewertung/" + cc.getCustomer().getId() + "/" + card.getId()));
     }
 
@@ -513,6 +522,7 @@ public class ApplePassService {
      */
     private PKGenericPassBuilder baueFelderGesperrt(Card card, CustomerCard cc, boolean grid) {
         String geschenk = cc.getWillkommenText() != null ? cc.getWillkommenText() : Card.WILLKOMMEN_STANDARD;
+        String lang = Texts.sprache(cc.getCustomer(), card.getShop());
         var pass = PKGenericPass.builder()
                 .passType(PKPassType.PKStoreCard)
                 .headerFieldBuilder(PKField.builder()
@@ -520,14 +530,14 @@ public class ApplePassService {
                         .value(card.zeigtWillkommenTitel() ? card.getWillkommenTitel() : ""));
         if (card.zeigtWillkommenGeschenk()) {
             pass.secondaryFieldBuilder(PKField.builder()
-                    .key("welcome").label("🎁 GESCHENK").value(geschenk));
+                    .key("welcome").label(Texts.t(lang, "pass.gift_label")).value(geschenk));
         }
         if (card.zeigtWillkommenHinweis()) {
             pass.secondaryFieldBuilder(PKField.builder()
-                    .key("welcome-how").label("SO GEHT'S").value(card.getWillkommenHinweis()));
+                    .key("welcome-how").label(Texts.t(lang, "pass.gift_how_label")).value(card.getWillkommenHinweis()));
         }
         return pass.auxiliaryFieldBuilder(PKField.builder()
-                .key("name").label("KUNDE").value(cc.getCustomer().getName()));
+                .key("name").label(Texts.t(lang, "pass.customer_label")).value(cc.getCustomer().getName()));
     }
 
     /**
@@ -547,7 +557,8 @@ public class ApplePassService {
         // Rueckhol an ODER schon einmal eine Kampagne verschickt: dann traegt
         // jeder Pass das Feld, dauerhaft (Shop#hatNachrichtenFeld).
         if (shop == null || !shop.hatNachrichtenFeld()) return;
-        var feld = PKField.builder().key("nachricht").label("NACHRICHT");
+        String lang = Texts.sprache(cc.getCustomer(), shop);
+        var feld = PKField.builder().key("nachricht").label(Texts.t(lang, "pass.message_label"));
         String text = cc.nachrichtText();
         if (text != null) {
             feld.value(text);
@@ -556,7 +567,7 @@ public class ApplePassService {
             // es beim naechsten Stempel eine zweite Meldung.
             if (cc.nachrichtFrisch()) feld.changeMessage("%@");
         } else {
-            feld.value("Hier erscheinen Nachrichten von " + shop.getName() + ".");
+            feld.value(Texts.t(lang, "pass.message_none", shop.getName()));
         }
         pass.backFieldBuilder(feld);
     }
@@ -578,19 +589,20 @@ public class ApplePassService {
         List<Reward> katalog = rewardService.list(card);
         Reward ziel = RewardService.naechstesZiel(katalog, stand);
 
+        String lang = Texts.sprache(cc.getCustomer(), card.getShop());
         String standText = PointsMath.formatiere(stand);
         boolean etwasErreichbar = katalog.stream()
                 .anyMatch(r -> r.getCostPointsX100() <= stand);
 
         // %@ ersetzt Apple durch den neuen Wert des Feldes.
         String changeMsg = etwasErreichbar
-                ? "\uD83C\uDF89 Du kannst einl\u00F6sen! Punktestand: %@"
-                : "Update! Dein Punktestand: %@";
+                ? Texts.t(lang, "pass.msg_points_ready")
+                : Texts.t(lang, "pass.msg_points_update");
 
         var genericPass = PKGenericPass.builder()
                 .passType(PKPassType.PKStoreCard)
                 .headerFieldBuilder(PKField.builder()
-                        .key("points-header").label("PUNKTE")
+                        .key("points-header").label(Texts.t(lang, "pass.points_label"))
                         .value(standText)
                         .changeMessage(changeMsg));
 
@@ -599,22 +611,22 @@ public class ApplePassService {
             genericPass
                     .primaryFieldBuilder(PKField.builder()
                             .key("points-goal")
-                            .label(fehlend > 0 ? "Punkte bis \u2193" : "BEREIT")
+                            .label(fehlend > 0 ? Texts.t(lang, "pass.points_until_label") : Texts.t(lang, "pass.ready_label"))
                             .value(fehlend > 0
                                     ? PointsMath.formatiere(fehlend)
-                                    : "Bereit! \uD83C\uDF89"))
+                                    : Texts.t(lang, "pass.ready")))
                     .secondaryFieldBuilder(PKField.builder()
-                            .key("reward").label("N\u00c4CHSTE PR\u00c4MIE")
+                            .key("reward").label(Texts.t(lang, "pass.next_reward_label"))
                             .value(ziel.getName()));
         } else {
             // Leerer Katalog: nur der Stand, kein erfundenes Ziel. Ein Laden
             // ohne Praemien hat schlicht noch keines.
             genericPass.primaryFieldBuilder(PKField.builder()
-                    .key("points-big").label("PUNKTE").value(standText));
+                    .key("points-big").label(Texts.t(lang, "pass.points_label")).value(standText));
         }
 
         genericPass.auxiliaryFieldBuilder(PKField.builder()
-                .key("name").label("KUNDE").value(cc.getCustomer().getName()));
+                .key("name").label(Texts.t(lang, "pass.customer_label")).value(cc.getCustomer().getName()));
 
         // ── Rueckseite: der ganze Katalog ─────────────────────────────────
         // Das sind die ERSTEN Rueckseitenfelder ueberhaupt in diesem Pass.
@@ -624,31 +636,32 @@ public class ApplePassService {
             genericPass.backFieldBuilder(PKField.builder()
                     .key("reward-" + r.getId())
                     .label(bezahlbar ? "\u2713 " + r.getName() : r.getName())
-                    .value(PointsMath.formatiere(r.getCostPointsX100()) + " Punkte"));
+                    .value(PointsMath.formatiere(r.getCostPointsX100()) + " " + Texts.t(lang, "unit.points")));
         }
 
         genericPass.backFieldBuilder(PKField.builder()
-                .key("rate").label("So sammelst du")
-                .value(kursText(card)));
+                .key("rate").label(Texts.t(lang, "pass.rate_label"))
+                .value(kursText(lang, card)));
 
         return genericPass;
     }
 
     /** Der Kurs im Klartext, damit der Kunde seine Punkte selbst nachrechnen
      *  kann. Unter einem Punkt pro Euro liest sich der Kehrwert besser. */
-    private String kursText(Card card) {
+    private String kursText(String lang, Card card) {
         int kurs = card.getPointsPerEuroX100();
         if (kurs >= 100) {
-            return PointsMath.formatiere(kurs) + " Punkte pro Euro";
+            return Texts.t(lang, "pass.rate_per_euro", PointsMath.formatiere(kurs));
         }
         long euroProPunktX100 = Math.round(10000.0 / kurs);
-        return "1 Punkt pro " + PointsMath.formatiere(euroProPunktX100) + " Euro";
+        return Texts.t(lang, "pass.rate_inverse", PointsMath.formatiere(euroProPunktX100));
     }
 
     List<PKLocation> sperrbildschirmOrte(Shop shop, Card card, CustomerCard cc) {
         if (!shop.isLockScreenActive()) {
             return List.of();
         }
+        String lang = Texts.sprache(cc.getCustomer(), shop);
 
         // Gesperrt: in Ladennaehe an das Geschenk erinnern - genau der Moment,
         // in dem der Kunde reingehen koennte. Die Stempel-Texte des Ladens
@@ -656,7 +669,7 @@ public class ApplePassService {
         if (cc.isWillkommenOffen()) {
             String geschenk = cc.getWillkommenText() != null
                     ? cc.getWillkommenText() : Card.WILLKOMMEN_STANDARD;
-            return orte(shop, geschenk + " - wartet auf dich");
+            return orte(shop, Texts.t(lang, "geo.gift", geschenk));
         }
 
         KartenFortschritt f = KartenFortschritt.von(card, cc, rewardService);
@@ -673,8 +686,8 @@ public class ApplePassService {
             hinweis = f.ersetze(eigener);
         } else {
             hinweis = f.erreicht()
-                    ? f.belohnung() + " wartet auf dich"
-                    : "Noch " + f.offen() + " " + f.einheit() + " bis: " + f.belohnung();
+                    ? Texts.t(lang, "geo.ready", f.belohnung())
+                    : Texts.t(lang, "geo.progress", f.offen(), f.einheit(lang), f.belohnung());
         }
 
         return orte(shop, hinweis);
@@ -711,9 +724,9 @@ public class ApplePassService {
         return orte;
     }
 
-    private String rewardText(int stamps, int threshold, String rewardText) {
+    private String rewardText(String lang, int stamps, int threshold, String rewardText) {
         return stamps >= threshold
-                ? rewardText + " verfügbar!"
+                ? Texts.t(lang, "pass.reward_available", rewardText)
                 : rewardText;
     }
 

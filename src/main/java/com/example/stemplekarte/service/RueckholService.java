@@ -173,9 +173,10 @@ public class RueckholService {
             // Punktekarte ohne Praemie: Platzhalter liessen sich nicht fuellen.
             if (!eigener.contains("{")) return eigener;
         }
-        if (f == null) return "Wir vermissen dich! Schau mal wieder vorbei.";
+        String lang = com.example.stemplekarte.i18n.Texts.sprache(cc.getCustomer(), shop);
+        if (f == null) return com.example.stemplekarte.i18n.Texts.t(lang, "winback.default");
         return f.erreicht()
-                ? "Wir vermissen dich! " + f.belohnung() + " wartet auf dich."
-                : "Wir vermissen dich! Noch " + f.offen() + " " + f.einheit() + " bis: " + f.belohnung();
+                ? com.example.stemplekarte.i18n.Texts.t(lang, "winback.ready", f.belohnung())
+                : com.example.stemplekarte.i18n.Texts.t(lang, "winback.progress", f.offen(), f.einheit(lang), f.belohnung());
     }
 }

@@ -125,7 +125,7 @@ public class PublicEmailController {
     private ResponseEntity<String> page(String lang, String icon, String title, String text) {
         String html = "<!doctype html><html" + Texts.htmlAttrs(lang) + "><head><meta charset=\"utf-8\">"
                 + "<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">"
-                + "<title>" + esc(title) + " – StampIT</title></head>"
+                + "<title>" + esc(title) + " – Stampit</title></head>"
                 + "<body style=\"margin:0;min-height:100vh;display:flex;align-items:center;"
                 + "justify-content:center;background:#f5f5f7;font-family:-apple-system,Segoe UI,sans-serif\">"
                 + "<div style=\"background:white;border-radius:16px;padding:40px;max-width:380px;"

@@ -50,9 +50,15 @@ public class PaketService {
 
     /** "Noch 7 Kurse übrig", "Noch 1 übrig", "Paket leer". */
     public static String restText(Card card, CustomerCard cc) {
+        return restText(com.example.stemplekarte.i18n.Texts.STANDARD, card, cc);
+    }
+
+    public static String restText(String lang, Card card, CustomerCard cc) {
         int rest = cc.getPaketRest();
-        if (rest <= 0) return "Paket leer";
-        return "N" + nochText(card, rest).substring(1);
+        if (rest <= 0) return com.example.stemplekarte.i18n.Texts.t(lang, "package.rest_empty");
+        return rest == 1
+                ? com.example.stemplekarte.i18n.Texts.t(lang, "package.rest_one")
+                : com.example.stemplekarte.i18n.Texts.t(lang, "package.rest", rest, card.getPaketEinheit());
     }
 
     /** "noch 7 Kurse übrig" bzw. "noch 1 übrig" - die Einheit hat nur eine Mehrzahl. */

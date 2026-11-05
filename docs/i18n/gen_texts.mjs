@@ -1,28 +1,57 @@
 // Erzeugt src/main/java/.../i18n/Texts.java aus den JSON-Dateien in diesem Ordner.
 // Aufruf: node docs/i18n/gen_texts.mjs
-import { readFileSync, writeFileSync, existsSync } from 'node:fs'
+//
+// Dateien: kunden_de_en.json {key: {de, en}}, kunden_ar.json und kunden_tr.json {key: text}.
+// Liegen neu_de_en.json / neu_ar.json / neu_tr.json daneben, werden sie vorher
+// in die kunden_*.json gemischt und geloescht (so kommen neue Schluessel rein).
+// Fehlt eine Uebersetzung, steht vorerst Deutsch drin - mit Warnung hier.
+import { readFileSync, writeFileSync, existsSync, unlinkSync } from 'node:fs'
 import { dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 const S = dirname(fileURLToPath(import.meta.url))
 const OUT = `${S}/../../src/main/java/com/example/stemplekarte/i18n/Texts.java`
 
-const deEn = JSON.parse(readFileSync(`${S}/kunden_de_en.json`, 'utf8'))
+const lies = p => JSON.parse(readFileSync(p, 'utf8'))
+const schreib = (p, o) => writeFileSync(p, JSON.stringify(o, null, 1) + '\n')
+
+// Neue Schluessel einmischen
+let deEn = lies(`${S}/kunden_de_en.json`)
+if (existsSync(`${S}/neu_de_en.json`)) {
+  const neu = lies(`${S}/neu_de_en.json`)
+  let alle = true
+  for (const l of ['ar', 'tr']) if (!existsSync(`${S}/neu_${l}.json`)) alle = false
+  deEn = { ...deEn, ...neu }
+  schreib(`${S}/kunden_de_en.json`, deEn)
+  for (const l of ['ar', 'tr']) {
+    const p = `${S}/neu_${l}.json`
+    if (!existsSync(p)) continue
+    const voll = existsSync(`${S}/kunden_${l}.json`) ? lies(`${S}/kunden_${l}.json`) : {}
+    schreib(`${S}/kunden_${l}.json`, { ...voll, ...lies(p) })
+    unlinkSync(p)
+  }
+  if (alle) unlinkSync(`${S}/neu_de_en.json`)
+  else console.log('neu_de_en.json bleibt liegen, bis neu_ar.json und neu_tr.json da sind')
+}
+
 const keys = Object.keys(deEn)
 const langs = { de: {}, en: {} }
 for (const k of keys) { langs.de[k] = deEn[k].de; langs.en[k] = deEn[k].en }
+const ph = s => (s.match(/\{\d\}/g) || []).sort().join('')
 for (const l of ['ar', 'tr']) {
   const p = `${S}/kunden_${l}.json`
-  if (existsSync(p)) {
-    const m = JSON.parse(readFileSync(p, 'utf8'))
-    const fehlt = keys.filter(k => !(k in m) || typeof m[k] !== 'string' || !m[k].trim())
-    const zuviel = Object.keys(m).filter(k => !(k in deEn))
-    if (fehlt.length || zuviel.length) throw new Error(`${l}: fehlt ${fehlt.join(',')} / zu viel ${zuviel.join(',')}`)
-    const ph = s => (s.match(/\{\d\}/g) || []).sort().join('')
-    for (const k of keys) if (ph(m[k]) !== ph(deEn[k].de)) throw new Error(`${l}.${k}: Platzhalter ${ph(m[k])} statt ${ph(deEn[k].de)}`)
-    langs[l] = m
-  } else {
-    console.log(`(${l} fehlt noch, Rueckfall auf de)`)
+  const m = existsSync(p) ? lies(p) : {}
+  const zuviel = Object.keys(m).filter(k => !(k in deEn))
+  if (zuviel.length) throw new Error(`${l}: Schluessel ohne de: ${zuviel.join(',')}`)
+  const fehlt = []
+  langs[l] = {}
+  for (const k of keys) {
+    const v = m[k]
+    if (typeof v !== 'string' || !v.trim()) { fehlt.push(k); langs[l][k] = deEn[k].de; continue }
+    if (ph(v) !== ph(deEn[k].de)) throw new Error(`${l}.${k}: Platzhalter ${ph(v)} statt ${ph(deEn[k].de)}`)
+    if ((v.includes('%@')) !== (deEn[k].de.includes('%@'))) throw new Error(`${l}.${k}: %@ fehlt oder zu viel`)
+    langs[l][k] = v
   }
+  if (fehlt.length) console.log(`WARNUNG ${l}: ${fehlt.length} Schluessel noch Deutsch: ${fehlt.slice(0, 8).join(', ')}${fehlt.length > 8 ? ' ...' : ''}`)
 }
 
 const esc = s => s.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
@@ -32,7 +61,6 @@ const methode = (l, m) => {
   z.push(`        return Map.copyOf(m);`, `    }`)
   return z.join('\n')
 }
-const vorhanden = Object.keys(langs)
 const java = `package com.example.stemplekarte.i18n;
 
 import com.example.stemplekarte.model.Customer;
@@ -44,15 +72,17 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * Texte, die der Endkunde sieht: Kartenseite, Anmeldeseite, Mail-Seiten und
- * Mails. Spiegel von i18n.js im Frontend, nur fuer das Backend.
+ * Texte, die der Endkunde sieht: Kartenseite, Anmeldeseite, Mail-Seiten,
+ * Mails, Wallet-Karte und Mitteilungen. Spiegel von i18n.js im Frontend,
+ * nur fuer das Backend.
  *
- * GENERIERT aus scratchpad/kunden/*.json (gen_texts.mjs) - Aenderungen an den
- * Texten bitte dort und neu erzeugen, oder hier UND in allen Sprachen.
+ * GENERIERT aus docs/i18n/*.json (node docs/i18n/gen_texts.mjs) - Aenderungen
+ * an den Texten bitte dort und neu erzeugen.
  *
  * Sprache: Customer.language (beim Anmelden vom Laden uebernommen), sonst
  * Shop.language, sonst Deutsch. Unbekannte Schluessel fallen auf Deutsch
- * zurueck, unbekannte Sprachen auch. Platzhalter {0}, {1} ...
+ * zurueck, unbekannte Sprachen auch. Platzhalter {0}, {1} ... ; "%@" bleibt
+ * stehen, das ersetzt Apple selbst.
  */
 public final class Texts {
 
@@ -60,9 +90,7 @@ public final class Texts {
     public static final Set<String> SPRACHEN = Set.of("de", "en", "ar", "tr");
 
     private static final Map<String, Map<String, String>> T = Map.of(
-            "de", de(), "en", en(),
-            "ar", ${vorhanden.includes('ar') ? 'ar()' : 'de()'},
-            "tr", ${vorhanden.includes('tr') ? 'tr()' : 'de()'});
+            "de", de(), "en", en(), "ar", ar(), "tr", tr());
 
     private Texts() {}
 
@@ -110,8 +138,8 @@ public final class Texts {
         return T.get(norm(lang));
     }
 
-${vorhanden.map(l => methode(l, langs[l])).join('\n\n')}
+${['de', 'en', 'ar', 'tr'].map(l => methode(l, langs[l])).join('\n\n')}
 }
 `
 writeFileSync(OUT, java.replace(/\r?\n/g, '\r\n'))
-console.log('Texts.java:', keys.length, 'Schluessel, Sprachen', vorhanden.join(','))
+console.log('Texts.java:', keys.length, 'Schluessel')

@@ -1254,7 +1254,7 @@ public class LandingController {
         return "<div class='stufe' style='margin-top:14px;text-align:center;font-size:14px;opacity:.9'>"
                 + t(lang, "card.status") + "<b>"
                 + escapeHtml(com.example.stemplekarte.service.Stufen.text(
-                        s, com.example.stemplekarte.service.Stufen.besuche(card, cc)))
+                        lang, s, com.example.stemplekarte.service.Stufen.besuche(card, cc)))
                 + "</b></div>";
     }
 
@@ -1285,7 +1285,7 @@ public class LandingController {
                 + "background:rgba(255,255,255,.14);text-align:center;font-size:14px'>"
                 + "<div style='font-weight:600;margin-bottom:6px'>" + t(lang, "card.ref_title") + "</div>"
                 + "<div style='opacity:.9;margin-bottom:8px'>"
-                + escapeHtml(com.example.stemplekarte.service.EmpfehlungService.werbeText(card)) + "</div>"
+                + escapeHtml(com.example.stemplekarte.service.EmpfehlungService.werbeText(lang, card)) + "</div>"
                 + "<div style='font-size:12px;opacity:.85;margin-bottom:10px'>" + t(lang, "card.ref_code") + "<b>"
                 + escapeHtml(cc.getEmpfehlungsCode()) + "</b></div>"
                 + "<button type='button' id='empfehlung-btn' data-link='" + escapeHtml(link) + "' "

@@ -18,6 +18,11 @@ import java.util.List;
  */
 public record KartenFortschritt(String belohnung, String offen, String einheit, boolean erreicht) {
 
+    /** Die Einheit in der Sprache des Kunden ("Stempel" oder "Punkte"). */
+    public String einheit(String lang) {
+        return com.example.stemplekarte.i18n.Texts.t(lang, "Punkte".equals(einheit) ? "unit.points" : "unit.stamps");
+    }
+
     /** Null bei einer Punktekarte ohne Praemie, bei Mitglieds- und 10er-Karten - dann gibt es kein Ziel zu nennen. */
     public static KartenFortschritt von(Card card, CustomerCard cc, RewardService rewardService) {
         if (card.isMember() || card.isPackage()) return null;

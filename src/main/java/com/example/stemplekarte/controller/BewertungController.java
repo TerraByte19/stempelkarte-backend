@@ -1,5 +1,6 @@
 package com.example.stemplekarte.controller;
 
+import com.example.stemplekarte.i18n.Texts;
 import com.example.stemplekarte.model.Card;
 import com.example.stemplekarte.model.CustomerCard;
 import com.example.stemplekarte.model.Rueckmeldung;
@@ -50,18 +51,19 @@ public class BewertungController {
     public ResponseEntity<String> seite(@PathVariable String customerId, @PathVariable String cardId) {
         CustomerCard cc = customerCardRepo.findByCustomer_IdAndCard_Id(customerId, cardId).orElse(null);
         if (cc == null) {
-            return ResponseEntity.ok(hinweisSeite("Karte nicht gefunden", ""));
+            return ResponseEntity.ok(hinweisSeite(Texts.STANDARD, Texts.t(Texts.STANDARD, "card.not_found"), ""));
         }
         Card card = cc.getCard();
         Shop shop = card.getShop();
+        String lang = Texts.sprache(cc.getCustomer(), shop);
         String zurueck = "/karte/" + escapeHtml(customerId) + "/" + escapeHtml(cardId);
         if (!shop.isRueckmeldungAktiv()) {
-            return ResponseEntity.ok(hinweisSeite("Rückmeldungen sind hier gerade nicht möglich.",
-                    "<a href='" + zurueck + "'>Zurück zur Karte</a>"));
+            return ResponseEntity.ok(hinweisSeite(lang, Texts.t(lang, "review.unavailable"),
+                    "<a href='" + zurueck + "'>" + Texts.t(lang, "review.back") + "</a>"));
         }
         String bgColor = LandingController.farbeVon(card);
         String logoUrl = LandingController.logoVon(card);
-        String html = seiteHtml(shop, cc, customerId, cardId, bgColor, logoUrl, zurueck);
+        String html = seiteHtml(lang, shop, cc, customerId, cardId, bgColor, logoUrl, zurueck);
         return ResponseEntity.ok()
                 .header("Cache-Control", "no-store")
                 .body(LandingController.mitKontrast(html, bgColor, shop.getNameColor()));
@@ -69,18 +71,23 @@ public class BewertungController {
 
     static String seiteHtml(Shop shop, CustomerCard cc, String customerId, String cardId,
                             String bgColor, String logoUrl, String zurueck) {
+        return seiteHtml(Texts.STANDARD, shop, cc, customerId, cardId, bgColor, logoUrl, zurueck);
+    }
+
+    static String seiteHtml(String lang, Shop shop, CustomerCard cc, String customerId, String cardId,
+                            String bgColor, String logoUrl, String zurueck) {
         StringBuilder sterne = new StringBuilder();
         for (int i = 1; i <= 5; i++) {
             sterne.append("<button type='button' class='stern' data-wert='").append(i)
-                  .append("' aria-label='").append(i).append(" von 5'>★</button>");
+                  .append("' aria-label='").append(escapeHtml(Texts.t(lang, "review.star_of", i))).append("'>★</button>");
         }
         return """
                 <!DOCTYPE html>
-                <html lang="de">
+                <html%s>
                 <head>
                     <meta charset="UTF-8">
                     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                    <title>%s — Wie war's?</title>
+                    <title>%s — %s</title>
                     <style>
                         * { margin: 0; padding: 0; box-sizing: border-box; }
                         body {
@@ -131,26 +138,27 @@ public class BewertungController {
                             <div class="shop-name">%s</div>
                         </div>
                         <form id="formular" autocomplete="off">
-                            <h2>Hallo %s, wie war dein Besuch?</h2>
+                            <h2>%s</h2>
                             <div class="sterne" id="sterne">%s</div>
-                            <textarea id="text" maxlength="%d" placeholder="Was war gut, was können wir besser machen? (optional)"></textarea>
+                            <textarea id="text" maxlength="%d" placeholder="%s"></textarea>
                             <input type="text" name="website" id="website" class="falle" tabindex="-1" autocomplete="off">
                             <div class="fehler" id="fehler"></div>
-                            <button type="submit" class="btn" id="senden" disabled>Abschicken</button>
-                            <p class="hinweis">Deine Rückmeldung geht nur an %s, nicht an Google.</p>
+                            <button type="submit" class="btn" id="senden" disabled>%s</button>
+                            <p class="hinweis">%s</p>
                         </form>
                         <div class="danke hidden" id="danke">
                             <div class="gross">🙏</div>
-                            <h2 id="danke-text">Danke, %s!</h2>
-                            <p class="hinweis" id="danke-hinweis">Deine Rückmeldung ist bei %s angekommen.</p>
+                            <h2 id="danke-text">%s</h2>
+                            <p class="hinweis" id="danke-hinweis">%s</p>
                             %s
                         </div>
-                        <a class="zurueck" href="%s">Zurück zur Karte</a>
+                        <a class="zurueck" href="%s">%s</a>
                     </div>
                     <script>
                         (function () {
                             var card = document.querySelector('.card');
                             var custId = %s, cardId = %s;
+                            var tAlready = %s, tThanks = %s, tError = %s, tOffline = %s;
                             var wert = 0;
                             var sterne = Array.prototype.slice.call(document.querySelectorAll('.stern'));
                             var senden = document.getElementById('senden');
@@ -186,14 +194,14 @@ public class BewertungController {
                                         })
                                     });
                                     if (res.ok) { fertig(null, null); return; }
-                                    if (res.status === 409) { fertig('Danke!', 'Du hast heute schon eine Rückmeldung geschickt.'); return; }
+                                    if (res.status === 409) { fertig(tThanks, tAlready); return; }
                                     var d = null;
                                     try { d = await res.json(); } catch (e) {}
-                                    fehler.textContent = (d && d.error) ? d.error : 'Das hat nicht geklappt. Bitte nochmal versuchen.';
+                                    fehler.textContent = (d && d.error) ? d.error : tError;
                                     fehler.style.display = 'block';
                                     senden.disabled = false;
                                 } catch (e) {
-                                    fehler.textContent = 'Keine Verbindung. Bitte nochmal versuchen.';
+                                    fehler.textContent = tOffline;
                                     fehler.style.display = 'block';
                                     senden.disabled = false;
                                 }
@@ -203,25 +211,28 @@ public class BewertungController {
                 </body>
                 </html>
                 """.formatted(
-                escapeHtml(shop.getName()), LandingController.safeCssColor(bgColor),
+                Texts.htmlAttrs(lang), escapeHtml(shop.getName()), Texts.t(lang, "review.title"), LandingController.safeCssColor(bgColor),
                 logoUrl.isBlank() ? ""
                         : "<img src='" + escapeHtml(logoUrl) + "' class='shop-logo' alt='Logo'>",
                 escapeHtml(shop.getName()),
-                escapeHtml(cc.getCustomer().getName()),
+                Texts.t(lang, "review.question", escapeHtml(cc.getCustomer().getName())),
                 sterne.toString(),
-                Rueckmeldung.TEXT_MAX,
-                escapeHtml(shop.getName()),
-                escapeHtml(cc.getCustomer().getName()),
-                escapeHtml(shop.getName()),
-                LandingController.bewertungsLink(shop),
-                zurueck,
+                Rueckmeldung.TEXT_MAX, escapeHtml(Texts.t(lang, "review.placeholder")),
+                Texts.t(lang, "review.send"),
+                Texts.t(lang, "review.private_hint", escapeHtml(shop.getName())),
+                Texts.t(lang, "review.thanks", escapeHtml(cc.getCustomer().getName())),
+                Texts.t(lang, "review.received", escapeHtml(shop.getName())),
+                LandingController.bewertungsLink(lang, shop),
+                zurueck, Texts.t(lang, "review.back"),
                 // IDs stehen in JS-Zeichenketten: toJsString liefert die
                 // Anfuehrungszeichen mit.
-                LandingController.toJsString(customerId), LandingController.toJsString(cardId));
+                LandingController.toJsString(customerId), LandingController.toJsString(cardId),
+                LandingController.toJsString(Texts.t(lang, "review.already")), LandingController.toJsString(Texts.t(lang, "review.thanks_short")),
+                LandingController.toJsString(Texts.t(lang, "review.error")), LandingController.toJsString(Texts.t(lang, "review.offline")));
     }
 
-    private static String hinweisSeite(String text, String linkHtml) {
-        return "<html><body style='font-family:sans-serif;padding:40px;text-align:center'><h2>"
+    private static String hinweisSeite(String lang, String text, String linkHtml) {
+        return "<html" + Texts.htmlAttrs(lang) + "><body style='font-family:sans-serif;padding:40px;text-align:center'><h2>"
                 + escapeHtml(text) + "</h2><p style='margin-top:16px'>" + linkHtml + "</p></body></html>";
     }
 

@@ -1,5 +1,7 @@
 package com.example.stemplekarte.wallet;
 
+import com.example.stemplekarte.i18n.Texts;
+
 import com.example.stemplekarte.config.AppProperties;
 import com.example.stemplekarte.model.Card;
 import com.example.stemplekarte.model.CustomerCard;
@@ -178,28 +180,28 @@ public class GoogleWalletService {
     static String[] meldungText(CustomerCard cc, Meldung meldung) {
         Card card = cc.getCard();
         String laden = card.getShop().getName();
+        String lang = Texts.sprache(cc.getCustomer(), card.getShop());
         return switch (meldung) {
             case STEMPEL -> new String[]{
-                    "Neuer Stempel bei " + laden,
-                    "Du hast jetzt " + Math.min(cc.getStamps(), card.getRewardThreshold())
-                            + " von " + card.getRewardThreshold() + " Stempeln."};
+                    Texts.t(lang, "gw.stamp_header", laden),
+                    Texts.t(lang, "gw.stamp_body", Math.min(cc.getStamps(), card.getRewardThreshold()), card.getRewardThreshold())};
             case VOLL -> new String[]{
-                    "🎉 Karte voll!",
-                    card.getRewardText() + " verdient! Zeig die Karte beim nächsten Besuch vor."};
+                    Texts.t(lang, "gw.full_header"),
+                    Texts.t(lang, "gw.full_body", card.getRewardText())};
             case PUNKTE -> new String[]{
-                    "Punkte bei " + laden,
-                    "Du hast jetzt " + PointsMath.formatiere(cc.getPointsX100()) + " Punkte."};
+                    Texts.t(lang, "gw.points_header", laden),
+                    Texts.t(lang, "gw.points_body", PointsMath.formatiere(cc.getPointsX100()))};
             case BESUCH -> new String[]{
-                    "Besuch bei " + laden,
-                    "Schön, dass du da warst! Das war dein " + cc.getStamps() + ". Besuch."};
+                    Texts.t(lang, "gw.visit_header", laden),
+                    Texts.t(lang, "gw.visit_body", cc.getStamps())};
             case PAKET -> new String[]{
-                    "Abgebucht bei " + laden,
+                    Texts.t(lang, "gw.debit_header", laden),
                     cc.getPaketRest() > 0
-                            ? com.example.stemplekarte.service.PaketService.restText(card, cc) + "."
-                            : "Dein Paket ist aufgebraucht. Ein neues gibt's an der Kasse!"};
+                            ? com.example.stemplekarte.service.PaketService.restText(lang, card, cc) + "."
+                            : Texts.t(lang, "package.used_up")};
             case AUFGELADEN -> new String[]{
-                    "Paket aufgeladen bei " + laden,
-                    card.paketText() + " dazu. " + com.example.stemplekarte.service.PaketService.restText(card, cc) + "."};
+                    Texts.t(lang, "gw.loaded_header", laden),
+                    Texts.t(lang, "gw.loaded_body", card.paketText(), com.example.stemplekarte.service.PaketService.restText(lang, card, cc))};
             case KEINE -> null;
         };
     }
@@ -256,9 +258,10 @@ public class GoogleWalletService {
                     .orElseThrow(() -> new NoSuchElementException("CustomerCard nicht gefunden: " + customerCardId));
             String objectId = objectIdFor(cc);
 
+            String lang = Texts.sprache(cc.getCustomer(), cc.getCard().getShop());
             Message message = new Message()
-                    .setHeader("🎉 Karte voll!")
-                    .setBody(rewardText + " verdient! Zeig die Karte beim nächsten Besuch vor.")
+                    .setHeader(Texts.t(lang, "gw.full_header"))
+                    .setBody(Texts.t(lang, "gw.full_body", rewardText))
                     .setMessageType("TEXT")
                     .setId("reward-" + customerCardId + "-" + System.currentTimeMillis());
 
@@ -285,10 +288,10 @@ public class GoogleWalletService {
                     .orElseThrow(() -> new NoSuchElementException("CustomerCard nicht gefunden: " + customerCardId));
             String objectId = objectIdFor(cc);
 
+            String lang = Texts.sprache(cc.getCustomer(), cc.getCard().getShop());
             Message message = new Message()
-                    .setHeader("🎉 Karte freigeschaltet!")
-                    .setBody("Ab deinem nächsten Besuch sammelst du Stempel bei "
-                            + cc.getCard().getShop().getName() + ".")
+                    .setHeader(Texts.t(lang, "gw.unlocked_header"))
+                    .setBody(Texts.t(lang, "gw.unlocked_body", cc.getCard().getShop().getName()))
                     .setMessageType("TEXT_AND_NOTIFY")
                     .setId("welcome-" + customerCardId + "-" + System.currentTimeMillis());
 
@@ -419,6 +422,7 @@ public class GoogleWalletService {
         String qrValue = com.example.stemplekarte.service.QrPayload.fuer(cc);
 
         Card card = cc.getCard();
+        String lang = Texts.sprache(cc.getCustomer(), card.getShop());
 
         LoyaltyPoints haupt;
         LoyaltyPoints neben;
@@ -433,18 +437,18 @@ public class GoogleWalletService {
                             .format(cc.getCreatedAt().atZone(java.time.ZoneId.of("Europe/Berlin")))
                     : "";
             haupt = new LoyaltyPoints()
-                    .setLabel("Besuche")
+                    .setLabel(Texts.t(lang, "gw.visits"))
                     .setBalance(new LoyaltyPointsBalance().setString(String.valueOf(cc.getStamps())));
             neben = new LoyaltyPoints()
-                    .setLabel("Mitglied seit")
+                    .setLabel(Texts.t(lang, "gw.member_since"))
                     .setBalance(new LoyaltyPointsBalance().setString(seit));
         } else if (card.isPackage()) {
             // 10er-Karte: Rest und Paketgroesse.
             haupt = new LoyaltyPoints()
-                    .setLabel("Übrig")
+                    .setLabel(Texts.t(lang, "gw.left"))
                     .setBalance(new LoyaltyPointsBalance().setString(String.valueOf(cc.getPaketRest())));
             neben = new LoyaltyPoints()
-                    .setLabel("Paket")
+                    .setLabel(Texts.t(lang, "gw.package"))
                     .setBalance(new LoyaltyPointsBalance().setString(card.paketText()));
         } else if (card.isPoints()) {
             long stand = cc.getPointsX100();
@@ -452,22 +456,22 @@ public class GoogleWalletService {
             Reward ziel = RewardService.naechstesZiel(katalog, stand);
 
             haupt = new LoyaltyPoints()
-                    .setLabel("Punkte")
+                    .setLabel(Texts.t(lang, "gw.points"))
                     .setBalance(new LoyaltyPointsBalance()
                             .setString(PointsMath.formatiere(stand)));
 
             if (ziel != null) {
                 long fehlend = Math.max(0, ziel.getCostPointsX100() - stand);
                 neben = new LoyaltyPoints()
-                        .setLabel("N\u00e4chste Pr\u00e4mie")
+                        .setLabel(Texts.t(lang, "gw.next_reward"))
                         .setBalance(new LoyaltyPointsBalance()
                                 .setString(fehlend > 0
-                                        ? ziel.getName() + ", noch " + PointsMath.formatiere(fehlend)
-                                        : ziel.getName() + " bereit!"));
+                                        ? Texts.t(lang, "gw.next_reward_left", ziel.getName(), PointsMath.formatiere(fehlend))
+                                        : Texts.t(lang, "gw.next_reward_ready", ziel.getName())));
             } else {
                 neben = new LoyaltyPoints()
-                        .setLabel("Pr\u00e4mien")
-                        .setBalance(new LoyaltyPointsBalance().setString("noch keine"));
+                        .setLabel(Texts.t(lang, "gw.rewards"))
+                        .setBalance(new LoyaltyPointsBalance().setString(Texts.t(lang, "gw.rewards_none")));
             }
 
             // Der Katalog als Textbaustein - das Gegenstueck zur
@@ -479,11 +483,11 @@ public class GoogleWalletService {
                     sb.append(bezahlbar ? "\u2713 " : "\u00b7 ")
                       .append(r.getName()).append(" - ")
                       .append(PointsMath.formatiere(r.getCostPointsX100()))
-                      .append(" Punkte\n");
+                      .append(" ").append(Texts.t(lang, "unit.points")).append("\n");
                 }
                 module.add(new TextModuleData()
                         .setId("katalog")
-                        .setHeader("Pr\u00e4mien")
+                        .setHeader(Texts.t(lang, "gw.rewards"))
                         .setBody(sb.toString().trim()));
             }
         } else if (cc.isWillkommenOffen()) {
@@ -494,13 +498,13 @@ public class GoogleWalletService {
         } else {
             // Unveraendert der bisherige Stempel-Weg.
             haupt = new LoyaltyPoints()
-                    .setLabel("Stempel")
+                    .setLabel(Texts.t(lang, "gw.stamps"))
                     .setBalance(new LoyaltyPointsBalance()
                             // Gedeckelt: gesenkte Schwelle wuerde sonst "10/5" anzeigen.
                             .setString(Math.min(cc.getStamps(), card.getRewardThreshold())
                                     + "/" + card.getRewardThreshold()));
             neben = new LoyaltyPoints()
-                    .setLabel("Belohnung")
+                    .setLabel(Texts.t(lang, "gw.reward"))
                     .setBalance(new LoyaltyPointsBalance()
                             .setString(card.getRewardText()));
         }
@@ -510,19 +514,19 @@ public class GoogleWalletService {
         // naechsten Objekt-Update von selbst weg (module wird komplett gesetzt).
         String heute = card.getShop() != null ? card.getShop().tagesangebot(java.time.Instant.now()) : null;
         if (heute != null) {
-            module.add(new TextModuleData().setId("heute").setHeader("Heute").setBody(heute));
+            module.add(new TextModuleData().setId("heute").setHeader(Texts.t(lang, "gw.today")).setBody(heute));
         }
         // Stufe (Bronze, Silber, Gold), nur bei Karten mit Stufen.
         com.example.stemplekarte.service.Stufen.Stufe stufe = com.example.stemplekarte.service.Stufen.von(card, cc);
         if (stufe != null) {
-            module.add(new TextModuleData().setId("status").setHeader("Status")
+            module.add(new TextModuleData().setId("status").setHeader(Texts.t(lang, "gw.status"))
                     .setBody(com.example.stemplekarte.service.Stufen.text(
-                            stufe, com.example.stemplekarte.service.Stufen.besuche(card, cc))));
+                            lang, stufe, com.example.stemplekarte.service.Stufen.besuche(card, cc))));
         }
         // Kunde wirbt Kunde: Satz plus Link mit dem Code dieser Karte.
         if (com.example.stemplekarte.service.EmpfehlungService.sichtbar(card, cc)) {
-            module.add(new TextModuleData().setId("empfehlen").setHeader("Freunde werben")
-                    .setBody(com.example.stemplekarte.service.EmpfehlungService.werbeText(card) + " Dein Link: "
+            module.add(new TextModuleData().setId("empfehlen").setHeader(Texts.t(lang, "gw.referral"))
+                    .setBody(com.example.stemplekarte.service.EmpfehlungService.werbeText(lang, card) + " " + Texts.t(lang, "pass.referral_link")
                             + com.example.stemplekarte.service.EmpfehlungService.linkFuer(
                                     props.baseUrl(), card.getId(), cc.getEmpfehlungsCode())));
         }

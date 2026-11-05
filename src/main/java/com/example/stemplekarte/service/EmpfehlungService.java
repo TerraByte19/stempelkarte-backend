@@ -88,11 +88,15 @@ public class EmpfehlungService {
 
     /** Ein Satz fuer Karte, Pass und Anmeldeseite. */
     public static String werbeText(Card card) {
+        return werbeText(com.example.stemplekarte.i18n.Texts.STANDARD, card);
+    }
+
+    public static String werbeText(String lang, Card card) {
         int bonus = card.getEmpfehlungBonus();
-        String einheit = card.isPoints()
-                ? (bonus == 1 ? "Punkt" : "Punkte")
-                : (bonus == 1 ? "Stempel" : "Stempel");
-        return "Für jeden Freund, der mitmacht, gibt's " + bonus + " " + einheit + " für euch beide.";
+        String einheit = com.example.stemplekarte.i18n.Texts.t(lang, card.isPoints()
+                ? (bonus == 1 ? "unit.point_one" : "unit.points")
+                : (bonus == 1 ? "unit.stamp_one" : "unit.stamps"));
+        return com.example.stemplekarte.i18n.Texts.t(lang, "referral.text", bonus, einheit);
     }
 
     /** Zeigt die Karte Code und Link? Nur wenn der Laden es an hat und die Karte einen Code traegt. Mitglieds- und 10er-Karten nie. */
