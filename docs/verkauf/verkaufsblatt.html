@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<title>Stampit Verkaufsblatt</title>
+<style>
+  @page { size: A4; margin: 0; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 210mm; height: 297mm; }
+  body {
+    font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif; color: #1A1A2E;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
+  }
+  .blatt { width: 210mm; height: 297mm; padding: 14mm 15mm 12mm; display: flex; flex-direction: column; gap: 6mm; }
+  .kopf { display: flex; justify-content: space-between; align-items: flex-end; border-bottom: 2px solid #3C3489; padding-bottom: 4mm; }
+  .logo { font-size: 26pt; font-weight: 800; color: #3C3489; letter-spacing: -.02em; }
+  .logo small { display: block; font-size: 9.5pt; font-weight: 500; color: #5B5B73; letter-spacing: .08em; text-transform: uppercase; margin-top: 1mm; }
+  .kopf .claim { text-align: right; font-size: 10pt; color: #5B5B73; max-width: 70mm; line-height: 1.35; }
+  h1 { font-size: 22pt; font-weight: 800; line-height: 1.15; letter-spacing: -.02em; }
+  .lead { font-size: 11pt; color: #3b3b44; line-height: 1.45; margin-top: 2mm; }
+  .zwei { display: grid; grid-template-columns: 1fr 1fr; gap: 6mm; }
+  .box { border: 1px solid #ECEBF5; border-radius: 4mm; padding: 4.5mm 5mm; background: #F6F5FB; }
+  .box h2 { font-size: 11.5pt; color: #3C3489; margin-bottom: 2.5mm; letter-spacing: .02em; }
+  .box ul { list-style: none; display: flex; flex-direction: column; gap: 1.8mm; }
+  .box li { font-size: 10pt; line-height: 1.35; padding-left: 5mm; position: relative; }
+  .box li::before { content: '✓'; position: absolute; left: 0; color: #3C3489; font-weight: 700; }
+  .schritte { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4mm; }
+  .schritt { border-radius: 4mm; padding: 4mm; background: #fff; border: 1px solid #ECEBF5; }
+  .schritt .n { display: inline-block; width: 7mm; height: 7mm; border-radius: 50%; background: #3C3489; color: #fff; font-weight: 700; font-size: 10pt; text-align: center; line-height: 7mm; margin-bottom: 2mm; }
+  .schritt h3 { font-size: 10.5pt; margin-bottom: 1mm; }
+  .schritt p { font-size: 9.5pt; color: #3b3b44; line-height: 1.35; }
+  .kann { display: grid; grid-template-columns: repeat(3, 1fr); gap: 2mm 5mm; font-size: 9.5pt; line-height: 1.35; }
+  .kann div { padding-left: 4.5mm; position: relative; }
+  .kann div::before { content: '•'; position: absolute; left: 0; color: #3C3489; font-weight: 700; }
+  .unten { margin-top: auto; display: grid; grid-template-columns: 1fr auto; gap: 6mm; align-items: stretch; }
+  .angebot { border: 1.5px dashed #3C3489; border-radius: 4mm; padding: 4mm 5mm; display: flex; flex-direction: column; gap: 2mm; }
+  .angebot h2 { font-size: 11.5pt; color: #3C3489; }
+  .angebot .zeile { border-bottom: 1px solid #c9c6e6; height: 7mm; }
+  .angebot .gratis { font-size: 10pt; font-weight: 700; margin-top: 1mm; }
+  .angebot small { font-size: 8.5pt; color: #5B5B73; }
+  .demo { text-align: center; width: 52mm; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1.5mm; border: 1px solid #ECEBF5; border-radius: 4mm; padding: 3mm; }
+  .demo img { width: 36mm; height: 36mm; }
+  .demo b { font-size: 9.5pt; }
+  .demo span { font-size: 8.5pt; color: #5B5B73; line-height: 1.3; }
+  .fuss { display: flex; justify-content: space-between; font-size: 9pt; color: #5B5B73; border-top: 1px solid #ECEBF5; padding-top: 2.5mm; }
+  .fuss b { color: #1A1A2E; }
+</style>
+</head>
+<body>
+<div class="blatt">
+  <div class="kopf">
+    <div class="logo">Stampit<small>Digitale Stempelkarte</small></div>
+    <div class="claim">Die Stempelkarte liegt in Apple Wallet und Google Wallet. Keine App, kein Karton, kein Papier.</div>
+  </div>
+
+  <div>
+    <h1>Aus Laufkundschaft werden Stammkunden.</h1>
+    <p class="lead">Deine Kunden holen sich die Karte in 10 Sekunden aufs Handy. Du scannst an der Kasse mit deinem eigenen Handy. Und wenn ein Kunde lange nicht da war, meldet sich die Karte von selbst auf seinem Sperrbildschirm.</p>
+  </div>
+
+  <div class="zwei">
+    <div class="box">
+      <h2>Für deinen Laden</h2>
+      <ul>
+        <li>Du siehst, wer wiederkommt, wer neu ist und wer lange weg war.</li>
+        <li>Nachricht aufs Handy deiner Kunden, mit einem Tipp. Kein Spam-Ordner.</li>
+        <li>Geburtstagsgruß, Rückhol-Nachricht und Tagesangebot laufen von selbst.</li>
+        <li>Jeder im Team scannt mit seinem Handy. Kein Gerät nötig.</li>
+      </ul>
+    </div>
+    <div class="box">
+      <h2>Für deine Kunden</h2>
+      <ul>
+        <li>Keine App, kein Login. Karte holen und in die Wallet legen.</li>
+        <li>Die Karte wird nicht vergessen, nicht nass und nicht verloren.</li>
+        <li>Stempel kommt sofort aufs Handy, mit Meldung auf dem Sperrbildschirm.</li>
+        <li>Auf Deutsch, Türkisch, Arabisch oder Englisch, wie der Kunde es will.</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="schritte">
+    <div class="schritt"><span class="n">1</span><h3>Karte anlegen</h3><p>Logo, Farbe, Anzahl Stempel und Belohnung. Oder wir machen das für dich.</p></div>
+    <div class="schritt"><span class="n">2</span><h3>Aushang an die Theke</h3><p>Kunde scannt den QR-Code, trägt Name und E-Mail ein, Karte liegt in der Wallet.</p></div>
+    <div class="schritt"><span class="n">3</span><h3>An der Kasse scannen</h3><p>Kunde zeigt die Karte, du scannst mit dem Handy. Drei Sekunden, fertig.</p></div>
+  </div>
+
+  <div class="box" style="background:#fff">
+    <h2>Was Stampit alles kann</h2>
+    <div class="kann">
+      <div>Stempelkarte, Punktekarte, Mitgliedskarte, 10er-Karte</div>
+      <div>Push-Nachrichten an Zielgruppen, mit Ergebnis</div>
+      <div>Geburtstagsgruß und Willkommensgeschenk</div>
+      <div>Rückhol-Nachricht nach 14, 21 oder 30 Tagen</div>
+      <div>Tagesangebot auf dem Sperrbildschirm</div>
+      <div>Erinnerung, wenn der Kunde in der Nähe ist</div>
+      <div>Kunde wirbt Kunde, Stufen Bronze / Silber / Gold</div>
+      <div>Bewertungs-Erinnerung und private Rückmeldung</div>
+      <div>Mehrere Filialen, Zugänge fürs Team</div>
+      <div>Statistik: Stoßzeiten, Stammgäste, Vergleich</div>
+      <div>Aufkleber für Liefertüten</div>
+      <div>DSGVO-konform, entwickelt in Berlin</div>
+    </div>
+  </div>
+
+  <div class="unten">
+    <div class="angebot">
+      <h2>Dein Angebot</h2>
+      <div class="zeile"></div>
+      <div class="zeile"></div>
+      <div class="gratis">14 Tage gratis testen. Keine Kreditkarte, keine Laufzeit.</div>
+      <small>Wir richten die Karte für dich ein und schicken dir den Aushang.</small>
+    </div>
+    <div class="demo">
+      <img src="demo-qr.png" alt="QR-Code zur Demo-Karte">
+      <b>Jetzt selbst ausprobieren</b>
+      <span>Scannen, Karte holen und sehen, wie es auf dem Handy aussieht.</span>
+    </div>
+  </div>
+
+  <div class="fuss">
+    <span><b>www.stampit-app.de</b></span>
+    <span><b>info@stampit-app.de</b></span>
+    <span>Stampit · Berlin</span>
+  </div>
+</div>
+</body>
+</html>
