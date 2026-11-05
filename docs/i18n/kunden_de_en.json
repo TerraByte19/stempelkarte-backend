@@ -766,5 +766,21 @@
  "review.star_of": {
   "de": "{0} von 5",
   "en": "{0} of 5"
+ },
+ "kiosk.locked": {
+  "de": "Schon gestempelt. Der nächste Stempel geht ab {0} Uhr.",
+  "en": "Already stamped. The next stamp is possible from {0}."
+ },
+ "kiosk.full": {
+  "de": "Deine Karte ist voll! Zeig sie dem Personal, dann bekommst du: {0}",
+  "en": "Your card is full! Show it to the staff and you get: {0}"
+ },
+ "kiosk.not_stamp": {
+  "de": "Diese Karte bitte beim Personal vorzeigen.",
+  "en": "Please show this card to the staff."
+ },
+ "kiosk.welcome": {
+  "de": "Hol dir zuerst dein Willkommensgeschenk beim Personal.",
+  "en": "First collect your welcome gift from the staff."
  }
 }

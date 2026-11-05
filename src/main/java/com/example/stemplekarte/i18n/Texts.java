@@ -269,6 +269,10 @@ public final class Texts {
         m.put("review.offline", "Keine Verbindung. Bitte nochmal versuchen.");
         m.put("review.unavailable", "Rückmeldungen sind hier gerade nicht möglich.");
         m.put("review.star_of", "{0} von 5");
+        m.put("kiosk.locked", "Schon gestempelt. Der nächste Stempel geht ab {0} Uhr.");
+        m.put("kiosk.full", "Deine Karte ist voll! Zeig sie dem Personal, dann bekommst du: {0}");
+        m.put("kiosk.not_stamp", "Diese Karte bitte beim Personal vorzeigen.");
+        m.put("kiosk.welcome", "Hol dir zuerst dein Willkommensgeschenk beim Personal.");
         return Map.copyOf(m);
     }
 
@@ -466,6 +470,10 @@ public final class Texts {
         m.put("review.offline", "No connection. Please try again.");
         m.put("review.unavailable", "Feedback is not available here right now.");
         m.put("review.star_of", "{0} of 5");
+        m.put("kiosk.locked", "Already stamped. The next stamp is possible from {0}.");
+        m.put("kiosk.full", "Your card is full! Show it to the staff and you get: {0}");
+        m.put("kiosk.not_stamp", "Please show this card to the staff.");
+        m.put("kiosk.welcome", "First collect your welcome gift from the staff.");
         return Map.copyOf(m);
     }
 
@@ -663,6 +671,10 @@ public final class Texts {
         m.put("review.offline", "لا يوجد اتصال. يُرجى المحاولة مرة أخرى.");
         m.put("review.unavailable", "إرسال الملاحظات غير متاح هنا حاليًا.");
         m.put("review.star_of", "{0} من 5");
+        m.put("kiosk.locked", "تم الختم بالفعل. الختم التالي ممكن ابتداءً من الساعة {0}.");
+        m.put("kiosk.full", "بطاقتك ممتلئة! أظهرها للموظفين لتحصل على: {0}");
+        m.put("kiosk.not_stamp", "يرجى إظهار هذه البطاقة للموظفين.");
+        m.put("kiosk.welcome", "احصل أولًا على هدية الترحيب من الموظفين.");
         return Map.copyOf(m);
     }
 
@@ -860,6 +872,10 @@ public final class Texts {
         m.put("review.offline", "Bağlantı yok. Lütfen tekrar dene.");
         m.put("review.unavailable", "Şu anda burada geri bildirim gönderilemiyor.");
         m.put("review.star_of", "5 üzerinden {0}");
+        m.put("kiosk.locked", "Damga zaten alındı. Bir sonraki damga saat {0} itibarıyla mümkün.");
+        m.put("kiosk.full", "Kartın doldu! Personele göster, ödülün hazır: {0}");
+        m.put("kiosk.not_stamp", "Lütfen bu kartı personele göster.");
+        m.put("kiosk.welcome", "Önce hoş geldin hediyeni personelden al.");
         return Map.copyOf(m);
     }
 }

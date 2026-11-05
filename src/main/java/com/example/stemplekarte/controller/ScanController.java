@@ -39,6 +39,11 @@ public class ScanController {
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private com.example.stemplekarte.service.FilialenService filialen;
 
+    // Selbst-Stempeln am Tablet (Rolle KIOSK). Optional wie oben: ohne den
+    // Dienst (Tests) gibt es keinen Kiosk-Weg.
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.example.stemplekarte.service.KioskService kiosk;
+
     /** Filiale fuers Protokoll: Zuordnung des Zugangs, sonst Geraeteort, sonst Hauptstandort. */
     private String ortFuer(com.example.stemplekarte.model.StaffToken staff, Shop shop, Double lat, Double lon) {
         return filialen != null ? filialen.ortFuer(staff, shop, lat, lon) : staff.getOrtId();
@@ -63,7 +68,15 @@ public class ScanController {
         if (auth == null || !(auth.getPrincipal() instanceof StaffTokenFilter.StaffPrincipal p)) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Kein gueltiger Staff-Token");
         }
-        return java.util.Map.of("standortPflicht", !p.staff().getShop().isGeoBefreit());
+        var staff = p.staff();
+        java.util.Map<String, Object> out = new java.util.LinkedHashMap<>();
+        out.put("standortPflicht", !staff.getShop().isGeoBefreit());
+        out.put("rolle", staff.getRolle());
+        out.put("kiosk", staff.istKiosk());
+        out.put("kioskSperreStunden", staff.getShop().getKioskSperreStunden());
+        out.put("label", staff.getLabel());
+        out.put("shopName", staff.getShop().getName());
+        return out;
     }
 
     public record StateRequest(@NotBlank String qrPayload) {}
@@ -143,6 +156,16 @@ public class ScanController {
         int count = req.count() <= 0 ? 1 : req.count();
 
         var staff = ((StaffTokenFilter.StaffPrincipal) auth.getPrincipal()).staff();
+        // Tablet: immer genau ein Stempel, und nur wenn der KioskService
+        // nichts dagegen hat (Kartentyp, volle Karte, Sperrzeit).
+        if (staff.istKiosk()) {
+            if (kiosk == null) {
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                        com.example.stemplekarte.model.StaffToken.NUR_PERSONAL_TEXT);
+            }
+            count = 1;
+            kiosk.pruefe(shop, req.qrPayload(), java.time.Instant.now());
+        }
         ScanResult result = service.processScan(req.qrPayload(), shop, count,
                 staff.getLabel(), ortFuer(staff, shop, req.lat(), req.lon()));
         var cc = result.customerCard();
@@ -218,6 +241,10 @@ public class ScanController {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Kein gueltiger Staff-Token");
         }
         var staff = ((StaffTokenFilter.StaffPrincipal) auth.getPrincipal()).staff();
+        if (staff.istKiosk()) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                    com.example.stemplekarte.model.StaffToken.NUR_PERSONAL_TEXT);
+        }
         Shop shop = staff.getShop();
         com.example.stemplekarte.service.TarifPruefung.pruefeTestphase(shop);
         if (!com.example.stemplekarte.service.StandortPflicht.darfScannen(shop, java.time.Instant.now())) {
@@ -269,6 +296,10 @@ public class ScanController {
         // Bewusst nicht aus scan() herausgezogen: der Stempel-Weg laeuft in
         // echten Laeden und bleibt dafuer unangetastet.
         var staff = ((StaffTokenFilter.StaffPrincipal) auth.getPrincipal()).staff();
+        if (staff.istKiosk()) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                    com.example.stemplekarte.model.StaffToken.NUR_PERSONAL_TEXT);
+        }
         Shop shop = staff.getShop();
         com.example.stemplekarte.service.TarifPruefung.pruefeTestphase(shop);
         if (!com.example.stemplekarte.service.StandortPflicht.darfScannen(shop, java.time.Instant.now())) {
@@ -316,7 +347,7 @@ public class ScanController {
         var staff = ((StaffTokenFilter.StaffPrincipal) auth.getPrincipal()).staff();
         // Zuruecksetzen = Praemie eingeloest, neue Karte. Das darf eine
         // Aushilfe nicht - sonst gaebe es den Gratis-Artikel ohne Kontrolle.
-        if (staff.istAushilfe()) {
+        if (!staff.darfEinloesen()) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN,
                     com.example.stemplekarte.model.StaffToken.NUR_MITARBEITER_TEXT);
         }

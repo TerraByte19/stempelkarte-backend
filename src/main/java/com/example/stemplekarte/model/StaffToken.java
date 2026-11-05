@@ -21,6 +21,10 @@ public class StaffToken {
 
     public static final String ROLLE_MITARBEITER = "MITARBEITER";
     public static final String ROLLE_AUSHILFE = "AUSHILFE";
+    // Tablet an der Theke, der Kunde stempelt selbst (KioskService). Darf
+    // nur stempeln: keine Praemie, keine Punkte, kein Aufladen, kein Reset.
+    public static final String ROLLE_KIOSK = "KIOSK";
+    public static final String NUR_PERSONAL_TEXT = "Das macht das Personal am Tresen.";
     public static final String NUR_MITARBEITER_TEXT =
             "Dieser Zugang darf nur stempeln. Dafür braucht es einen Mitarbeiter-Zugang.";
 
@@ -74,7 +78,7 @@ public class StaffToken {
     public static String rolleSauber(String rolle) {
         if (rolle == null || rolle.isBlank()) return ROLLE_MITARBEITER;
         String r = rolle.trim().toUpperCase(Locale.ROOT);
-        if (!ROLLE_MITARBEITER.equals(r) && !ROLLE_AUSHILFE.equals(r)) {
+        if (!ROLLE_MITARBEITER.equals(r) && !ROLLE_AUSHILFE.equals(r) && !ROLLE_KIOSK.equals(r)) {
             throw new IllegalArgumentException("Unbekannte Rolle: " + rolle);
         }
         return r;
@@ -95,8 +99,11 @@ public class StaffToken {
      */
     public boolean istAushilfe() { return ROLLE_AUSHILFE.equals(getRolle()); }
 
+    /** Tablet zum Selbst-Stempeln: nur Stempel, alles andere macht das Personal. */
+    public boolean istKiosk() { return ROLLE_KIOSK.equals(getRolle()); }
+
     /** Praemie einloesen, Karte zuruecksetzen, Punkte korrigieren: nur MITARBEITER. */
-    public boolean darfEinloesen() { return !istAushilfe(); }
+    public boolean darfEinloesen() { return !istAushilfe() && !istKiosk(); }
 
     public void umbenennen(String label) { this.label = label; }
     public void rolle(String rolle) { this.rolle = rolleSauber(rolle); }

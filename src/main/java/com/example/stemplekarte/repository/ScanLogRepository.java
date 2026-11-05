@@ -20,6 +20,10 @@ public interface ScanLogRepository extends JpaRepository<ScanLog, String> {
     // Die juengsten Scans fuer "Zuletzt passiert" im Dashboard.
     List<ScanLog> findTop15ByShopIdOrderByScannedAtDesc(String shopId);
 
+    /** Letzter Scan einer Kundenkarte in diesem Laden (Sperrzeit am Tablet, KioskService). */
+    java.util.Optional<ScanLog> findTopByShopIdAndCustomerIdAndCardIdOrderByScannedAtDesc(
+            String shopId, String customerId, String cardId);
+
     // Wird der QR-Code dieser Karte benutzt? Scans seit <after>.
     long countByCardIdAndScannedAtAfter(String cardId, Instant after);
 

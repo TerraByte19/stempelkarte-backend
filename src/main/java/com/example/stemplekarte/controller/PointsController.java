@@ -164,6 +164,10 @@ public class PointsController {
         if (auth == null || !(auth.getPrincipal() instanceof StaffTokenFilter.StaffPrincipal p)) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Kein gueltiger Staff-Token");
         }
+        if (p.staff().istKiosk()) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                    com.example.stemplekarte.model.StaffToken.NUR_PERSONAL_TEXT);
+        }
         return new Staff(p.staff().getShop(), p.staff().getLabel(), p.staff().istAushilfe(), p.staff());
     }
 

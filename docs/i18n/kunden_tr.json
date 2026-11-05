@@ -190,5 +190,9 @@
  "review.error": "Bir sorun oluştu. Lütfen tekrar dene.",
  "review.offline": "Bağlantı yok. Lütfen tekrar dene.",
  "review.unavailable": "Şu anda burada geri bildirim gönderilemiyor.",
- "review.star_of": "5 üzerinden {0}"
+ "review.star_of": "5 üzerinden {0}",
+ "kiosk.locked": "Damga zaten alındı. Bir sonraki damga saat {0} itibarıyla mümkün.",
+ "kiosk.full": "Kartın doldu! Personele göster, ödülün hazır: {0}",
+ "kiosk.not_stamp": "Lütfen bu kartı personele göster.",
+ "kiosk.welcome": "Önce hoş geldin hediyeni personelden al."
 }

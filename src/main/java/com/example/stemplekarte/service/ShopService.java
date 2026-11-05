@@ -178,6 +178,17 @@ public class ShopService {
         return shopRepo.save(shop);
     }
 
+    /** Sperrzeit am Tablet (Selbst-Stempeln): 1 bis 24 Stunden. */
+    @Transactional
+    public Shop updateKioskSperre(String shopId, int stunden) {
+        if (stunden < 1 || stunden > Shop.KIOSK_SPERRE_MAX) {
+            throw new IllegalArgumentException("Sperre zwischen 1 und " + Shop.KIOSK_SPERRE_MAX + " Stunden");
+        }
+        Shop shop = getById(shopId);
+        shop.updateKioskSperre(stunden);
+        return shopRepo.save(shop);
+    }
+
     /** Geburtstagsgruss ein/aus, eigener Text bis 160 Zeichen, leer = Standard. */
     @Transactional
     public Shop updateGeburtstagsgruss(String shopId, boolean enabled, String text) {

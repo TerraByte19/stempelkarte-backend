@@ -239,6 +239,11 @@ public class Shop {
     @Column(name = "test_mail_stufe")
     private Integer testMailStufe;
 
+    // Selbst-Stempeln am Tablet (Rolle KIOSK): so viele Stunden ist eine
+    // Karte nach einem Stempel gesperrt. Null = KIOSK_SPERRE_STANDARD.
+    @Column(name = "kiosk_sperre_stunden")
+    private Integer kioskSperreStunden;
+
     // Demo-Laden fuer die Website: Besucher holen sich eine Karte und
     // stempeln sich selbst (DemoService). Vom Admin gesetzt. Null = nein.
     @Column(name = "demo")
@@ -536,6 +541,19 @@ public class Shop {
     /** Bereich prueft der ShopService. */
     public void updateBewertungErinnerung(int ab) {
         this.reviewReminderVisits = ab;
+        this.updatedAt = Instant.now();
+    }
+
+    public static final int KIOSK_SPERRE_STANDARD = 2;
+    public static final int KIOSK_SPERRE_MAX = 24;
+
+    /** Stunden Sperre nach einem Stempel am Tablet, 1 bis 24. */
+    public int getKioskSperreStunden() {
+        return kioskSperreStunden != null ? kioskSperreStunden : KIOSK_SPERRE_STANDARD;
+    }
+
+    public void updateKioskSperre(int stunden) {
+        this.kioskSperreStunden = stunden;
         this.updatedAt = Instant.now();
     }
 

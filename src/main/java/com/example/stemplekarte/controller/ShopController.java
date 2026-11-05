@@ -216,6 +216,7 @@ public class ShopController {
         map.put("nameColor", shop.getNameColor());
         map.put("googleReviewUrl", shop.getGoogleReviewUrl() != null ? shop.getGoogleReviewUrl() : "");
         map.put("reviewReminderVisits", shop.getBewertungErinnerungAb());
+        map.put("kioskSperreStunden", shop.getKioskSperreStunden());
         map.put("signupBirthday", shop.getSignupBirthday());
         map.put("signupPhone", shop.getSignupPhone());
         map.put("birthdayGreetingEnabled", shop.isGeburtstagsgrussAktiv());
@@ -227,6 +228,15 @@ public class ShopController {
         map.put("testTage", shop.testTageUebrig(java.time.Instant.now()));
         map.put("testVorbei", com.example.stemplekarte.service.TarifPruefung.testVorbei(shop, java.time.Instant.now()));
         return map;
+    }
+
+    public record KioskRequest(int stunden) {}
+
+    @Operation(summary = "Sperrzeit am Tablet (Selbst-Stempeln) setzen, 1 bis 24 Stunden")
+    @PutMapping("/me/kiosk")
+    public Map<String, Object> updateKiosk(@RequestBody KioskRequest req, Authentication auth) {
+        Shop updated = shopService.updateKioskSperre(currentShop(auth).getId(), req.stunden());
+        return Map.of("kioskSperreStunden", updated.getKioskSperreStunden());
     }
 
     @Operation(summary = "Tarif, Kundengrenze und welche Funktionen enthalten sind",
