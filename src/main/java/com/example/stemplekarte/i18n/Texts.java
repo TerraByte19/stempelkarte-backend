@@ -290,13 +290,10 @@ public final class Texts {
         m.put("kiosk.not_stamp", "Diese Karte bitte beim Personal vorzeigen.");
         m.put("kiosk.welcome", "Hol dir zuerst dein Willkommensgeschenk beim Personal.");
         m.put("signup.google", "Mit Google anmelden");
-        m.put("signup.google_hint", "Mit Google ohne Bestätigungs-Mail, die Karte ist sofort da.");
-        m.put("signup.or", "oder mit E-Mail");
         m.put("signup.google_error", "Google-Anmeldung fehlgeschlagen. Nimm den Weg über die E-Mail.");
-        m.put("signup.apple_hint", "Mit Apple ohne Bestätigungs-Mail, die Karte ist sofort da.");
-        m.put("signup.sozial_hint", "Mit Google oder Apple ohne Bestätigungs-Mail, die Karte ist sofort da.");
         m.put("signup.apple_error", "Apple-Anmeldung fehlgeschlagen. Nimm den Weg über die E-Mail.");
         m.put("signup.apple_close", "Anmeldung läuft. Du kannst dieses Fenster schließen.");
+        m.put("signup.oder", "oder");
         return Map.copyOf(m);
     }
 
@@ -499,13 +496,10 @@ public final class Texts {
         m.put("kiosk.not_stamp", "Please show this card to the staff.");
         m.put("kiosk.welcome", "First collect your welcome gift from the staff.");
         m.put("signup.google", "Sign in with Google");
-        m.put("signup.google_hint", "With Google there is no confirmation email, the card is there right away.");
-        m.put("signup.or", "or with email");
         m.put("signup.google_error", "Google sign-in failed. Use the email option instead.");
-        m.put("signup.apple_hint", "With Apple there is no confirmation email, the card is there right away.");
-        m.put("signup.sozial_hint", "With Google or Apple there is no confirmation email, the card is there right away.");
         m.put("signup.apple_error", "Apple sign-in failed. Use the email option instead.");
         m.put("signup.apple_close", "Signing you in. You can close this window.");
+        m.put("signup.oder", "or");
         return Map.copyOf(m);
     }
 
@@ -708,13 +702,10 @@ public final class Texts {
         m.put("kiosk.not_stamp", "يرجى إظهار هذه البطاقة للموظفين.");
         m.put("kiosk.welcome", "احصل أولًا على هدية الترحيب من الموظفين.");
         m.put("signup.google", "تسجيل الدخول عبر Google");
-        m.put("signup.google_hint", "عبر Google لا حاجة إلى رسالة تأكيد، البطاقة جاهزة فورًا.");
-        m.put("signup.or", "أو عبر البريد الإلكتروني");
         m.put("signup.google_error", "فشل تسجيل الدخول عبر Google. استخدم طريقة البريد الإلكتروني.");
-        m.put("signup.apple_hint", "عبر Apple لا حاجة إلى رسالة تأكيد، البطاقة جاهزة فورًا.");
-        m.put("signup.sozial_hint", "عبر Google أو Apple لا حاجة إلى رسالة تأكيد، البطاقة جاهزة فورًا.");
         m.put("signup.apple_error", "فشل تسجيل الدخول عبر Apple. استخدم طريقة البريد الإلكتروني.");
         m.put("signup.apple_close", "جارٍ تسجيل الدخول. يمكنك إغلاق هذه النافذة.");
+        m.put("signup.oder", "أو");
         return Map.copyOf(m);
     }
 
@@ -917,13 +908,10 @@ public final class Texts {
         m.put("kiosk.not_stamp", "Lütfen bu kartı personele göster.");
         m.put("kiosk.welcome", "Önce hoş geldin hediyeni personelden al.");
         m.put("signup.google", "Google ile giriş yap");
-        m.put("signup.google_hint", "Google ile onay e-postası gerekmez, kart hemen hazır.");
-        m.put("signup.or", "ya da e-posta ile");
         m.put("signup.google_error", "Google ile giriş başarısız oldu. E-posta yolunu kullan.");
-        m.put("signup.apple_hint", "Apple ile onay e-postası gerekmez, kart hemen hazır.");
-        m.put("signup.sozial_hint", "Google veya Apple ile onay e-postası gerekmez, kart hemen hazır.");
         m.put("signup.apple_error", "Apple ile giriş başarısız oldu. E-posta yolunu kullan.");
         m.put("signup.apple_close", "Giriş yapılıyor. Bu pencereyi kapatabilirsin.");
+        m.put("signup.oder", "veya");
         return Map.copyOf(m);
     }
 }

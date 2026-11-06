@@ -45,9 +45,10 @@ wie die Google-Anmeldung (`docs/specs/2026-11-05-google-anmeldung-design.md`), d
 
 ## Anmeldeseite
 
-Ein Block `sozial` über dem E-Mail-Formular: Google-Knopf (falls eingerichtet), Apple-Knopf (falls
-eingerichtet), ein Hinweis (`signup.google_hint`, `signup.apple_hint` oder beide: `signup.sozial_hint`),
-dann „oder mit E-Mail“. Ohne beides kein Block.
+Ein Block `sozial` **unter** dem Knopf „Karte holen“ (User 2026-11-06 nach dem ersten Test: klein, kein
+Erklärtext): „oder“, dann Google-Knopf (falls eingerichtet, medium, 200 px), dann Apple-Knopf (falls
+eingerichtet, 200 × 36 px). Ohne beides kein Block. Die Sprachleiste DE · EN · AR · TR steht auf der
+Anmeldeseite ganz unten, wie auf den Kartenseiten.
 
 ## Grenzen
 

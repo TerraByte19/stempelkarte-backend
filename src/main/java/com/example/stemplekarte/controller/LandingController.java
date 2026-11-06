@@ -970,9 +970,8 @@ public class LandingController {
                                 padding: 8px 0 4px;
                             }
                             .success-icon { font-size: 48px; margin-bottom: 12px; }
-                            .sozial { display: flex; flex-direction: column; align-items: center; gap: 10px; margin-bottom: 14px; }
-                            .sozial-hint { font-size: 12px; opacity: 0.85; text-align: center; }
-                            #appleid-signin { width: 240px; height: 40px; cursor: pointer; }
+                            .sozial { display: flex; flex-direction: column; align-items: center; gap: 10px; margin-top: 4px; }
+                            #appleid-signin { width: 200px; height: 36px; cursor: pointer; }
                             .oder { font-size: 13px; opacity: 0.8; text-align: center; }
                             .success-title { font-size: 18px; font-weight: 700; margin-bottom: 8px; }
                             .success-text { font-size: 14px; opacity: 0.9; line-height: 1.6; }
@@ -992,7 +991,6 @@ public class LandingController {
                             </div>
                             <div class="error" id="error"></div>
                             <div class="form" id="form">
-                                %s
                                 <input type="text" id="name" placeholder="%s" required />
                                 <input type="email" id="email" placeholder="%s" required />
                                 %s
@@ -1003,12 +1001,14 @@ public class LandingController {
                                 <button class="btn" onclick="getCard()">
                                     %s
                                 </button>
+                                %s
                             </div>
                             <div class="success" id="success">
                                 <div class="success-icon">📧</div>
                                 <div class="success-title">%s</div>
                                 <div class="success-text">%s</div>
                             </div>
+                            %s
                             %s
                         </div>
                         <script>
@@ -1138,13 +1138,14 @@ public class LandingController {
                     escapeHtml(shopName),
                     anmeldeTitel(lang, card),
                     anmeldeText(lang, card),
-                    sprachenLeiste(lang, "/karte-neu/" + cardId, ref) + sozialBlock(lang),
                     t(lang, "signup.name"), t(lang, "signup.email"),
                     anmeldeFelder(lang, card.getShop()) + empfehlungsFeld(lang, card),
                     t(lang, "signup.consent", escapeHtml(shopName)),
                     t(lang, "signup.button"),
+                    sozialBlock(lang),
                     t(lang, "signup.sent_title"), t(lang, "signup.sent_text"),
                     bewertungsLink(lang, card.getShop()),
+                    sprachenLeiste(lang, "/karte-neu/" + cardId, ref),
                     toJsString(t(lang, "signup.err_fields")), toJsString(t(lang, "signup.err_birthday")),
                     toJsString(t(lang, "signup.err_phone")), toJsString(t(lang, "signup.err_generic")),
                     toJsString(cardId), toJsString(t(lang, "signup.google_error")),
@@ -1523,20 +1524,19 @@ public class LandingController {
     }
 
     /**
-     * "Mit Google / Apple anmelden" ueber der E-Mail-Anmeldung, nur mit
-     * GOOGLE_CLIENT_ID bzw. APPLE_LOGIN_CLIENT_ID. Beide Skripte rendern ihren
-     * Knopf selbst und rufen window.onGoogleCredential / onAppleCredential.
+     * "Mit Google / Apple anmelden" unter dem Karte-holen-Knopf (User
+     * 2026-11-06: klein, ohne Erklaertext), nur mit GOOGLE_CLIENT_ID bzw.
+     * APPLE_LOGIN_CLIENT_ID. Beide Skripte rendern ihren Knopf selbst und
+     * rufen window.onGoogleCredential / onAppleCredential.
      */
     String sozialBlock(String lang) {
         boolean google = googleAnmeldung != null && googleAnmeldung.aktiv();
         boolean apple = appleAnmeldung != null && appleAnmeldung.aktiv();
         if (!google && !apple) return "";
-        String hinweis = google && apple ? "signup.sozial_hint" : google ? "signup.google_hint" : "signup.apple_hint";
         return "<div class='sozial'>"
+                + "<div class='oder'>" + t(lang, "signup.oder") + "</div>"
                 + (google ? googleKnopf(lang) : "")
                 + (apple ? appleKnopf(lang) : "")
-                + "<p class='sozial-hint'>" + t(lang, hinweis) + "</p>"
-                + "<div class='oder'>" + t(lang, "signup.or") + "</div>"
                 + "</div>";
     }
 
@@ -1544,7 +1544,7 @@ public class LandingController {
         return "<script src='https://accounts.google.com/gsi/client' async defer></script>"
                 + "<div id='g_id_onload' data-client_id='" + escapeHtml(googleAnmeldung.clientId())
                 + "' data-callback='onGoogleCredential' data-auto_prompt='false' data-context='signup'></div>"
-                + "<div class='g_id_signin' data-type='standard' data-size='large' data-shape='pill' "
+                + "<div class='g_id_signin' data-type='standard' data-size='medium' data-width='200' data-shape='pill' "
                 + "data-text='continue_with' data-locale='" + Texts.norm(lang) + "'></div>";
     }
 
@@ -1564,7 +1564,7 @@ public class LandingController {
      */
     private String appleKnopf(String lang) {
         return "<div id='appleid-signin' data-color='black' data-border='false' data-type='continue' "
-                + "data-mode='center-align' data-width='240' data-height='40'></div>"
+                + "data-mode='center-align' data-width='200' data-height='36'></div>"
                 + "<script>window.appleInit = function () {"
                 + " AppleID.auth.init({ clientId: " + toJsString(appleAnmeldung.clientId())
                 + ", scope: 'name email', redirectURI: " + toJsString(baseUrl + "/karte-neu/apple") + ", usePopup: true });"

@@ -84,10 +84,14 @@ class AppleAnmeldeSeiteTest {
                 .contains("clientId: \"de.stampit.web\"")
                 .contains("redirectURI: \"https://api.example/karte-neu/apple\"")
                 .contains("id='appleid-signin'").contains("onAppleCredential")
-                .contains("Mit Apple ohne Bestätigungs-Mail")
-                .contains("oder mit E-Mail")
+                .contains("class='oder'>oder</div>")
                 .doesNotContain("gsi/client")                     // Google aus
                 .contains("placeholder=\"Dein Name\"");           // E-Mail-Weg bleibt
+        // User 2026-11-06: Knoepfe klein unter "Karte holen", kein Erklaertext, Sprachleiste ganz unten.
+        assertThat(html).doesNotContain("Bestätigungs-Mail, die Karte ist sofort da");
+        assertThat(html.indexOf("onclick=\"getCard()\"")).isLessThan(html.indexOf("class='sozial'"));
+        assertThat(html.indexOf("id=\"success\"")).isLessThan(html.indexOf("class='sprachen'"));
+        assertThat(html).contains("data-width='200' data-height='36'");
         assertThat(controller.newCustomerPage("CARD-1", "tr", null).getBody())
                 .contains("appleid/1/tr_TR/appleid.auth.js");
 
@@ -107,14 +111,12 @@ class AppleAnmeldeSeiteTest {
     }
 
     @Test
-    void beideKnoepfe_einHinweis_einOder() {
+    void beideKnoepfe_einOder() {
         apple("de.stampit.web");
         google("123-abc.apps.googleusercontent.com");
         String html = controller.newCustomerPage("CARD-1", null, null).getBody();
-        assertThat(html).contains("gsi/client").contains("appleid.auth.js")
-                .contains("Mit Google oder Apple ohne Bestätigungs-Mail")
-                .doesNotContain("Mit Google ohne").doesNotContain("Mit Apple ohne");
-        assertThat(html.split("oder mit E-Mail", -1)).hasSize(2);   // genau einmal
+        assertThat(html).contains("gsi/client").contains("appleid.auth.js");
+        assertThat(html.split("class='oder'", -1)).hasSize(2);   // genau ein "oder"
         // Google steht vor Apple.
         assertThat(html.indexOf("g_id_signin")).isLessThan(html.indexOf("id='appleid-signin'"));
     }
