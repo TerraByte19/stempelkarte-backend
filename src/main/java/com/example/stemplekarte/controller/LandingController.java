@@ -48,6 +48,10 @@ public class LandingController {
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private com.example.stemplekarte.service.GoogleAnmeldung googleAnmeldung;
 
+    // "Mit Apple anmelden", genauso optional (APPLE_LOGIN_CLIENT_ID).
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.example.stemplekarte.service.AppleAnmeldung appleAnmeldung;
+
     @Value("${stempelkarte.base-url:http://localhost:8080}")
     private String baseUrl;
 
@@ -129,11 +133,7 @@ public class LandingController {
             throw new IllegalArgumentException("Anmeldung mit Google ist nicht eingerichtet");
         }
         // Offener Endpunkt mit einer Anfrage an Google dahinter: je Adresse begrenzen.
-        String forwarded = http != null ? http.getHeader("X-Forwarded-For") : null;
-        String ip = (forwarded != null && !forwarded.isBlank())
-                ? forwarded.split(",")[0].trim()
-                : (http != null ? http.getRemoteAddr() : null);
-        googleAnmeldung.drossel(ip, java.time.Instant.now());
+        googleAnmeldung.drossel(clientIp(http), java.time.Instant.now());
         com.example.stemplekarte.model.Shop shop = cardService.getById(req.cardId()).getShop();
         Zusatz z = zusatz(shop, req.birthday(), req.phone(), seitenSprache(req.language()));
         com.example.stemplekarte.service.GoogleAnmeldung.Profil p = googleAnmeldung.pruefe(req.credential());
@@ -142,6 +142,55 @@ public class LandingController {
                 Texts.gewaehlt(req.language()));
         log.info("[GOOGLE] Anmeldung karte={} kunde={}", req.cardId(), cc.getCustomer().getId());
         return Map.of("status", "ok", "url", "/karte/" + cc.getCustomer().getId() + "/" + req.cardId());
+    }
+
+    /** Adresse des Aufrufers; hinter Render steht sie im X-Forwarded-For. */
+    private static String clientIp(jakarta.servlet.http.HttpServletRequest http) {
+        String forwarded = http != null ? http.getHeader("X-Forwarded-For") : null;
+        return (forwarded != null && !forwarded.isBlank())
+                ? forwarded.split(",")[0].trim()
+                : (http != null ? http.getRemoteAddr() : null);
+    }
+
+    public record AppleRegisterRequest(String credential, String name, String cardId, boolean marketingConsent,
+                                       String birthday, String phone, String ref, String language) {}
+
+    /**
+     * Anmeldung mit Apple: wie Google, nur steckt der Name nicht im Token,
+     * sondern kommt aus Apples Fenster (nur beim ersten Mal) - deshalb
+     * schickt ihn die Seite mit.
+     */
+    @PostMapping("/karte-neu/register-apple")
+    public Map<String, Object> registerMitApple(@RequestBody AppleRegisterRequest req,
+                                                jakarta.servlet.http.HttpServletRequest http) {
+        if (appleAnmeldung == null || !appleAnmeldung.aktiv()) {
+            throw new IllegalArgumentException("Anmeldung mit Apple ist nicht eingerichtet");
+        }
+        appleAnmeldung.drossel(clientIp(http), java.time.Instant.now());
+        com.example.stemplekarte.model.Shop shop = cardService.getById(req.cardId()).getShop();
+        Zusatz z = zusatz(shop, req.birthday(), req.phone(), seitenSprache(req.language()));
+        com.example.stemplekarte.service.AppleAnmeldung.Profil p = appleAnmeldung.pruefe(req.credential(), req.name());
+        CustomerCard cc = customerService.registerForCardBestaetigt(
+                p.name(), p.email(), req.cardId(), req.marketingConsent(), z.geburtstag(), z.telefon(), req.ref(),
+                Texts.gewaehlt(req.language()));
+        log.info("[APPLE] Anmeldung karte={} kunde={}", req.cardId(), cc.getCustomer().getId());
+        return Map.of("status", "ok", "url", "/karte/" + cc.getCustomer().getId() + "/" + req.cardId());
+    }
+
+    /**
+     * Bei Apple eingetragene Ruecksprung-Adresse. Im Popup-Ablauf kommt das
+     * Ergebnis per Ereignis in die Anmeldeseite; landet ein Browser doch
+     * hier, steht nur "Fenster schliessen".
+     */
+    @RequestMapping(value = "/karte-neu/apple", method = {RequestMethod.GET, RequestMethod.POST},
+            produces = MediaType.TEXT_HTML_VALUE)
+    public ResponseEntity<String> appleRueckkehr(@RequestParam(required = false) String lang) {
+        String l = seitenSprache(lang);
+        return ResponseEntity.ok("<!DOCTYPE html><html" + Texts.htmlAttrs(l) + "><head><meta charset='UTF-8'>"
+                + "<meta name='viewport' content='width=device-width, initial-scale=1'><title>Stampit</title></head>"
+                + "<body style='font-family:-apple-system,sans-serif;padding:40px;text-align:center'>"
+                + "<p>" + t(l, "signup.apple_close") + "</p>"
+                + "<script>setTimeout(function () { window.close() }, 800)</script></body></html>");
     }
 
     // Bestehende Kunden-Landing-Page (mit Stempeln)
@@ -921,8 +970,9 @@ public class LandingController {
                                 padding: 8px 0 4px;
                             }
                             .success-icon { font-size: 48px; margin-bottom: 12px; }
-                            .google { display: flex; flex-direction: column; align-items: center; gap: 8px; margin-bottom: 14px; }
-                            .google-hint { font-size: 12px; opacity: 0.85; text-align: center; }
+                            .sozial { display: flex; flex-direction: column; align-items: center; gap: 10px; margin-bottom: 14px; }
+                            .sozial-hint { font-size: 12px; opacity: 0.85; text-align: center; }
+                            #appleid-signin { width: 240px; height: 40px; cursor: pointer; }
                             .oder { font-size: 13px; opacity: 0.8; text-align: center; }
                             .success-title { font-size: 18px; font-weight: 700; margin-bottom: 8px; }
                             .success-text { font-size: 14px; opacity: 0.9; line-height: 1.6; }
@@ -968,36 +1018,51 @@ public class LandingController {
                             const errGeneric = %s;
                             const CARD_ID = %s;
                             const GOOGLE_ERR = %s;
+                            const APPLE_ERR = %s;
                             const LANG = %s;
-                            // Google-Knopf (nur wenn eingerichtet): Google liefert ein Token,
-                            // der Server prueft es und schickt den Link zur Karte.
-                            window.onGoogleCredential = async function (r) {
+                            // Google- und Apple-Knopf (nur wenn eingerichtet): der Anbieter liefert
+                            // ein Token, der Server prueft es und schickt den Link zur Karte.
+                            async function sozialAnmeldung(url, daten, fehlerText) {
                                 const errorEl = document.getElementById('error')
                                 errorEl.style.display = 'none'
                                 const bEl = document.getElementById('birthday')
                                 const pEl = document.getElementById('phone')
                                 const rEl = document.getElementById('ref')
                                 try {
-                                    const res = await fetch('/karte-neu/register-google', {
+                                    const res = await fetch(url, {
                                         method: 'POST',
                                         headers: { 'Content-Type': 'application/json' },
-                                        body: JSON.stringify({
-                                            credential: r && r.credential,
+                                        body: JSON.stringify(Object.assign({
                                             cardId: CARD_ID,
                                             language: LANG,
                                             marketingConsent: document.getElementById('consent').checked,
                                             birthday: bEl ? bEl.value : null,
                                             phone: pEl ? pEl.value.trim() : null,
                                             ref: rEl ? rEl.value.trim() : (new URLSearchParams(location.search).get('ref') || null)
-                                        })
+                                        }, daten))
                                     })
                                     const j = await res.json().catch(function () { return {} })
-                                    if (!res.ok || !j.url) throw new Error(j.error || GOOGLE_ERR)
+                                    if (!res.ok || !j.url) throw new Error(j.error || fehlerText)
                                     location.href = j.url
                                 } catch (e) {
                                     errorEl.style.display = 'block'
-                                    errorEl.textContent = (e && e.message) ? e.message : GOOGLE_ERR
+                                    errorEl.textContent = (e && e.message) ? e.message : fehlerText
                                 }
+                            }
+                            window.onGoogleCredential = function (r) {
+                                return sozialAnmeldung('/karte-neu/register-google', { credential: r && r.credential }, GOOGLE_ERR)
+                            }
+                            // Apple nennt den Namen nur beim allerersten Mal, danach kommt nur das Token.
+                            window.onAppleCredential = function (d) {
+                                const a = d && d.authorization
+                                const n = d && d.user && d.user.name
+                                const name = n ? [n.firstName, n.lastName].filter(Boolean).join(' ') : null
+                                return sozialAnmeldung('/karte-neu/register-apple', { credential: a && a.id_token, name: name }, APPLE_ERR)
+                            }
+                            window.appleFehler = function () {
+                                const errorEl = document.getElementById('error')
+                                errorEl.style.display = 'block'
+                                errorEl.textContent = APPLE_ERR
                             }
                             // Empfehlungslink eines Freundes (?ref=CODE) ins Feld, falls es eins gibt.
                             (function () {
@@ -1073,7 +1138,7 @@ public class LandingController {
                     escapeHtml(shopName),
                     anmeldeTitel(lang, card),
                     anmeldeText(lang, card),
-                    sprachenLeiste(lang, "/karte-neu/" + cardId, ref) + googleBlock(lang),
+                    sprachenLeiste(lang, "/karte-neu/" + cardId, ref) + sozialBlock(lang),
                     t(lang, "signup.name"), t(lang, "signup.email"),
                     anmeldeFelder(lang, card.getShop()) + empfehlungsFeld(lang, card),
                     t(lang, "signup.consent", escapeHtml(shopName)),
@@ -1083,6 +1148,7 @@ public class LandingController {
                     toJsString(t(lang, "signup.err_fields")), toJsString(t(lang, "signup.err_birthday")),
                     toJsString(t(lang, "signup.err_phone")), toJsString(t(lang, "signup.err_generic")),
                     toJsString(cardId), toJsString(t(lang, "signup.google_error")),
+                    toJsString(t(lang, "signup.apple_error")),
                     explizit != null ? toJsString(explizit) : "null",
                     // cardId steht in einer JS-Zeichenkette - toJsString
                     // liefert die Anfuehrungszeichen mit.
@@ -1457,21 +1523,57 @@ public class LandingController {
     }
 
     /**
-     * "Mit Google anmelden" ueber der E-Mail-Anmeldung, nur mit GOOGLE_CLIENT_ID.
-     * Googles Skript rendert den Knopf selbst (g_id_signin) und ruft
-     * window.onGoogleCredential mit dem Token.
+     * "Mit Google / Apple anmelden" ueber der E-Mail-Anmeldung, nur mit
+     * GOOGLE_CLIENT_ID bzw. APPLE_LOGIN_CLIENT_ID. Beide Skripte rendern ihren
+     * Knopf selbst und rufen window.onGoogleCredential / onAppleCredential.
      */
-    String googleBlock(String lang) {
-        if (googleAnmeldung == null || !googleAnmeldung.aktiv()) return "";
-        return "<div class='google'>"
-                + "<script src='https://accounts.google.com/gsi/client' async defer></script>"
+    String sozialBlock(String lang) {
+        boolean google = googleAnmeldung != null && googleAnmeldung.aktiv();
+        boolean apple = appleAnmeldung != null && appleAnmeldung.aktiv();
+        if (!google && !apple) return "";
+        String hinweis = google && apple ? "signup.sozial_hint" : google ? "signup.google_hint" : "signup.apple_hint";
+        return "<div class='sozial'>"
+                + (google ? googleKnopf(lang) : "")
+                + (apple ? appleKnopf(lang) : "")
+                + "<p class='sozial-hint'>" + t(lang, hinweis) + "</p>"
+                + "<div class='oder'>" + t(lang, "signup.or") + "</div>"
+                + "</div>";
+    }
+
+    private String googleKnopf(String lang) {
+        return "<script src='https://accounts.google.com/gsi/client' async defer></script>"
                 + "<div id='g_id_onload' data-client_id='" + escapeHtml(googleAnmeldung.clientId())
                 + "' data-callback='onGoogleCredential' data-auto_prompt='false' data-context='signup'></div>"
                 + "<div class='g_id_signin' data-type='standard' data-size='large' data-shape='pill' "
-                + "data-text='continue_with' data-locale='" + Texts.norm(lang) + "'></div>"
-                + "<p class='google-hint'>" + t(lang, "signup.google_hint") + "</p>"
-                + "<div class='oder'>" + t(lang, "signup.or") + "</div>"
-                + "</div>";
+                + "data-text='continue_with' data-locale='" + Texts.norm(lang) + "'></div>";
+    }
+
+    /** Die Sprache von Apples Skript steckt im Pfad. */
+    static String appleLocale(String lang) {
+        return switch (Texts.norm(lang)) {
+            case "en" -> "en_US";
+            case "ar" -> "ar_SA";
+            case "tr" -> "tr_TR";
+            default -> "de_DE";
+        };
+    }
+
+    /**
+     * Apples Skript laedt asynchron und meldet sich per onload; dann init mit
+     * Popup. Abbruch durch den Kunden ist kein Fehler.
+     */
+    private String appleKnopf(String lang) {
+        return "<div id='appleid-signin' data-color='black' data-border='false' data-type='continue' "
+                + "data-mode='center-align' data-width='240' data-height='40'></div>"
+                + "<script>window.appleInit = function () {"
+                + " AppleID.auth.init({ clientId: " + toJsString(appleAnmeldung.clientId())
+                + ", scope: 'name email', redirectURI: " + toJsString(baseUrl + "/karte-neu/apple") + ", usePopup: true });"
+                + " document.addEventListener('AppleIDSignInOnSuccess', function (e) { window.onAppleCredential(e.detail) });"
+                + " document.addEventListener('AppleIDSignInOnFailure', function (e) {"
+                + " var f = e && e.detail && e.detail.error;"
+                + " if (f && f !== 'popup_closed_by_user' && f !== 'user_cancelled_authorize') window.appleFehler() }) }</script>"
+                + "<script src='https://appleid.cdn-apple.com/appleauth/static/jsapi/appleid/1/" + appleLocale(lang)
+                + "/appleid.auth.js' async onload='appleInit()'></script>";
     }
 
     /** Ohne Angebot steht hier wortgleich der bisherige Text. */

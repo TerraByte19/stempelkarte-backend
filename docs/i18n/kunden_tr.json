@@ -198,5 +198,9 @@
  "signup.google": "Google ile giriş yap",
  "signup.google_hint": "Google ile onay e-postası gerekmez, kart hemen hazır.",
  "signup.or": "ya da e-posta ile",
- "signup.google_error": "Google ile giriş başarısız oldu. E-posta yolunu kullan."
+ "signup.google_error": "Google ile giriş başarısız oldu. E-posta yolunu kullan.",
+ "signup.apple_hint": "Apple ile onay e-postası gerekmez, kart hemen hazır.",
+ "signup.sozial_hint": "Google veya Apple ile onay e-postası gerekmez, kart hemen hazır.",
+ "signup.apple_error": "Apple ile giriş başarısız oldu. E-posta yolunu kullan.",
+ "signup.apple_close": "Giriş yapılıyor. Bu pencereyi kapatabilirsin."
 }

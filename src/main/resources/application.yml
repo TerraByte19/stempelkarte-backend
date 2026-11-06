@@ -49,6 +49,9 @@ stempelkarte:
     wwdr-cert-path: ${APPLE_WWDR_PATH:./certs/AppleWWDRCAG4.pem}
     template-path: ${APPLE_TEMPLATE_PATH:./pass-template/StempelKarte.pass}
     auth-secret: ${APPLE_AUTH_SECRET:bitte-im-prod-aendern-mindestens-32-zeichen}
+    # "Mit Apple anmelden" beim Kartenholen (AppleAnmeldung): die Services-ID
+    # aus dem Apple-Developer-Konto. Leer = kein Knopf.
+    login-client-id: ${APPLE_LOGIN_CLIENT_ID:}
 
   google:
     # "Mit Google anmelden" beim Kartenholen (GoogleAnmeldung). Leer = kein Knopf.

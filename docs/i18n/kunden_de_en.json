@@ -798,5 +798,21 @@
  "signup.google_error": {
   "de": "Google-Anmeldung fehlgeschlagen. Nimm den Weg über die E-Mail.",
   "en": "Google sign-in failed. Use the email option instead."
+ },
+ "signup.apple_hint": {
+  "de": "Mit Apple ohne Bestätigungs-Mail, die Karte ist sofort da.",
+  "en": "With Apple there is no confirmation email, the card is there right away."
+ },
+ "signup.sozial_hint": {
+  "de": "Mit Google oder Apple ohne Bestätigungs-Mail, die Karte ist sofort da.",
+  "en": "With Google or Apple there is no confirmation email, the card is there right away."
+ },
+ "signup.apple_error": {
+  "de": "Apple-Anmeldung fehlgeschlagen. Nimm den Weg über die E-Mail.",
+  "en": "Apple sign-in failed. Use the email option instead."
+ },
+ "signup.apple_close": {
+  "de": "Anmeldung läuft. Du kannst dieses Fenster schließen.",
+  "en": "Signing you in. You can close this window."
  }
 }
