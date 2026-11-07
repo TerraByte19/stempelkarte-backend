@@ -35,14 +35,24 @@ public record QrPayload(String customerId, String cardId) {
         return KURZ + cc.getId();
     }
 
-    /** Liest beide Formen; die kurze braucht die Datenbank. */
-    public static QrPayload parse(String qrPayload, CustomerCardRepository repo) {
+    /**
+     * Die Kundenkarten-ID aus der kurzen Form, null bei der langen Form.
+     * Ohne Datenbank: der Kiosk sperrt damit die Zeile, BEVOR er etwas laedt.
+     */
+    public static String kurzeId(String qrPayload) {
         String roh = qrPayload == null ? "" : qrPayload.trim();
-        if (!roh.regionMatches(true, 0, KURZ, 0, KURZ.length())) return parse(roh);
+        if (!roh.regionMatches(true, 0, KURZ, 0, KURZ.length())) return null;
         String id = roh.substring(KURZ.length()).trim();
         if (!KARTEN_ID.matcher(id).matches()) {
             throw new IllegalArgumentException("Ungueltiger QR-Code");
         }
+        return id;
+    }
+
+    /** Liest beide Formen; die kurze braucht die Datenbank. */
+    public static QrPayload parse(String qrPayload, CustomerCardRepository repo) {
+        String id = kurzeId(qrPayload);
+        if (id == null) return parse(qrPayload == null ? "" : qrPayload.trim());
         CustomerCard cc = repo.findById(id)
                 .orElseThrow(() -> new NoSuchElementException("Karte nicht gefunden"));
         if (cc.getCustomer() == null || cc.getCard() == null) {

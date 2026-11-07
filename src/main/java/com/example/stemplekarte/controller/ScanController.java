@@ -176,18 +176,22 @@ public class ScanController {
         int count = req.count() <= 0 ? 1 : req.count();
 
         var staff = ((StaffTokenFilter.StaffPrincipal) auth.getPrincipal()).staff();
+        String ortId = ortFuer(staff, shop, req.lat(), req.lon());
+        ScanResult result;
         // Tablet: immer genau ein Stempel, und nur wenn der KioskService
-        // nichts dagegen hat (Kartentyp, volle Karte, Sperrzeit).
+        // nichts dagegen hat (Kartentyp, volle Karte, Sperrzeit). Pruefung
+        // und Stempel laufen dort in EINER Transaktion mit Zeilensperre -
+        // sonst geben zwei Tablets im selben Moment zwei Stempel.
         if (staff.istKiosk()) {
             if (kiosk == null) {
                 throw new ResponseStatusException(HttpStatus.FORBIDDEN,
                         com.example.stemplekarte.model.StaffToken.NUR_PERSONAL_TEXT);
             }
             count = 1;
-            kiosk.pruefe(shop, req.qrPayload(), java.time.Instant.now());
+            result = kiosk.stempeln(shop, req.qrPayload(), java.time.Instant.now(), staff.getLabel(), ortId);
+        } else {
+            result = service.processScan(req.qrPayload(), shop, count, staff.getLabel(), ortId);
         }
-        ScanResult result = service.processScan(req.qrPayload(), shop, count,
-                staff.getLabel(), ortFuer(staff, shop, req.lat(), req.lon()));
         var cc = result.customerCard();
 
         // Startpunkt jeder Wallet-Kette. Ab hier laesst sich ein Vorfall

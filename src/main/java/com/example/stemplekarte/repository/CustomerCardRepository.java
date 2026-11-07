@@ -134,4 +134,21 @@ public interface CustomerCardRepository extends JpaRepository<CustomerCard, Stri
 
     // Gesperrte Karten, deren Pass nach einer Design-Aenderung neu muss.
     List<CustomerCard> findByCardAndWelcomePendingTrue(Card card);
+
+    // Selbst-Stempeln am Tablet (KioskService.stempeln): die Zeile der
+    // Kundenkarte sperren, OHNE sie zu laden. Zwei Tablets, dieselbe Karte,
+    // derselbe Moment: das zweite wartet hier, bis das erste fertig ist,
+    // liest danach dessen Scan im Protokoll und meldet die Sperrzeit statt
+    // noch einmal zu stempeln.
+    //
+    // Nativ und nur die ID: eine JPA-Sperre laedt die Entity, und die laege
+    // dann veraltet in der Sitzung, waehrend das andere Tablet schreibt.
+    // Gibt es die Zeile noch nicht (erste Karte), gibt es nichts zu sperren;
+    // das Anlegen schuetzt die eindeutige Spalte Kunde+Karte.
+    @Query(value = "select id from customer_cards where id = :id for update", nativeQuery = true)
+    Optional<String> sperrePerId(String id);
+
+    @Query(value = "select id from customer_cards where customer_id = :customerId and card_id = :cardId for update",
+            nativeQuery = true)
+    Optional<String> sperrePerKundeUndKarte(String customerId, String cardId);
 }

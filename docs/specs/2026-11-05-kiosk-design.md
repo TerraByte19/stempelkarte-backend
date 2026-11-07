@@ -15,7 +15,8 @@ Wie bei gobonki („Self-Service“) und Bonuno, aber ohne eigene App.
 
 - `StaffToken.ROLLE_KIOSK` (neben MITARBEITER und AUSHILFE). `istKiosk()`, `darfEinloesen()` ist dann false.
   `NUR_PERSONAL_TEXT` = „Das macht das Personal am Tresen.“ (403) in `/scan/aufladen`, `/scan/willkommen`, `/scan/reset` und allen Punkte-Endpunkten.
-- `KioskService.pruefe(shop, qr, jetzt)` läuft in `POST /api/scan` vor dem Stempel, wenn der Zugang KIOSK ist; `count` ist dann immer 1. Lehnt ab (400, Klartext in der Sprache des Kunden, `Texts kiosk.*`):
+- `KioskService.stempeln(shop, qr, jetzt, label, ortId)` läuft in `POST /api/scan` statt `processScan`, wenn der Zugang KIOSK ist; `count` ist dann immer 1. Eine Transaktion: erst die Zeile der Kundenkarte sperren (`CustomerCardRepository.sperrePerId` bzw. `sperrePerKundeUndKarte`, natives `select id … for update`, lädt nichts), dann `pruefe`, dann `CustomerService.processScan`. Zwei Tablets mit derselben Karte im selben Moment: das zweite wartet an der Sperre und meldet danach die Sperrzeit (Fix 2026-11-07; vorher lief die Prüfung ohne Transaktion, beide kamen durch, zwei Stempel). Noch keine Zeile (erste Karte): nichts zu sperren, die eindeutige Spalte Kunde+Karte fängt den zweiten Versuch.
+  `pruefe(shop, qr, jetzt)` lehnt ab (400, Klartext in der Sprache des Kunden, `Texts kiosk.*`):
   - keine Stempelkarte
   - Willkommensgeschenk offen
   - Karte voll (ein Scan auf einer vollen Karte würde die Prämie einlösen)
@@ -32,4 +33,4 @@ Wie bei gobonki („Self-Service“) und Bonuno, aber ohne eigene App.
 
 ## Tests
 
-`KioskServiceTest` (10): Normalfall, erste Karte, volle Karte, Sperrzeit mit Uhrzeit, Kundensprache, nur Stempelkarten, Willkommensgeschenk, fremder Laden, Rolle, Einstellung.
+`KioskServiceTest` (14): Normalfall, erste Karte, volle Karte, Sperrzeit mit Uhrzeit, Kundensprache, nur Stempelkarten, Willkommensgeschenk, fremder Laden, Rolle, Einstellung; `stempeln`: Reihenfolge Sperre → Protokoll → ein Stempel (langer und kurzer QR), in der Sperrzeit kein Stempel, Unsinn im QR weder Sperre noch Stempel. `KioskSperreAbfragenTest` (DataJpaTest): die beiden Sperr-Abfragen laufen gegen H2, liefern die ID und laden keine Entity.
