@@ -20,6 +20,8 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -33,7 +35,9 @@ import java.util.regex.Pattern;
  * plus QR-Code zurueck. Kostenlos, ohne Login - und darunter steht Stampit.
  *
  * Schutz der Google-Kosten: Ergebnisse 24 h im Speicher, Drossel je IP,
- * hoechstens fuenf Treffer, nur die drei Felder id/Name/Adresse. Ohne
+ * dazu ein fester Deckel je Tag fuer alle zusammen - die IP kommt aus
+ * X-Forwarded-For und laesst sich vom Aufrufer faelschen, der Tagesdeckel
+ * nicht. Hoechstens fuenf Treffer, nur die drei Felder id/Name/Adresse. Ohne
  * GOOGLE_PLACES_API_KEY ist das Tool aus; die Seite bietet dann nur die
  * Eingabe einer Place-ID von Hand an.
  */
@@ -50,6 +54,10 @@ public class BewertungsLinkService {
     static final int Q_MAX = 120;
     static final int MAX_TREFFER = 5;
     static final int MAX_JE_IP = 20;
+    /** Google-Anfragen je Tag insgesamt. Bei ~0,03 EUR je Anfrage ist das die Obergrenze der Rechnung. */
+    static final int MAX_JE_TAG = 1500;
+    static final String TAG_VOLL = "Das Tool ist für heute ausgelastet. Bitte morgen noch einmal.";
+    private static final ZoneId BERLIN = ZoneId.of("Europe/Berlin");
     static final Duration CACHE_DAUER = Duration.ofHours(24);
     static final int CACHE_MAX = 5000;
 
@@ -62,6 +70,8 @@ public class BewertungsLinkService {
     private final String apiKey;
     private final Drossel drossel = new Drossel(MAX_JE_IP, Duration.ofMinutes(10));
     private final Map<String, Eintrag> cache = new ConcurrentHashMap<>();
+    private LocalDate zaehlTag;
+    private int heute;
 
     public BewertungsLinkService(@Value("${stempelkarte.google.places-api-key:}") String apiKey) {
         this.apiKey = apiKey == null ? "" : apiKey.trim();
@@ -80,8 +90,9 @@ public class BewertungsLinkService {
         if (alt != null && alt.am().plus(CACHE_DAUER).isAfter(jetzt)) {
             return new Ergebnis(true, alt.treffer());
         }
-        // Nur echte Anfragen an Google zaehlen fuer die Drossel - Treffer aus dem Speicher sind gratis.
+        // Nur echte Anfragen an Google zaehlen fuer Drossel und Tagesdeckel - Treffer aus dem Speicher sind gratis.
         drossel.pruefe(ip, jetzt);
+        tagesdeckel(jetzt);
         String json;
         try {
             json = abfragen(q);
@@ -96,6 +107,17 @@ public class BewertungsLinkService {
         if (cache.size() >= CACHE_MAX) cache.clear();
         cache.put(key, new Eintrag(jetzt, treffer));
         return new Ergebnis(true, treffer);
+    }
+
+    /** Zaehlt eine Google-Anfrage; ab MAX_JE_TAG wirft es, bis Mitternacht Berlin. */
+    private synchronized void tagesdeckel(Instant jetzt) {
+        LocalDate tag = jetzt.atZone(BERLIN).toLocalDate();
+        if (!tag.equals(zaehlTag)) {
+            zaehlTag = tag;
+            heute = 0;
+        }
+        if (heute >= MAX_JE_TAG) throw new IllegalArgumentException(TAG_VOLL);
+        heute++;
     }
 
     /** Text Search der Places API (New). Nur id, Name, Adresse - mehr kostet mehr. Ueberschreibbar fuer Tests. */

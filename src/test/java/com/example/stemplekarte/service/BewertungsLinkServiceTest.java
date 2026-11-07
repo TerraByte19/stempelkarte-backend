@@ -87,6 +87,20 @@ class BewertungsLinkServiceTest {
     }
 
     @Test
+    void tagesdeckel_fuerAlleZusammen_auchBeiGefaelschterIp() {
+        Test_Dienst d = new Test_Dienst("key");
+        // Jede Anfrage von einer anderen (gefaelschten) Adresse: die Drossel je IP greift nie.
+        for (int i = 0; i < BewertungsLinkService.MAX_JE_TAG; i++) d.suche("Laden " + i, "ip-" + i, JETZT.plusSeconds(i));
+        assertThat(d.anfragen).hasSize(BewertungsLinkService.MAX_JE_TAG);
+        assertThatThrownBy(() -> d.suche("Laden zu viel", "ip-neu", JETZT.plusSeconds(3000)))   // 23:50 Berlin, gleicher Tag
+                .isInstanceOf(IllegalArgumentException.class).hasMessage(BewertungsLinkService.TAG_VOLL);
+        // Aus dem Speicher geht weiter, und am naechsten Tag (Berlin) zaehlt es neu.
+        assertThat(d.suche("Laden 3", "ip-x", JETZT.plusSeconds(3001)).treffer()).isNotEmpty();
+        assertThat(d.suche("Laden morgen", "ip-y", JETZT.plus(Duration.ofHours(4))).treffer()).isNotEmpty();  // 02:00 Berlin = neuer Tag
+        assertThat(d.anfragen).hasSize(BewertungsLinkService.MAX_JE_TAG + 1);
+    }
+
+    @Test
     void zuKurz_400_googleKaputt_503() {
         Test_Dienst d = new Test_Dienst("key");
         assertThatThrownBy(() -> d.suche("ab", "1.1.1.1", JETZT)).isInstanceOf(IllegalArgumentException.class);
