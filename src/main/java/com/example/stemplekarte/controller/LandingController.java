@@ -1063,8 +1063,10 @@ public class LandingController {
                                 const errorEl = document.getElementById('error')
                                 errorEl.style.display = 'block'
                                 errorEl.textContent = APPLE_ERR
-                            }
+                            };
                             // Empfehlungslink eines Freundes (?ref=CODE) ins Feld, falls es eins gibt.
+                            // Das Semikolon davor ist Pflicht: ohne liest JavaScript "(function ..." als
+                            // Aufruf von appleFehler, und der Fehler steht schon beim Laden da (2026-11-08).
                             (function () {
                                 const p = new URLSearchParams(location.search).get('ref')
                                 const el = document.getElementById('ref')
@@ -1565,19 +1567,16 @@ public class LandingController {
     private String appleKnopf(String lang) {
         return "<div id='appleid-signin' data-color='black' data-border='false' data-type='continue' "
                 + "data-mode='center-align' data-width='200' data-height='36'></div>"
-                // Apples Skript meldet auf manchen Geraeten schon beim Laden ein "Failure",
-                // ohne dass jemand getippt hat (User 2026-11-08, iPhone nach QR-Scan). Deshalb
-                // zaehlt ein Fehler erst, wenn der Knopf vorher beruehrt wurde.
+                // "Fehler schon beim Laden" (User 2026-11-08) war kein Apple-Ereignis, sondern ein
+                // fehlendes Semikolon vor "(function" in der Seite (siehe newCustomerPage). Der
+                // Schutz "Fehler nur nach Beruehrung" ist deshalb wieder raus - er haette echte
+                // Fehler verschlucken koennen.
                 + "<script>window.appleInit = function () {"
                 + " AppleID.auth.init({ clientId: " + toJsString(appleAnmeldung.clientId())
                 + ", scope: 'name email', redirectURI: " + toJsString(baseUrl + "/karte-neu/apple") + ", usePopup: true });"
-                + " var gestartet = false, k = document.getElementById('appleid-signin');"
-                + " if (k) { k.addEventListener('pointerdown', function () { gestartet = true }, true);"
-                + " k.addEventListener('click', function () { gestartet = true }, true) }"
                 + " document.addEventListener('AppleIDSignInOnSuccess', function (e) { window.onAppleCredential(e.detail) });"
                 + " document.addEventListener('AppleIDSignInOnFailure', function (e) {"
                 + " var f = e && e.detail && e.detail.error;"
-                + " if (!gestartet) { console.warn('Apple meldet ohne Klick: ' + f); return }"
                 + " if (f && f !== 'popup_closed_by_user' && f !== 'user_cancelled_authorize') window.appleFehler() }) }</script>"
                 + "<script src='https://appleid.cdn-apple.com/appleauth/static/jsapi/appleid/1/" + appleLocale(lang)
                 + "/appleid.auth.js' async onload='appleInit()'></script>";

@@ -34,8 +34,11 @@ wie die Google-Anmeldung (`docs/specs/2026-11-05-google-anmeldung-design.md`), d
    Mal, `user.name`. Die Seite schickt Token, Name, Karte, Einwilligung, Geburtstag/Telefon und
    Empfehlungscode an `POST /karte-neu/register-apple` (gemeinsame Funktion `sozialAnmeldung` mit Google).
    Abbruch durch den Kunden (`popup_closed_by_user`, `user_cancelled_authorize`) ist kein Fehler.
-   Ein `AppleIDSignInOnFailure` **vor** der ersten Berührung des Knopfs wird ignoriert (nur `console.warn`): auf dem
-   iPhone kam nach dem QR-Scan sofort „Apple-Anmeldung fehlgeschlagen“, ohne dass jemand getippt hatte (2026-11-08).
+   „Apple-Anmeldung fehlgeschlagen“ sofort nach dem QR-Scan, ohne Klick (iPhone, 2026-11-08), war kein Apple-Ereignis,
+   sondern ein fehlendes Semikolon nach `window.appleFehler = function () {…}`: JavaScript las die folgende Zeile
+   `(function () {…})()` als Aufruf von `appleFehler`. Seit 2026-11-06 stand die Meldung so auf jeder Anmeldeseite.
+   Der zwischenzeitliche Schutz „Fehler erst nach Berührung des Knopfs“ (f9527ed) ist wieder raus, er hätte echte
+   Fehler verschlucken können. Ein Test prüft, dass keine Skriptzeile mit `(` oder `[` beginnt, ohne `;` davor.
 3. `AppleAnmeldung.pruefe` prüft das Token selbst (jjwt): Signatur gegen Apples öffentliche Schlüssel
    (`appleid.apple.com/auth/keys`, 24 h im Speicher, bei unbekanntem `kid` neu laden, höchstens einmal
    je Minute), `iss = https://appleid.apple.com`, `aud` = unsere Services-ID, Ablauf (60 s Spielraum),

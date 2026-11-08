@@ -92,8 +92,6 @@ class AppleAnmeldeSeiteTest {
         assertThat(html.indexOf("onclick=\"getCard()\"")).isLessThan(html.indexOf("class='sozial'"));
         assertThat(html.indexOf("id=\"success\"")).isLessThan(html.indexOf("class='sprachen'"));
         assertThat(html).contains("data-width='200' data-height='36'");
-        // Apples Skript meldet manchmal beim Laden einen Fehler ohne Klick - der zaehlt nicht.
-        assertThat(html).contains("if (!gestartet) { console.warn(");
         assertThat(controller.newCustomerPage("CARD-1", "tr", null).getBody())
                 .contains("appleid/1/tr_TR/appleid.auth.js");
 
@@ -110,6 +108,33 @@ class AppleAnmeldeSeiteTest {
         assertThatThrownBy(() -> controller.registerMitApple(
                 new LandingController.AppleRegisterRequest("falsch", null, "CARD-1", true, null, null, null, null), null))
                 .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    /**
+     * 2026-11-08: "Apple-Anmeldung fehlgeschlagen" stand sofort nach dem QR-Scan da, ohne Klick.
+     * Ursache war kein Apple-Fehler, sondern JavaScript: nach `window.appleFehler = function () {...}`
+     * fehlte das Semikolon, und die naechste Zeile `(function () {...})()` wurde als Aufruf von
+     * appleFehler gelesen (Fehlerbox an, danach TypeError). Deshalb: keine Skriptzeile darf mit
+     * `(` oder `[` beginnen, wenn die Zeile davor nicht mit `;` endet.
+     */
+    @Test
+    void skript_zeileMitKlammerAmAnfang_brauchtSemikolonDavor() {
+        apple("de.stampit.web");
+        google("123-abc.apps.googleusercontent.com");
+        String html = controller.newCustomerPage("CARD-1", null, null).getBody();
+        String vorherige = "";
+        for (String zeile : html.split("\n")) {
+            String z = zeile.trim();
+            if (z.isEmpty() || z.startsWith("//")) continue;
+            if (z.startsWith("(") || z.startsWith("[")) {
+                assertThat(vorherige).as("Zeile vor '%s' muss mit ; enden", z).endsWith(";");
+            }
+            vorherige = z;
+        }
+        assertThat(html).contains("window.appleFehler = function () {");
+        // Der fruehere Schutz "Fehler vor der ersten Beruehrung ignorieren" (f9527ed) behandelte nur
+        // das Symptom und koennte echte Fehler verschlucken - er ist wieder raus.
+        assertThat(html).doesNotContain("gestartet");
     }
 
     @Test
