@@ -92,6 +92,8 @@ class AppleAnmeldeSeiteTest {
         assertThat(html.indexOf("onclick=\"getCard()\"")).isLessThan(html.indexOf("class='sozial'"));
         assertThat(html.indexOf("id=\"success\"")).isLessThan(html.indexOf("class='sprachen'"));
         assertThat(html).contains("data-width='200' data-height='36'");
+        // Apples Skript meldet manchmal beim Laden einen Fehler ohne Klick - der zaehlt nicht.
+        assertThat(html).contains("if (!gestartet) { console.warn(");
         assertThat(controller.newCustomerPage("CARD-1", "tr", null).getBody())
                 .contains("appleid/1/tr_TR/appleid.auth.js");
 
