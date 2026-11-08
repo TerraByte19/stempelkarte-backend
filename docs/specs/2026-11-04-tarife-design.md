@@ -3,7 +3,7 @@
 ## Ziel
 
 Die Preisseite verspricht Basic, Pro und Kette. Das Backend setzt das jetzt um:
-Basic bekommt die Pro-Funktionen nicht, und bei 100 Kunden kommt ein Hinweis.
+Basic bekommt die Pro-Funktionen nicht, und bei 200 Kunden kommt ein Hinweis.
 
 ## Entscheidungen
 
@@ -12,7 +12,7 @@ Basic bekommt die Pro-Funktionen nicht, und bei 100 Kunden kommt ein Hinweis.
 - Basic hat nicht: Kampagnen, Auto-Nachrichten (dazu gehört der Geburtstagsgruß), Automationen (Baukasten), Tagesangebot, Newsletter, API/Webhooks und Filialen.
 - Basic behält: alle Kartentypen, Design, Stufen, Kunde wirbt Kunde, Aufkleber, Team, Kundenliste, Gruppen, Statistik, Bewertungen und Rückmeldung (auch die Bewertungs-Erinnerung), Ortsmitteilung, Stempel-Mitteilung und Rückhol-Nachricht.
 - Kette verhält sich wie Pro. Wie viele Filialen Pro oder Kette haben, setzt der Admin weiter über `maxOrte`, weil weitere Filialen extra kosten.
-- **Kundengrenze Basic 100:** Ab 100 Kunden kommt nur ein Hinweis. Nichts wird gesperrt, neue Kunden melden sich weiter an.
+- **Kundengrenze Basic 100:** Ab 200 Kunden kommt nur ein Hinweis. Nichts wird gesperrt, neue Kunden melden sich weiter an.
 
 ## Was gesperrt wird
 
@@ -51,7 +51,7 @@ Der Status ist bewusst nicht 403, weil `src/api.js` im Frontend bei 403 ausloggt
 ## Frontend offen
 
 - **Admin:** Auswahl Basic/Pro/Kette je Laden. Kunden als „112 / 100“ anzeigen, rot ab der Grenze. Den `hinweis` anzeigen.
-- **Dashboard:** bei `grenzeErreicht` ein Hinweis-Streifen: „Du hast 100 Kunden erreicht. Neue Kunden können sich weiter anmelden. Mit Pro hast du unbegrenzt viele.“
+- **Dashboard:** bei `grenzeErreicht` ein Hinweis-Streifen: „Du hast 200 Kunden erreicht. Neue Kunden können sich weiter anmelden. Mit Pro hast du unbegrenzt viele.“
 - **Nachrichten, Team, Profil:** Funktionen mit `funktionen.x = false` zeigen ein Schloss „Ab Pro“ statt der Formulare. Bestehende Einträge bleiben sichtbar und lassen sich ausschalten oder löschen.
 - Bei einer 402-Antwort mit `code: TARIF` die Meldung freundlich zeigen, nicht als Fehler.
 
@@ -68,3 +68,6 @@ Der Status ist bewusst nicht 403, weil `src/api.js` im Frontend bei 403 ausloggt
 - `/api/shop/me` liefert `testBis`, `testTage` (verbleibende Tage, 0 = vorbei) und `testVorbei`. `/api/shop/tarif` liefert `testVorbei`.
 - **Frontend (gebaut):** Admin-Auswahl „Test: X T / Test vorbei / Als bezahlt markieren / +7 / +14“. Dashboard-Streifen: blau mit Resttagen, rot wenn vorbei.
 - **Erinnerungs-Mail** (TestphaseErinnerungService, alle 30 Minuten, nur 9 bis 20 Uhr Berlin): 3 Tage vor dem Ende „endet am …“, nach dem Ende „ist vorbei“. Jede nur einmal, gemerkt in `Shop.testMailStufe` (Spalte `test_mail_stufe`). Es zählt nur eine Mail, die der Mailserver angenommen hat. Verlängert der Admin, beginnt es von vorn. Knopf „Zum Dashboard“ (`FRONTEND_URL` + /dashboard).
+
+
+**Änderung 2026-11-08:** Basic 29 € statt 39 €, Grenze 200 Kunden statt 100 (`Tarif.BASIC_KUNDEN`), jede weitere Filiale bei Pro 29 € statt 39 €.

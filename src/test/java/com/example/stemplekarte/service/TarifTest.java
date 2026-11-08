@@ -89,14 +89,14 @@ class TarifTest {
     }
 
     @Test
-    void kundengrenze_nurBasic_ab100Hinweis() {
+    void kundengrenze_nurBasic_ab200Hinweis() {
         Shop s = laden();
         s.setTarif(Tarif.BASIC);
         TarifPruefung.Stand unter = TarifPruefung.stand(s, 99);
-        assertThat(unter.kundenGrenze()).isEqualTo(100);
+        assertThat(unter.kundenGrenze()).isEqualTo(200);
         assertThat(unter.grenzeErreicht()).isFalse();
         assertThat(unter.funktionen()).containsEntry("kampagnen", false).containsEntry("filialen", false);
-        assertThat(TarifPruefung.stand(s, 100).grenzeErreicht()).isTrue();
+        assertThat(TarifPruefung.stand(s, 200).grenzeErreicht()).isTrue();
 
         s.setTarif(Tarif.PRO);
         TarifPruefung.Stand pro = TarifPruefung.stand(s, 5000);

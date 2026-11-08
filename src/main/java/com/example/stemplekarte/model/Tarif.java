@@ -7,7 +7,7 @@ import java.util.Set;
 /**
  * Tarif eines Ladens, vom Admin gesetzt (Shop.tarif).
  *
- * Basic: ein Standort, bis 100 Kunden (an der Grenze nur ein Hinweis,
+ * Basic: ein Standort, bis 200 Kunden (an der Grenze nur ein Hinweis,
  * niemand wird abgewiesen), ohne die Funktionen in {@link Funktion}.
  * Pro und Kette: alles. Wie viele Filialen Pro und Kette haben, setzt der
  * Admin weiter ueber Shop.maxOrte, weil weitere Filialen extra kosten.
@@ -22,7 +22,7 @@ public enum Tarif {
     public static final Tarif STANDARD = PRO;
 
     /** Ab so vielen Kunden bekommt ein Basic-Laden den Hinweis. */
-    public static final int BASIC_KUNDEN = 100;
+    public static final int BASIC_KUNDEN = 200;   // User 2026-11-08: 200 statt 100 (mit Basic 29 EUR)
 
     /** Was Basic nicht hat. Alles andere hat jeder Tarif. */
     public enum Funktion {
