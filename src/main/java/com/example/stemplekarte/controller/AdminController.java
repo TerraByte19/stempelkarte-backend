@@ -199,6 +199,7 @@ public class AdminController {
             map.put("testBis", shop.getTestBis() != null ? shop.getTestBis().toString() : null);
             map.put("testTage", shop.testTageUebrig(java.time.Instant.now()));
             map.put("demo", shop.isDemo());
+            map.put("ordner", shop.getAdminOrdner());
             return map;
         }).toList();
 
@@ -585,6 +586,24 @@ public class AdminController {
         shopRepo.save(shop);
         log.info("[ADMIN] Demo laden={} demo={}", shop.getId(), req.demo());
         return ResponseEntity.ok(Map.of("id", shop.getId(), "demo", shop.isDemo()));
+    }
+
+    public record OrdnerRequest(String ordner) {}
+
+    /** Ordner im Admin-Panel setzen oder leeren. Nur zum Einordnen, aendert am Laden nichts. */
+    @PostMapping("/shops/{shopId}/ordner")
+    public ResponseEntity<Map<String, Object>> setOrdner(@PathVariable String shopId, @RequestBody OrdnerRequest req) {
+        Shop shop = shopRepo.findById(shopId).orElse(null);
+        if (shop == null) {
+            return ResponseEntity.status(404).body(Map.of("error", "Shop nicht gefunden: " + shopId));
+        }
+        shop.setAdminOrdner(req.ordner());
+        shopRepo.save(shop);
+        log.info("[ADMIN] Ordner laden={} ordner={}", shop.getId(), shop.getAdminOrdner());
+        Map<String, Object> out = new HashMap<>();
+        out.put("id", shop.getId());
+        out.put("ordner", shop.getAdminOrdner());
+        return ResponseEntity.ok(out);
     }
 
     /**

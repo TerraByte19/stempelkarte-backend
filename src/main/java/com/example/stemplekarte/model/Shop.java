@@ -249,6 +249,11 @@ public class Shop {
     @Column(name = "demo")
     private Boolean demo;
 
+    // Ordner im Admin-Panel (z. B. Kunde, Interessent, Intern). Nur fuer den
+    // Betreiber zum Einordnen, wirkt sonst nirgends. Null = ohne Ordner.
+    @Column(name = "admin_ordner", length = 40)
+    private String adminOrdner;
+
     @Column(name = "webhook_url", length = 500)
     private String webhookUrl;
 
@@ -674,6 +679,15 @@ public class Shop {
     // ── Demo ────────────────────────────────────────────────────────────
 
     public boolean isDemo() { return Boolean.TRUE.equals(demo); }
+
+    public String getAdminOrdner() { return adminOrdner; }
+
+    /** Vom Admin. Leer = ohne Ordner, Leerzeichen am Rand weg, hoechstens 40 Zeichen. */
+    public void setAdminOrdner(String ordner) {
+        String o = ordner == null ? "" : ordner.strip().replaceAll("\\s+", " ");
+        if (o.length() > 40) o = o.substring(0, 40).strip();
+        this.adminOrdner = o.isEmpty() ? null : o;
+    }
 
     /** Vom Admin. */
     public void setDemo(boolean demo) {
