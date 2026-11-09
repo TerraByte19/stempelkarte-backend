@@ -19,8 +19,12 @@ braucht die Punkte unter "Muss".
 1. **Mehr als 10 Filialen** - Grenze fuer Tarif KETTE anheben (z. B. 60), Admin-Feld als Zahl statt Select.
 2. **Stammfiliale je Kunde** - neue Spalte `CustomerCard.stamm_ort_id` (nullable).
    Gesetzt bei Anmeldung (Filial-QR, Punkt 4), sonst aus den Scans (Filiale mit den meisten Scans, faellt auf Haupt zurueck).
-3. **10 naechste Filialen im Pass** - `ApplePassService.orte()` sortiert alle Filialen nach Entfernung zur Stammfiliale und nimmt die 10 naechsten.
-   Aenderung wirkt beim naechsten ohnehin faelligen Pass-Update, kein Extra-Push.
+3. **10 Filialen im Pass, lernend (User-Entscheidung 2026-11-09)** - `ApplePassService.orte()`:
+   - Bei Anmeldung: die 10 naechsten Filialen zur Anmeldefiliale (inkl. ihr selbst).
+   - Mit der Zeit: jede Filiale, in der der Kunde gestempelt hat, kommt fest auf die Liste (sortiert nach Besuchen, bei Gleichstand juengster Besuch). Die restlichen Plaetze fuellen die naechsten Filialen zur Stammfiliale auf.
+   - Mehr als 10 besuchte Filialen: die 10 meistbesuchten.
+   - Stammfiliale wandert mit: die meistbesuchte Filiale, solange noch keine Besuche: die Anmeldefiliale, ohne beides: Hauptstandort.
+   - Aenderung wirkt beim naechsten ohnehin faelligen Pass-Update (Stempel), kein Extra-Push.
 4. **Anmelde-QR pro Filiale** - Anmeldeseite mit `?f=<ortId>`, Aufsteller/Aufkleber (AufkleberService) je Filiale druckbar. Liefert Stammfiliale + Statistik "Neue Kunden je Filiale".
 5. **Filialen in einem Rutsch anlegen** - Liste einfuegen (Name; Breite; Laenge oder Adresse). Adresse -> Koordinaten nur, wenn wir einen Geocoder waehlen (Entscheidung). Sonst Koordinaten aus Google Maps kopieren.
 6. **Statistik je Filiale** - Tabelle: Scans, neue Kunden, eingeloeste Praemien, aktive Kunden je Filiale, Zeitraum waehlbar, sortierbar. Das will die Zentrale sehen.
