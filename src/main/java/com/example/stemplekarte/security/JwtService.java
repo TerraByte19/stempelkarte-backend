@@ -15,6 +15,7 @@ public class JwtService {
     private final SecretKey key;
     private static final long EXPIRATION_MS = 7 * 24 * 60 * 60 * 1000L; // 7 Tage
     private static final long ADMIN_EXPIRATION_MS = 4 * 60 * 60 * 1000L; // 4 Stunden
+    public static final long SUPPORT_EXPIRATION_MS = 60 * 60 * 1000L; // 1 Stunde
 
     public JwtService(@Value("${stempelkarte.jwt-secret}") String secret) {
         this.key = Keys.hmacShaKeyFor(secret.getBytes());
@@ -39,6 +40,33 @@ public class JwtService {
                 .expiration(new Date(System.currentTimeMillis() + ADMIN_EXPIRATION_MS))
                 .signWith(key)
                 .compact();
+    }
+
+    /**
+     * Support-Zugang: der Betreiber oeffnet das Dashboard eines Ladens aus dem
+     * Admin-Panel, ohne dessen Passwort zu kennen oder zu aendern.
+     *
+     * <p>Rolle SHOP, damit der Token genau das darf, was der Laden darf - und
+     * nichts im Admin-Bereich. "support" markiert ihn fuer den Hinweisbalken
+     * im Dashboard. Laeuft nach einer Stunde ab statt nach sieben Tagen.
+     */
+    public String generateSupportToken(String shopId) {
+        return Jwts.builder()
+                .subject(shopId)
+                .claim("role", "SHOP")
+                .claim("support", true)
+                .issuedAt(new Date())
+                .expiration(new Date(System.currentTimeMillis() + SUPPORT_EXPIRATION_MS))
+                .signWith(key)
+                .compact();
+    }
+
+    public boolean isSupport(String token) {
+        try {
+            return Boolean.TRUE.equals(parseClaims(token).get("support", Boolean.class));
+        } catch (Exception e) {
+            return false;
+        }
     }
 
     public String extractShopId(String token) {

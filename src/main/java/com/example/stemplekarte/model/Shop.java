@@ -322,6 +322,16 @@ public class Shop {
         this.updatedAt = Instant.now();
     }
 
+    /**
+     * Login-Adresse des Ladens. Nur ueber AdminZugangService.emailAendern
+     * aufrufen: dort wird sie klein geschrieben, geprueft und auf Dopplung
+     * getestet. Der Login sucht nach der klein geschriebenen Adresse.
+     */
+    public void setEmail(String email) {
+        this.email = email;
+        this.updatedAt = Instant.now();
+    }
+
     public void setMaxTokens(int maxTokens) {
         this.maxTokens = maxTokens;
         this.updatedAt = Instant.now();
