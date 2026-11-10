@@ -68,6 +68,11 @@ class AppleAnmeldeSeiteTest {
         // Das CSS fuer #appleid-signin steht immer da, der Knopf selbst nicht.
         assertThat(html).doesNotContain("appleid.auth.js").doesNotContain("id='appleid-signin'").doesNotContain("class='sozial'");
         assertThat(html).contains("placeholder=\"Dein Name\"");
+        // Ohne Google/Apple bleibt die Seite wie bisher: Name, Werbe-Haken, voller Knopf, alter Text.
+        assertThat(html.indexOf("id=\"name\"")).isLessThan(html.indexOf("id=\"consent\""));
+        assertThat(html.indexOf("id=\"consent\"")).isLessThan(html.indexOf("onclick=\"getCard()\""));
+        assertThat(html).contains("class=\"btn\" onclick=\"getCard()\"").doesNotContain("btn zweit")
+                .contains("Trag deinen Namen und deine E-Mail ein");
 
         apple("");
         assertThat(controller.newCustomerPage("CARD-1", null, null).getBody()).doesNotContain("appleid.auth.js");
@@ -84,14 +89,22 @@ class AppleAnmeldeSeiteTest {
                 .contains("clientId: \"de.stampit.web\"")
                 .contains("redirectURI: \"https://api.example/karte-neu/apple\"")
                 .contains("id='appleid-signin'").contains("onAppleCredential")
-                .contains("class='oder'>oder</div>")
+                .contains("class='oder'>oder mit E-Mail</div>")
                 .doesNotContain("gsi/client")                     // Google aus
                 .contains("placeholder=\"Dein Name\"");           // E-Mail-Weg bleibt
-        // User 2026-11-06: Knoepfe klein unter "Karte holen", kein Erklaertext, Sprachleiste ganz unten.
+        // User 2026-11-10 (Entwurf A): Knoepfe gross und oben, E-Mail darunter als zweite Wahl.
+        // Der Werbe-Haken steht ueber den Knoepfen, weil ein Tipp auf den Knopf sofort anmeldet.
         assertThat(html).doesNotContain("Bestätigungs-Mail, die Karte ist sofort da");
-        assertThat(html.indexOf("onclick=\"getCard()\"")).isLessThan(html.indexOf("class='sozial'"));
+        assertThat(html.indexOf("id=\"consent\"")).isLessThan(html.indexOf("class='sozial'"));
+        assertThat(html.indexOf("class='sozial'")).isLessThan(html.indexOf("id=\"name\""));
+        assertThat(html.indexOf("id='appleid-signin'")).isLessThan(html.indexOf("class='oder'"));
+        assertThat(html.indexOf("class='oder'")).isLessThan(html.indexOf("onclick=\"getCard()\""));
+        assertThat(html).contains("class=\"btn zweit\" onclick=\"getCard()\"");
         assertThat(html.indexOf("id=\"success\"")).isLessThan(html.indexOf("class='sprachen'"));
-        assertThat(html).contains("data-width='200' data-height='36'");
+        assertThat(html).contains("data-width='100%' data-height='40' data-border-radius='50'");
+        // Der Text verlangt nicht mehr Name und E-Mail.
+        assertThat(html).contains("Einmal tippen, und die Stempelkarte ist direkt in deiner Wallet.")
+                .doesNotContain("Trag deinen Namen");
         assertThat(controller.newCustomerPage("CARD-1", "tr", null).getBody())
                 .contains("appleid/1/tr_TR/appleid.auth.js");
 
@@ -146,6 +159,9 @@ class AppleAnmeldeSeiteTest {
         assertThat(html.split("class='oder'", -1)).hasSize(2);   // genau ein "oder"
         // Google steht vor Apple.
         assertThat(html.indexOf("g_id_signin")).isLessThan(html.indexOf("id='appleid-signin'"));
+        // Google gross; die Breite setzt ein Skript, deshalb laedt Googles Skript erst danach.
+        assertThat(html).contains("data-size='large'");
+        assertThat(html.indexOf("setAttribute('data-width'")).isLessThan(html.indexOf("gsi/client"));
     }
 
     @Test

@@ -135,6 +135,9 @@ public final class Texts {
         m.put("signup.headline", "🎉 Stempelkarte holen!");
         m.put("signup.text", "Trag deinen Namen und deine E-Mail ein und bekomme die Stempelkarte direkt in deine Wallet!");
         m.put("signup.text_gift", "Trag deinen Namen und deine E-Mail ein und hol dir die Karte in die Wallet. Zeig sie an der Kasse, und das Geschenk gehört dir. Danach sammelst du Stempel.");
+        // Mit Google/Apple-Knopf oben: der Text verlangt nicht mehr Name und E-Mail.
+        m.put("signup.text_schnell", "Einmal tippen, und die Stempelkarte ist direkt in deiner Wallet.");
+        m.put("signup.text_gift_schnell", "Hol dir die Karte in die Wallet. Zeig sie an der Kasse, und das Geschenk gehört dir. Danach sammelst du Stempel.");
         m.put("signup.name", "Dein Name");
         m.put("signup.email", "Deine E-Mail");
         m.put("signup.birthday", "Geburtstag");
@@ -293,7 +296,7 @@ public final class Texts {
         m.put("signup.google_error", "Google-Anmeldung fehlgeschlagen. Nimm den Weg über die E-Mail.");
         m.put("signup.apple_error", "Apple-Anmeldung fehlgeschlagen. Nimm den Weg über die E-Mail.");
         m.put("signup.apple_close", "Anmeldung läuft. Du kannst dieses Fenster schließen.");
-        m.put("signup.oder", "oder");
+        m.put("signup.oder", "oder mit E-Mail");
         return Map.copyOf(m);
     }
 
@@ -341,6 +344,8 @@ public final class Texts {
         m.put("signup.headline", "🎉 Get your stamp card!");
         m.put("signup.text", "Enter your name and email and get the stamp card straight into your wallet!");
         m.put("signup.text_gift", "Enter your name and email and get the card into your wallet. Show it at the till and the gift is yours. After that you collect stamps.");
+        m.put("signup.text_schnell", "One tap and the stamp card is straight in your wallet.");
+        m.put("signup.text_gift_schnell", "Get the card into your wallet. Show it at the till and the gift is yours. After that you collect stamps.");
         m.put("signup.name", "Your name");
         m.put("signup.email", "Your email");
         m.put("signup.birthday", "Birthday");
@@ -499,7 +504,7 @@ public final class Texts {
         m.put("signup.google_error", "Google sign-in failed. Use the email option instead.");
         m.put("signup.apple_error", "Apple sign-in failed. Use the email option instead.");
         m.put("signup.apple_close", "Signing you in. You can close this window.");
-        m.put("signup.oder", "or");
+        m.put("signup.oder", "or with email");
         return Map.copyOf(m);
     }
 
@@ -547,6 +552,8 @@ public final class Texts {
         m.put("signup.headline", "🎉 احصل على بطاقة الأختام!");
         m.put("signup.text", "أدخل اسمك وبريدك الإلكتروني واحصل على بطاقة الأختام مباشرة في محفظتك!");
         m.put("signup.text_gift", "أدخل اسمك وبريدك الإلكتروني وأضِف البطاقة إلى محفظتك. أظهرها عند الكاشير والهدية لك. بعد ذلك تبدأ بجمع الأختام.");
+        m.put("signup.text_schnell", "نقرة واحدة وتصبح بطاقة الأختام مباشرة في محفظتك.");
+        m.put("signup.text_gift_schnell", "أضِف البطاقة إلى محفظتك. أظهرها عند الكاشير والهدية لك. بعد ذلك تبدأ بجمع الأختام.");
         m.put("signup.name", "اسمك");
         m.put("signup.email", "بريدك الإلكتروني");
         m.put("signup.birthday", "تاريخ الميلاد");
@@ -705,7 +712,7 @@ public final class Texts {
         m.put("signup.google_error", "فشل تسجيل الدخول عبر Google. استخدم طريقة البريد الإلكتروني.");
         m.put("signup.apple_error", "فشل تسجيل الدخول عبر Apple. استخدم طريقة البريد الإلكتروني.");
         m.put("signup.apple_close", "جارٍ تسجيل الدخول. يمكنك إغلاق هذه النافذة.");
-        m.put("signup.oder", "أو");
+        m.put("signup.oder", "أو عبر البريد الإلكتروني");
         return Map.copyOf(m);
     }
 
@@ -753,6 +760,8 @@ public final class Texts {
         m.put("signup.headline", "🎉 Damga kartını al!");
         m.put("signup.text", "Adını ve e-postanı gir, damga kartın direkt cüzdanına gelsin!");
         m.put("signup.text_gift", "Adını ve e-postanı gir, kartı cüzdanına ekle. Kasada göster, hediye senin. Sonra damga toplamaya başlarsın.");
+        m.put("signup.text_schnell", "Tek dokunuşla damga kartın direkt cüzdanında.");
+        m.put("signup.text_gift_schnell", "Kartı cüzdanına ekle. Kasada göster, hediye senin. Sonra damga toplamaya başlarsın.");
         m.put("signup.name", "Adın");
         m.put("signup.email", "E-postan");
         m.put("signup.birthday", "Doğum günü");
@@ -911,7 +920,7 @@ public final class Texts {
         m.put("signup.google_error", "Google ile giriş başarısız oldu. E-posta yolunu kullan.");
         m.put("signup.apple_error", "Apple ile giriş başarısız oldu. E-posta yolunu kullan.");
         m.put("signup.apple_close", "Giriş yapılıyor. Bu pencereyi kapatabilirsin.");
-        m.put("signup.oder", "veya");
+        m.put("signup.oder", "veya e-posta ile");
         return Map.copyOf(m);
     }
 }

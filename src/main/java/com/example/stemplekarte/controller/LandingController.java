@@ -956,6 +956,12 @@ public class LandingController {
                                 font-weight: 600;
                                 cursor: pointer;
                             }
+                            /* "Karte holen" als zweite Wahl unter Google/Apple: nur Rahmen */
+                            .btn.zweit {
+                                background: transparent;
+                                border: 1.5px solid rgb(var(--ink));
+                                color: rgb(var(--ink));
+                            }
                             .error {
                                 background: rgba(255,0,0,0.2);
                                 padding: 10px;
@@ -970,9 +976,25 @@ public class LandingController {
                                 padding: 8px 0 4px;
                             }
                             .success-icon { font-size: 48px; margin-bottom: 12px; }
-                            .sozial { display: flex; flex-direction: column; align-items: center; gap: 10px; margin-top: 4px; }
-                            #appleid-signin { width: 200px; height: 36px; cursor: pointer; }
-                            .oder { font-size: 13px; opacity: 0.8; text-align: center; }
+                            /* Google und Apple: gross, volle Breite, ueber dem E-Mail-Weg */
+                            .sozial { display: flex; flex-direction: column; align-items: center; gap: 12px; width: 100%%; }
+                            #appleid-signin { width: 100%%; max-width: 375px; height: 40px; cursor: pointer; }
+                            .oder {
+                                display: flex;
+                                align-items: center;
+                                gap: 12px;
+                                width: 100%%;
+                                margin-top: 4px;
+                                font-size: 13px;
+                                opacity: 0.8;
+                                text-align: center;
+                            }
+                            .oder::before, .oder::after {
+                                content: "";
+                                flex: 1;
+                                height: 1px;
+                                background: rgba(var(--ink),0.3);
+                            }
                             .success-title { font-size: 18px; font-weight: 700; margin-bottom: 8px; }
                             .success-text { font-size: 14px; opacity: 0.9; line-height: 1.6; }
                         </style>
@@ -991,16 +1013,6 @@ public class LandingController {
                             </div>
                             <div class="error" id="error"></div>
                             <div class="form" id="form">
-                                <input type="text" id="name" placeholder="%s" required />
-                                <input type="email" id="email" placeholder="%s" required />
-                                %s
-                                <label class="consent">
-                                    <input type="checkbox" id="consent" />
-                                    <span>%s</span>
-                                </label>
-                                <button class="btn" onclick="getCard()">
-                                    %s
-                                </button>
                                 %s
                             </div>
                             <div class="success" id="success">
@@ -1139,12 +1151,8 @@ public class LandingController {
                             : "<img src='" + escapeHtml(logoUrl) + "' class='logo' alt='Logo'>",
                     escapeHtml(shopName),
                     anmeldeTitel(lang, card),
-                    anmeldeText(lang, card),
-                    t(lang, "signup.name"), t(lang, "signup.email"),
-                    anmeldeFelder(lang, card.getShop()) + empfehlungsFeld(lang, card),
-                    t(lang, "signup.consent", escapeHtml(shopName)),
-                    t(lang, "signup.button"),
-                    sozialBlock(lang),
+                    anmeldeText(lang, card, sozialAktiv()),
+                    anmeldeFormular(lang, card, shopName),
                     t(lang, "signup.sent_title"), t(lang, "signup.sent_text"),
                     bewertungsLink(lang, card.getShop()),
                     sprachenLeiste(lang, "/karte-neu/" + cardId, ref),
@@ -1525,29 +1533,68 @@ public class LandingController {
         return sb.append("</div>").toString();
     }
 
+    /** Ist Google oder Apple eingerichtet? Dann stehen die zwei Knoepfe oben. */
+    boolean sozialAktiv() {
+        return (googleAnmeldung != null && googleAnmeldung.aktiv())
+                || (appleAnmeldung != null && appleAnmeldung.aktiv());
+    }
+
     /**
-     * "Mit Google / Apple anmelden" unter dem Karte-holen-Knopf (User
-     * 2026-11-06: klein, ohne Erklaertext), nur mit GOOGLE_CLIENT_ID bzw.
-     * APPLE_LOGIN_CLIENT_ID. Beide Skripte rendern ihren Knopf selbst und
-     * rufen window.onGoogleCredential / onAppleCredential.
+     * Inhalt des Anmeldeformulars. Ohne Google/Apple wie bisher: Name, E-Mail,
+     * Zusatzfelder, Werbe-Haken, "Karte holen". Mit Google/Apple (User
+     * 2026-11-10, Entwurf A): die zwei Knoepfe gross und oben, der E-Mail-Weg
+     * darunter als zweite Wahl. Zusatzfelder und Werbe-Haken stehen dann ueber
+     * den Knoepfen, weil auch die Google-/Apple-Anmeldung sie mitschickt - ein
+     * Tipp auf den Knopf meldet sofort an, danach kaeme niemand mehr dran.
+     */
+    String anmeldeFormular(String lang, Card card, String shopName) {
+        String name = "<input type=\"text\" id=\"name\" placeholder=\"" + t(lang, "signup.name") + "\" required />\n";
+        String email = "<input type=\"email\" id=\"email\" placeholder=\"" + t(lang, "signup.email") + "\" required />\n";
+        String felder = anmeldeFelder(lang, card.getShop()) + empfehlungsFeld(lang, card) + "\n";
+        String haken = "<label class=\"consent\"><input type=\"checkbox\" id=\"consent\" /><span>"
+                + t(lang, "signup.consent", escapeHtml(shopName)) + "</span></label>\n";
+        if (!sozialAktiv()) {
+            return name + email + felder + haken + karteHolenKnopf(lang, "btn");
+        }
+        return felder + haken + sozialBlock(lang) + "\n" + name + email + karteHolenKnopf(lang, "btn zweit");
+    }
+
+    private static String karteHolenKnopf(String lang, String klassen) {
+        return "<button class=\"" + klassen + "\" onclick=\"getCard()\">" + t(lang, "signup.button") + "</button>";
+    }
+
+    /**
+     * "Weiter mit Google / Apple": gross und in voller Breite ueber dem
+     * E-Mail-Weg (User 2026-11-10; vorher klein darunter), nur mit
+     * GOOGLE_CLIENT_ID bzw. APPLE_LOGIN_CLIENT_ID. Darunter die Trennzeile
+     * "oder mit E-Mail". Beide Skripte rendern ihren Knopf selbst und rufen
+     * window.onGoogleCredential / onAppleCredential.
      */
     String sozialBlock(String lang) {
         boolean google = googleAnmeldung != null && googleAnmeldung.aktiv();
         boolean apple = appleAnmeldung != null && appleAnmeldung.aktiv();
         if (!google && !apple) return "";
         return "<div class='sozial'>"
-                + "<div class='oder'>" + t(lang, "signup.oder") + "</div>"
                 + (google ? googleKnopf(lang) : "")
                 + (apple ? appleKnopf(lang) : "")
+                + "<div class='oder'>" + t(lang, "signup.oder") + "</div>"
                 + "</div>";
     }
 
+    /**
+     * Google nimmt die Breite nur in festen Pixeln (hoechstens 400). Deshalb
+     * setzt ein kleines Skript sie auf die Breite der Karte, bevor Googles
+     * Skript laedt - das steht darum NACH dem Knopf. Ohne Skript bleibt 280.
+     */
     private String googleKnopf(String lang) {
-        return "<script src='https://accounts.google.com/gsi/client' async defer></script>"
-                + "<div id='g_id_onload' data-client_id='" + escapeHtml(googleAnmeldung.clientId())
+        return "<div id='g_id_onload' data-client_id='" + escapeHtml(googleAnmeldung.clientId())
                 + "' data-callback='onGoogleCredential' data-auto_prompt='false' data-context='signup'></div>"
-                + "<div class='g_id_signin' data-type='standard' data-size='medium' data-width='200' data-shape='pill' "
-                + "data-text='continue_with' data-locale='" + Texts.norm(lang) + "'></div>";
+                + "<div class='g_id_signin' data-type='standard' data-size='large' data-width='280' data-shape='pill' "
+                + "data-text='continue_with' data-logo_alignment='center' data-locale='" + Texts.norm(lang) + "'></div>"
+                + "<script>var gKnopf = document.querySelector('.g_id_signin');"
+                + " var gBreite = gKnopf ? Math.floor(gKnopf.parentNode.clientWidth) : 0;"
+                + " if (gBreite) gKnopf.setAttribute('data-width', String(Math.max(200, Math.min(400, gBreite))));</script>"
+                + "<script src='https://accounts.google.com/gsi/client' async defer></script>";
     }
 
     /** Die Sprache von Apples Skript steckt im Pfad. */
@@ -1566,7 +1613,7 @@ public class LandingController {
      */
     private String appleKnopf(String lang) {
         return "<div id='appleid-signin' data-color='black' data-border='false' data-type='continue' "
-                + "data-mode='center-align' data-width='200' data-height='36'></div>"
+                + "data-mode='center-align' data-width='100%' data-height='40' data-border-radius='50'></div>"
                 // "Fehler schon beim Laden" (User 2026-11-08) war kein Apple-Ereignis, sondern ein
                 // fehlendes Semikolon vor "(function" in der Seite (siehe newCustomerPage). Der
                 // Schutz "Fehler nur nach Beruehrung" ist deshalb wieder raus - er haette echte
@@ -1590,7 +1637,13 @@ public class LandingController {
     }
 
     static String anmeldeText(String lang, Card card) {
-        return t(lang, card.isWillkommenAktiv() ? "signup.text_gift" : "signup.text");
+        return anmeldeText(lang, card, false);
+    }
+
+    /** schnell = Google/Apple stehen oben; dann verlangt der Text nicht mehr Name und E-Mail. */
+    static String anmeldeText(String lang, Card card, boolean schnell) {
+        String key = card.isWillkommenAktiv() ? "signup.text_gift" : "signup.text";
+        return t(lang, schnell ? key + "_schnell" : key);
     }
 
     /**
