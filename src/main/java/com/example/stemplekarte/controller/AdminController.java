@@ -487,6 +487,29 @@ public class AdminController {
         return scannerMessungen.zusammenfassung(java.time.Instant.now());
     }
 
+    /** Hochformat gegen Querformat je Laden und Geraet, letzte 60 Tage. */
+    @GetMapping("/scanner-lage")
+    public List<Map<String, Object>> scannerLage() {
+        if (scannerMessungen == null) return List.of();
+        Map<String, String> namen = new HashMap<>();
+        List<Map<String, Object>> out = new ArrayList<>();
+        for (var z : scannerMessungen.lagen(java.time.Instant.now())) {
+            String laden = namen.computeIfAbsent(z.shopId(),
+                    id -> shopRepo.findById(id).map(Shop::getName).orElse(id));
+            Map<String, Object> m = new java.util.LinkedHashMap<>();
+            m.put("laden", laden);
+            m.put("geraet", z.geraet());
+            m.put("lage", z.lage());
+            m.put("app", z.app());
+            m.put("runden", z.runden());
+            m.put("trefferMs", z.trefferMs());
+            m.put("bildGedreht", z.bildGedreht());
+            m.put("zuletzt", z.zuletzt());
+            out.add(m);
+        }
+        return out;
+    }
+
     public record SpracheRequest(String language) {}
 
     /**

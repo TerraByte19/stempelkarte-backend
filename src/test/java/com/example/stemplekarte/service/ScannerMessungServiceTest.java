@@ -66,4 +66,66 @@ class ScannerMessungServiceTest {
         when(repo.countByShopIdAndErstelltAmAfter(anyString(), any())).thenReturn((long) ScannerMessungService.MAX_JE_LADEN_UND_TAG);
         assertThat(s.annehmen("SHOP-1", "Kasse", "ios", IPHONE, "neu", 900, 300, null, JETZT)).isNull();
     }
+
+    private static final String IPAD_APP = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko)";
+    private static final String IPAD_SAFARI = IPAD_APP + " Version/26.1 Safari/605.1.15";
+
+    @Test
+    void geraetetyp_erkenntIpadTrotzMacKennung() {
+        assertThat(ScannerMessung.create("S", null, "ios", IPAD_APP, "neu", 1, 1, null, JETZT).geraeteTyp()).isEqualTo("iPad");
+        assertThat(ScannerMessung.create("S", null, "ios", IPAD_SAFARI, "neu", 1, 1, null, JETZT).geraeteTyp()).isEqualTo("iPad iOS 26.1");
+        // Echter Mac (kein Touchscreen, Plattform "andere") bleibt, was er ist.
+        assertThat(ScannerMessung.create("S", null, "andere", IPAD_SAFARI, "neu", 1, 1, null, JETZT).geraeteTyp()).isEqualTo("andere");
+    }
+
+    @Test
+    void lage_nurBekannteWerteUndPlausibleBilder() {
+        ScannerMessung m = m(IPHONE, "neu", 1, 1, null).mitLage("quer", 1280, 720, true);
+        assertThat(m.getLage()).isEqualTo("quer");
+        assertThat(m.getBildBreite()).isEqualTo(1280);
+        assertThat(m.getApp()).isTrue();
+        assertThat(m.bildPasstZurLage()).isTrue();
+        assertThat(m(IPHONE, "neu", 1, 1, null).mitLage("quer", 720, 1280, true).bildPasstZurLage()).isFalse();
+        assertThat(m(IPHONE, "neu", 1, 1, null).mitLage("hoch", 720, 1280, false).bildPasstZurLage()).isTrue();
+
+        ScannerMessung kaputt = m(IPHONE, "neu", 1, 1, null).mitLage("<script>", 0, 99_999, null);
+        assertThat(kaputt.getLage()).isNull();
+        assertThat(kaputt.getBildBreite()).isNull();
+        assertThat(kaputt.getBildHoehe()).isNull();
+        assertThat(kaputt.bildPasstZurLage()).isNull();
+    }
+
+    @Test
+    void lagen_jeLadenGeraetUndLage() {
+        List<ScannerMessung> l = List.of(
+                ScannerMessung.create("SHOP-1", "Kasse", "ios", IPAD_APP, "neu", 900, 300, null, JETZT).mitLage("quer", 720, 1280, true),
+                ScannerMessung.create("SHOP-1", "Kasse", "ios", IPAD_APP, "neu", 500, null, null, JETZT).mitLage("quer", 1280, 720, true),
+                ScannerMessung.create("SHOP-1", "Kasse", "ios", IPAD_APP, "neu", 400, 700, null, JETZT).mitLage("quer", 1280, 720, true),
+                ScannerMessung.create("SHOP-1", "Kasse", "ios", IPAD_APP, "neu", 200, 100, null, JETZT).mitLage("hoch", 720, 1280, true),
+                // Alte App ohne Lage: zaehlt hier nicht mit.
+                m(IPHONE, "neu", 900, 300, null));
+        var zeilen = ScannerMessungService.lagen(l);
+        assertThat(zeilen).hasSize(2);
+        var quer = zeilen.get(0);
+        assertThat(quer.geraet()).isEqualTo("iPad");
+        assertThat(quer.lage()).isEqualTo("quer");
+        assertThat(quer.app()).isTrue();
+        assertThat(quer.runden()).isEqualTo(3);
+        assertThat(quer.trefferMs()).isEqualTo(400);   // Median von 300, 400, 500
+        assertThat(quer.bildGedreht()).isEqualTo(1);
+        assertThat(zeilen.get(1).lage()).isEqualTo("hoch");
+        assertThat(zeilen.get(1).trefferMs()).isEqualTo(100);
+    }
+
+    @Test
+    void annehmen_speichertLage() {
+        ScannerMessungRepository repo = mock(ScannerMessungRepository.class);
+        when(repo.save(any(ScannerMessung.class))).thenAnswer(i -> i.getArgument(0));
+        ScannerMessungService s = new ScannerMessungService(repo);
+        ScannerMessung m = s.annehmen("SHOP-1", "Kasse", "ios", IPAD_APP, "neu", 900, 300, null, "quer", 1280, 720, true, JETZT);
+        assertThat(m.getLage()).isEqualTo("quer");
+        assertThat(m.getBildHoehe()).isEqualTo(720);
+        // Alte App schickt nichts mit: bleibt leer, wird trotzdem gespeichert.
+        assertThat(s.annehmen("SHOP-1", "Kasse", "ios", IPHONE, "neu", 900, 300, null, JETZT).getLage()).isNull();
+    }
 }

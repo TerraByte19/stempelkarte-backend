@@ -59,8 +59,24 @@ public class ScannerMessung {
     @Column(name = "erstellt_am", nullable = false)
     private Instant erstelltAm;
 
+    /** Wie das Geraet beim Scan gehalten wurde: hoch oder quer. Null = alte App. */
+    @Column(length = 5)
+    private String lage;
+
+    /** Groesse des Kamerabilds in Pixeln. Passt sie nicht zur Lage, liefert das Geraet das Bild gedreht. */
+    @Column(name = "bild_breite")
+    private Integer bildBreite;
+
+    @Column(name = "bild_hoehe")
+    private Integer bildHoehe;
+
+    /** true = installierte App vom Startbildschirm, false = Browser. */
+    @Column(name = "als_app")
+    private Boolean app;
+
     public static final java.util.Set<String> PLATTFORMEN = java.util.Set.of("ios", "android", "andere");
     public static final java.util.Set<String> GEGNER = java.util.Set.of("neu", "nimiq", "handy");
+    public static final java.util.Set<String> LAGEN = java.util.Set.of("hoch", "quer");
 
     protected ScannerMessung() {}
 
@@ -81,6 +97,27 @@ public class ScannerMessung {
         return m;
     }
 
+    /** Lage und Kamerabild dazu. Unbekannte oder unplausible Werte werden weggelassen. */
+    public ScannerMessung mitLage(String lage, Integer bildBreite, Integer bildHoehe, Boolean app) {
+        this.lage = lage != null && LAGEN.contains(lage) ? lage : null;
+        boolean bildOk = bildBreite != null && bildHoehe != null
+                && bildBreite > 0 && bildBreite <= 10_000 && bildHoehe > 0 && bildHoehe <= 10_000;
+        this.bildBreite = bildOk ? bildBreite : null;
+        this.bildHoehe = bildOk ? bildHoehe : null;
+        this.app = app;
+        return this;
+    }
+
+    /**
+     * Liefert die Kamera das Bild passend zur Lage? Quer gehalten = breites
+     * Bild, hoch gehalten = hohes Bild. Null, wenn Lage oder Bild fehlen.
+     */
+    public Boolean bildPasstZurLage() {
+        if (lage == null || bildBreite == null || bildHoehe == null) return null;
+        if (bildBreite.equals(bildHoehe)) return true;
+        return "quer".equals(lage) == (bildBreite > bildHoehe);
+    }
+
     private static String kurz(String s, int max) {
         if (s == null) return null;
         String t = s.trim();
@@ -97,6 +134,13 @@ public class ScannerMessung {
         if (ios.find()) return ios.group(1) + " iOS " + ios.group(2);
         if (ua.contains("iPhone")) return "iPhone";
         if (ua.contains("iPad")) return "iPad";
+        // iPadOS meldet sich als Mac. Die Plattform (Touchscreen) verraet es;
+        // die Safari-Version entspricht der iPadOS-Version, fehlt aber in der
+        // installierten App.
+        if ("ios".equals(plattform) && ua.contains("Macintosh")) {
+            java.util.regex.Matcher v = java.util.regex.Pattern.compile("Version/(\\d+(?:\\.\\d+)?)").matcher(ua);
+            return v.find() ? "iPad iOS " + v.group(1) : "iPad";
+        }
         java.util.regex.Matcher android = java.util.regex.Pattern.compile("Android [\\d.]+; ([^;)]+?)(?: Build|\\))").matcher(ua);
         if (android.find()) return "Android " + android.group(1).trim();
         if (ua.contains("Android")) return "Android";
@@ -113,4 +157,8 @@ public class ScannerMessung {
     public Integer getGegnerMs() { return gegnerMs; }
     public String getAktiv() { return aktiv; }
     public Instant getErstelltAm() { return erstelltAm; }
+    public String getLage() { return lage; }
+    public Integer getBildBreite() { return bildBreite; }
+    public Integer getBildHoehe() { return bildHoehe; }
+    public Boolean getApp() { return app; }
 }

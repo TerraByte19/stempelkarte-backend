@@ -84,7 +84,8 @@ public class ScanController {
     }
 
     public record MessungRequest(String gegner, Integer altMs, Integer gegnerMs, String aktiv,
-                                 String plattform, String geraet) {}
+                                 String plattform, String geraet,
+                                 String lage, Integer bildBreite, Integer bildHoehe, Boolean app) {}
 
     @Operation(summary = "Eine Runde der stillen Scanner-Messung melden",
             description = "Keine Kundendaten: nur Geraet, Herausforderer und Zeiten. Erfordert X-Staff-Token.")
@@ -95,6 +96,7 @@ public class ScanController {
         }
         boolean ok = messungen != null && messungen.annehmen(p.staff().getShop().getId(), p.staff().getLabel(),
                 req.plattform(), req.geraet(), req.gegner(), req.altMs(), req.gegnerMs(), req.aktiv(),
+                req.lage(), req.bildBreite(), req.bildHoehe(), req.app(),
                 java.time.Instant.now()) != null;
         return java.util.Map.of("ok", ok);
     }
