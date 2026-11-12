@@ -107,8 +107,8 @@ public class NewsletterService {
                         inhalt,
                         new EmailService.NewsletterEmpfaenger(
                                 e.email(), e.stempel(), e.benoetigt(), e.belohnung(),
-                                baseUrl + "/mail/unsubscribe?cc=" + e.customerCardId() + "&t=" + e.authToken(),
-                                baseUrl + "/mail/delete-request?c=" + e.customerId()));
+                                com.example.stemplekarte.config.KundenLink.basis(baseUrl) + "/mail/unsubscribe?cc=" + e.customerCardId() + "&t=" + e.authToken(),
+                                com.example.stemplekarte.config.KundenLink.basis(baseUrl) + "/mail/delete-request?c=" + e.customerId()));
                 if (ok) gesendet++;
                 else fehlgeschlagen.add(e.email());
             }

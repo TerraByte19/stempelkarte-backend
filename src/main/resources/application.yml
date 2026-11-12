@@ -32,6 +32,8 @@ stempelkarte:
   admin-secret: ${ADMIN_SECRET:admin-geheim-nur-lokal}
   upload-path: ${UPLOAD_PATH:./uploads}
   base-url: ${APP_BASE_URL:http://localhost:8080}
+  # Adresse, die Kunden sehen (QR, Aufkleber, Mails). Leer = base-url. Siehe config.KundenLink.
+  kunden-url: ${APP_KUNDEN_URL:}
 
   # ── E-Mail-Einstellungen ─────────────────────────────────────────────
   # enabled=false: Mails werden nur geloggt (sicher für Dev/vor Brevo-Setup)

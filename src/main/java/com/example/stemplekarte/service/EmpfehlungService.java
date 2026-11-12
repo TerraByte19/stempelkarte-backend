@@ -83,7 +83,7 @@ public class EmpfehlungService {
 
     /** Auch fuer Pass und Google-Objekt, die ihre eigene baseUrl tragen. */
     public static String linkFuer(String baseUrl, String cardId, String code) {
-        return baseUrl + "/karte-neu/" + cardId + "?ref=" + code;
+        return com.example.stemplekarte.config.KundenLink.anmeldung(baseUrl, cardId) + "?ref=" + code;
     }
 
     /** Ein Satz fuer Karte, Pass und Anmeldeseite. */

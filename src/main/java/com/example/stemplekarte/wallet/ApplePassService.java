@@ -501,7 +501,7 @@ public class ApplePassService {
         pass.backFieldBuilder(PKField.builder()
                 .key("feedback").label(Texts.t(lang, "pass.feedback_label"))
                 .value(Texts.t(lang, "pass.feedback_text")
-                        + props.baseUrl() + "/bewertung/" + cc.getCustomer().getId() + "/" + card.getId()));
+                        + com.example.stemplekarte.config.KundenLink.basis(props.baseUrl()) + "/bewertung/" + cc.getCustomer().getId() + "/" + card.getId()));
     }
 
     /**

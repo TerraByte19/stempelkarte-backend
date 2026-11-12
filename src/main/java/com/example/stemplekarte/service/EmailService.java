@@ -85,9 +85,9 @@ public class EmailService {
 
         String lang = Texts.sprache(customer, shop);
         String shopName = shop.getName();
-        String confirmUrl = baseUrl + "/mail/confirm?token=" + customer.getConfirmToken()
+        String confirmUrl = com.example.stemplekarte.config.KundenLink.basis(baseUrl) + "/mail/confirm?token=" + customer.getConfirmToken()
                 + "&customerId=" + customer.getId() + "&cardId=" + cardId;
-        String deleteUrl  = baseUrl + "/mail/delete-request?c=" + customer.getId();
+        String deleteUrl  = com.example.stemplekarte.config.KundenLink.basis(baseUrl) + "/mail/delete-request?c=" + customer.getId();
 
         String html = seite(
                 lang, shop,
@@ -126,7 +126,7 @@ public class EmailService {
     // kartenspezifisch).
     @Async
     public void sendDeletionMail(Customer customer) {
-        String deleteConfirmUrl = baseUrl + "/mail/delete-confirm?token=" + customer.getDeleteToken();
+        String deleteConfirmUrl = com.example.stemplekarte.config.KundenLink.basis(baseUrl) + "/mail/delete-confirm?token=" + customer.getDeleteToken();
         String lang = Texts.sprache(customer, null);
 
         String html = seite(

@@ -88,7 +88,7 @@ public class DemoService {
             if (!shop.isActive()) continue;
             for (Card c : cardRepo.findByShopAndActiveTrue(shop)) {
                 out.add(new DemoKarte(c.getId(), c.getName(), c.getDescription(), c.getType().name(),
-                        shop.getName(), props.baseUrl() + "/karte-neu/" + c.getId()));
+                        shop.getName(), com.example.stemplekarte.config.KundenLink.anmeldung(props.baseUrl(), c.getId())));
             }
         }
         return out;

@@ -101,6 +101,8 @@ public class SecurityConfig {
                         .requestMatchers("/api/shop/stamp-icons/**").permitAll()
                         .requestMatchers("/wallet/**").permitAll()
                         .requestMatchers("/karte/**", "/karte-neu/**", "/logos/**").permitAll()
+                        // Kurze Kundenadresse karte.../CARD-XXXXXXXX (config.KundenLink)
+                        .requestMatchers("/CARD-*").permitAll()
                         // Bewertungsseite fuer Kunden (Rueckmeldung an den Laden)
                         .requestMatchers("/bewertung/**").permitAll()
                         .requestMatchers("/mail/**").permitAll()

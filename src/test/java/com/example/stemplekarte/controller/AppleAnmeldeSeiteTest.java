@@ -87,7 +87,7 @@ class AppleAnmeldeSeiteTest {
         String html = controller.newCustomerPage("CARD-1", null, null).getBody();
         assertThat(html).contains("appleid/1/de_DE/appleid.auth.js")
                 .contains("clientId: \"de.stampit.web\"")
-                .contains("redirectURI: \"https://api.example/karte-neu/apple\"")
+                .contains("redirectURI: window.location.origin + '/karte-neu/apple'")
                 .contains("id='appleid-signin'").contains("onAppleCredential")
                 .contains("class='oder'>oder mit E-Mail</div>")
                 .doesNotContain("gsi/client")                     // Google aus

@@ -866,7 +866,9 @@ public class LandingController {
     }
 
     // Neue Landing-Page für Kunden ohne ID
-    @GetMapping(value = "/karte-neu/{cardId}", produces = MediaType.TEXT_HTML_VALUE)
+    // Zweite, kurze Adresse "/CARD-..." fuer die eigene Kundenadresse (config.KundenLink).
+    @GetMapping(value = {"/karte-neu/{cardId}", "/{cardId:" + com.example.stemplekarte.config.KundenLink.KURZ_MUSTER + "}"},
+            produces = MediaType.TEXT_HTML_VALUE)
     public ResponseEntity<String> newCustomerPage(@PathVariable String cardId,
                                                   @RequestParam(value = "lang", required = false) String langParam,
                                                   @RequestParam(value = "ref", required = false) String ref) {
@@ -1155,7 +1157,7 @@ public class LandingController {
                     anmeldeFormular(lang, card, shopName),
                     t(lang, "signup.sent_title"), t(lang, "signup.sent_text"),
                     bewertungsLink(lang, card.getShop()),
-                    sprachenLeiste(lang, "/karte-neu/" + cardId, ref),
+                    sprachenLeiste(lang, com.example.stemplekarte.config.KundenLink.anmeldePfad(cardId), ref),
                     toJsString(t(lang, "signup.err_fields")), toJsString(t(lang, "signup.err_birthday")),
                     toJsString(t(lang, "signup.err_phone")), toJsString(t(lang, "signup.err_generic")),
                     toJsString(cardId), toJsString(t(lang, "signup.google_error")),
@@ -1620,7 +1622,7 @@ public class LandingController {
                 // Fehler verschlucken koennen.
                 + "<script>window.appleInit = function () {"
                 + " AppleID.auth.init({ clientId: " + toJsString(appleAnmeldung.clientId())
-                + ", scope: 'name email', redirectURI: " + toJsString(baseUrl + "/karte-neu/apple") + ", usePopup: true });"
+                + ", scope: 'name email', redirectURI: window.location.origin + '/karte-neu/apple', usePopup: true });"
                 + " document.addEventListener('AppleIDSignInOnSuccess', function (e) { window.onAppleCredential(e.detail) });"
                 + " document.addEventListener('AppleIDSignInOnFailure', function (e) {"
                 + " var f = e && e.detail && e.detail.error;"

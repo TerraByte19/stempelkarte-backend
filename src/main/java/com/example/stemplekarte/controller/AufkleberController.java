@@ -51,7 +51,7 @@ public class AufkleberController {
                                             Authentication auth) throws Exception {
         Shop shop = currentShop(auth);
         Card card = cardService.getByIdAndShop(cardId, shop);
-        String link = props.baseUrl() + "/karte-neu/" + card.getId();
+        String link = com.example.stemplekarte.config.KundenLink.anmeldung(props.baseUrl(), card.getId());
         AufkleberService.Texte texte = AufkleberService.texte(titel, zeile, shop.getName(), card.getName());
         byte[] png = einzeln
                 ? aufkleberService.einzeln(link, texte)

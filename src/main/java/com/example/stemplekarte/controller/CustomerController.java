@@ -190,7 +190,7 @@ public class CustomerController {
     public byte[] qr(@PathVariable String customerId,
                      @PathVariable String cardId) throws Exception {
         customerService.getOrCreateCustomerCard(customerId, cardId);
-        String landingUrl = baseUrl + "/karte/" + customerId + "/" + cardId;
+        String landingUrl = com.example.stemplekarte.config.KundenLink.basis(baseUrl) + "/karte/" + customerId + "/" + cardId;
         var matrix = new QRCodeWriter().encode(landingUrl, BarcodeFormat.QR_CODE, 280, 280);
         var baos = new ByteArrayOutputStream();
         MatrixToImageWriter.writeToStream(matrix, "PNG", baos);
@@ -201,7 +201,7 @@ public class CustomerController {
     @GetMapping(value = "/card/{cardId}/qr-shop", produces = MediaType.IMAGE_PNG_VALUE)
     public byte[] shopQr(@PathVariable String cardId) throws Exception {
         cardService.getById(cardId);
-        String landingUrl = baseUrl + "/karte-neu/" + cardId;
+        String landingUrl = com.example.stemplekarte.config.KundenLink.anmeldung(baseUrl, cardId);
         var matrix = new QRCodeWriter().encode(landingUrl, BarcodeFormat.QR_CODE, 600, 600);
         var baos = new ByteArrayOutputStream();
         MatrixToImageWriter.writeToStream(matrix, "PNG", baos);
