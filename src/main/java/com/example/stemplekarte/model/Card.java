@@ -212,6 +212,13 @@ public class Card {
     // Der Titel steht rechts oben im Kopf - viel Platz ist da nicht.
     public static final int WILLKOMMEN_TITEL_MAX = 18;
     public static final int WILLKOMMEN_HINWEIS_MAX = 40;
+    // ── NFC-Karte des Ladens ──────────────────────────────────────────────
+    // Zufallsschluessel, der in den NFC-Tag am Tresen geschrieben wird
+    // (/t/<token>). Identifiziert die Karte, nicht den Kunden - der kommt
+    // aus dem Cookie im Kundenhandy. Nullable: Bestandskarten haben keinen,
+    // er entsteht erst, wenn der Laden die NFC-Karte anfordert.
+    @Column(name = "nfc_token", length = 64, unique = true)
+    private String nfcToken;
 
     protected Card() {}
 
@@ -541,5 +548,18 @@ public class Card {
     public Integer getPointsPerEuroX100() { return pointsPerEuroX100; }
     public PointsRounding getPointsRounding() {
         return pointsRounding != null ? pointsRounding : PointsRounding.GENAU;
+    }
+
+    public String getNfcToken() { return nfcToken; }
+
+    /**
+     * Setzt einen neuen NFC-Schluessel und gibt ihn zurueck. Jeder Aufruf
+     * macht den alten Schluessel wertlos - genau das ist der Zweck, wenn
+     * eine NFC-Karte verloren geht. Der Laden muss danach eine neue Karte
+     * beschreiben.
+     */
+    public String neuerNfcToken() {
+        this.nfcToken = UUID.randomUUID().toString().replace("-", "");
+        return this.nfcToken;
     }
 }

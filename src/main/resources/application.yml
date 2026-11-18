@@ -65,6 +65,17 @@ stempelkarte:
     class-suffix: stempelkarte_class_v1
     service-account-path: C:/Users/adham/Downloads/stempelkarte-496400-8da6689f7402.json
 
+  # ── NFC-Karte am Tresen ──────────────────────────────────────────────
+  # Mitarbeiter haelt die Karte ans Kundenhandy, das Handy oeffnet /t/<token>,
+  # der Stempel landet in der Wallet-Karte.
+  nfc:
+    enabled: ${NFC_ENABLED:true}
+    # Ohne NFC_COOKIE_SECRET bleibt NFC abgeschaltet (kein oeffentlich bekannter Vorgabewert).
+    cookie-secret: ${NFC_COOKIE_SECRET:}
+    # 12 Stunden: die NFC-Karte traegt einen festen Link, den der Kunde aus dem
+    # Verlauf wieder oeffnen koennte. So gibt es hoechstens einen Stempel je halbem Tag.
+    cooldown-seconds: ${NFC_COOLDOWN_SECONDS:43200}
+
   apns:
     enabled: ${APNS_ENABLED:false}
     key-id: ${APNS_KEY_ID:}

@@ -626,6 +626,34 @@ public class ShopController {
                 card.zeigtWillkommenGeschenk(), card.zeigtWillkommenHinweis());
     }
 
+    // ── NFC-Karte fuer den Tresen ─────────────────────────────────────────
+    // Die Adresse, die auf den NFC-Tag geschrieben wird. Beim ersten Abruf
+    // entsteht der Schluessel; Bestandskarten haben keinen.
+
+    public record NfcResponse(String url, String token) {}
+
+    @Operation(summary = "NFC-Adresse der Karte holen (legt beim ersten Mal den Schluessel an)")
+    @GetMapping("/cards/{cardId}/nfc")
+    public NfcResponse nfcUrl(@PathVariable String cardId, Authentication auth) {
+        Card card = cardService.getByIdAndShop(cardId, currentShop(auth));
+        if (card.getNfcToken() == null) {
+            card.neuerNfcToken();
+            cardService.save(card);
+        }
+        return new NfcResponse(baseUrl + "/t/" + card.getNfcToken(), card.getNfcToken());
+    }
+
+    @Operation(summary = "Neuen NFC-Schluessel erzeugen",
+            description = "Fuer verlorene Karten: die alte NFC-Karte stempelt danach nicht mehr. "
+                    + "Die neue Adresse muss auf einen Tag geschrieben werden.")
+    @PostMapping("/cards/{cardId}/nfc/neu")
+    public NfcResponse nfcNeu(@PathVariable String cardId, Authentication auth) {
+        Card card = cardService.getByIdAndShop(cardId, currentShop(auth));
+        String token = card.neuerNfcToken();
+        cardService.save(card);
+        return new NfcResponse(baseUrl + "/t/" + token, token);
+    }
+
     @Operation(summary = "Praemien einer Karte auflisten")
     @GetMapping("/cards/{cardId}/rewards")
     public List<RewardResponse> listRewards(@PathVariable String cardId, Authentication auth) {

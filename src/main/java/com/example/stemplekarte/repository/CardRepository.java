@@ -14,6 +14,11 @@ public interface CardRepository extends JpaRepository<Card, String> {
 
     List<Card> findByShopAndActiveTrue(Shop shop);
 
+    // NFC-Tag am Tresen loest nur den Token auf. Shop muss mit, weil der
+    // Stempelweg ihn braucht und die Hibernate-Session danach zu ist.
+    @EntityGraph(attributePaths = {"shop"})
+    Optional<Card> findByNfcToken(String nfcToken);
+
     // Für vollständige Shop-Löschung (auch inaktive Karten)
     List<Card> findByShop(Shop shop);
 }

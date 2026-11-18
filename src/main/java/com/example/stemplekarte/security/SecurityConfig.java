@@ -105,6 +105,9 @@ public class SecurityConfig {
                         .requestMatchers("/CARD-*").permitAll()
                         // Bewertungsseite fuer Kunden (Rueckmeldung an den Laden)
                         .requestMatchers("/bewertung/**").permitAll()
+                        // NFC-Karte am Tresen: der Kunde weist sich mit seinem
+                        // signierten Cookie aus, nicht mit einem Login.
+                        .requestMatchers("/t/**").permitAll()
                         .requestMatchers("/mail/**").permitAll()
                         // Kontaktformular der Landing-Page
                         .requestMatchers("/api/public/**").permitAll()

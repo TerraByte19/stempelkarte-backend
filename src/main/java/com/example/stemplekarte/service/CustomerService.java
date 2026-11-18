@@ -320,7 +320,19 @@ public class CustomerService {
     /** ortId: Filiale (ShopOrt.id), in der gescannt wurde - nur fuers Protokoll. Null = Hauptstandort. */
     @Transactional
     public ScanResult processScan(String qrPayload, Shop shop, int count, String staffLabel, String ortId) {
-        QrPayload qr = QrPayload.parse(qrPayload, customerCardRepo);
+        return stempeln(QrPayload.parse(qrPayload, customerCardRepo), shop, count, staffLabel, ortId);
+    }
+
+    /**
+     * Stempeln ohne QR-Umweg. Der NFC-Weg kennt Kunde und Karte direkt.
+     */
+    @Transactional
+    public ScanResult processScan(QrPayload qr, Shop shop, int count) {
+        return stempeln(qr, shop, count, null, null);
+    }
+
+    @Transactional
+    public ScanResult stempeln(QrPayload qr, Shop shop, int count, String staffLabel, String ortId) {
         String customerId = qr.customerId();
         String cardId = qr.cardId();
 

@@ -8,7 +8,10 @@ import com.example.stemplekarte.service.RewardService;
 import com.example.stemplekarte.model.CustomerCard;
 import com.example.stemplekarte.service.CardService;
 import com.example.stemplekarte.service.CustomerService;
+import com.example.stemplekarte.service.KundenCookie;
 import com.example.stemplekarte.wallet.GoogleWalletService;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -54,6 +57,9 @@ public class LandingController {
 
     @Value("${stempelkarte.base-url:http://localhost:8080}")
     private String baseUrl;
+
+    @Value("${stempelkarte.nfc.cookie-secret:}")
+    private String nfcCookieSecret;
 
     public LandingController(CustomerService customerService, CardService cardService,
                              GoogleWalletService googleWalletService,
@@ -563,11 +569,39 @@ public class LandingController {
                 .replace("\"", "&quot;").replace("'", "&#39;");
     }
 
+    /** Ohne Anfrage (Tests, alte Aufrufer): kein Cookie. */
+    public ResponseEntity<String> landingPage(String customerId, String cardId, String langParam) {
+        return landingPage(customerId, cardId, langParam, null, null);
+    }
+
     @GetMapping(value = "/karte/{customerId}/{cardId}", produces = MediaType.TEXT_HTML_VALUE)
     public ResponseEntity<String> landingPage(@PathVariable String customerId,
                                               @PathVariable String cardId,
-                                              @RequestParam(value = "lang", required = false) String langParam) {
+                                              @RequestParam(value = "lang", required = false) String langParam,
+                                              HttpServletRequest request,
+                                              HttpServletResponse response) {
         try {
+            // Hier - und nur hier - erfaehrt das Handy, wem es gehoert. Beim
+            // NFC-Tippen am Tresen traegt die Karte des Ladens keine Kunden-ID
+            // mit sich; sie kommt dann aus diesem Cookie. Jeder Kunde landet
+            // nach der Anmeldung auf dieser Seite, also ist das die Stelle.
+            //
+            // Wer diese Adresse hat, hat ohnehin volle Gewalt ueber die Karte:
+            // die Seite zeigt den Stand und laedt den Wallet-Pass herunter,
+            // beides ohne Anmeldung. Das Cookie gibt also nichts her, was der
+            // Link nicht schon gibt. Es darf nur nicht STILL gesetzt werden -
+            // siehe KundenCookie#darfSetzen.
+            if (nfcCookieSecret != null && !nfcCookieSecret.isBlank()
+                    && request != null && response != null
+                    && KundenCookie.darfSetzen(request)) {
+                KundenCookie.lesen(request, nfcCookieSecret)
+                        .filter(alt -> !alt.equals(customerId))
+                        .ifPresent(alt -> log.warn(
+                                "[NFC] Kunden-Cookie wechselt von {} auf {}", alt, customerId));
+                KundenCookie.setzen(response, customerId, nfcCookieSecret,
+                        baseUrl.startsWith("https://"));
+            }
+
             CustomerCard cc = customerService.getOrCreateCustomerCard(customerId, cardId);
             Card card = cc.getCard();
             Customer customer = cc.getCustomer();

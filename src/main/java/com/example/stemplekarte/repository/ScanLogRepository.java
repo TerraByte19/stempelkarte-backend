@@ -7,6 +7,7 @@ import org.springframework.data.repository.query.Param;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 
 public interface ScanLogRepository extends JpaRepository<ScanLog, String> {
 
@@ -29,6 +30,10 @@ public interface ScanLogRepository extends JpaRepository<ScanLog, String> {
 
     // Wie viel hat ein Mitarbeiter-Zugang (nach Name) seit <after> gestempelt.
     long countByShopIdAndStaffLabelAndScannedAtAfter(String shopId, String staffLabel, Instant after);
+    // Letzter Stempel dieses Kunden auf dieser Karte. Grundlage der
+    // Abklingzeit beim NFC-Tippen: ohne sie gibt ein zweites Antippen
+    // sofort den naechsten Stempel.
+    Optional<ScanLog> findFirstByCustomerIdAndCardIdOrderByScannedAtDesc(String customerId, String cardId);
 
     // Alle Scans eines Shops in einem Zeitfenster (Tages-Detail: Stunden-
     // verteilung fuer EINEN Tag).

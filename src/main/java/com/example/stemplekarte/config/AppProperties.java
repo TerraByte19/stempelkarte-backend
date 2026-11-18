@@ -8,7 +8,8 @@ public record AppProperties(
         String baseUrl,
         Apple apple,
         Google google,
-        Apns apns
+        Apns apns,
+        Nfc nfc
 ) {
     public record Apple(
             String passTypeIdentifier,
@@ -25,6 +26,21 @@ public record AppProperties(
             String issuerId,
             String classSuffix,
             String serviceAccountPath
+    ) {}
+
+    /**
+     * NFC-Karte am Tresen.
+     *
+     * @param cookieSecret   signiert das Kunden-Cookie. Wird er geaendert,
+     *                       sind alle Cookies ungueltig und die Kunden
+     *                       muessen ihre Karte einmal wieder oeffnen.
+     * @param cooldownSeconds Mindestabstand zwischen zwei Stempeln desselben
+     *                        Kunden auf derselben Karte.
+     */
+    public record Nfc(
+            boolean enabled,
+            String cookieSecret,
+            int cooldownSeconds
     ) {}
 
     public record Apns(
