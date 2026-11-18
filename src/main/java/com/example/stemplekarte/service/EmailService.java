@@ -103,6 +103,8 @@ public class EmailService {
                 deleteUrl
         );
 
+        // Kunde ohne E-Mail: die Platzhalter-Adresse nie anschreiben.
+        if (customer.isOhneMail()) return;
         send(customer.getEmail(), shopName, null,
                 Texts.t(lang, "mail.confirm_subject", shopName), html);
     }
@@ -141,6 +143,7 @@ public class EmailService {
                 null
         );
 
+        if (customer.isOhneMail()) return;
         send(customer.getEmail(), "Stampit", null,
                 Texts.t(lang, "mail.delete_subject"), html);
     }

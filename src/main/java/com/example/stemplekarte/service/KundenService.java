@@ -203,7 +203,7 @@ public class KundenService {
         Card card = cc.getCard();
         Instant besuch = cc.getLastVisitAt();
         return new Kunde(cc.getId(), cc.getCustomer().getId(),
-                cc.getCustomer().getName(), cc.getCustomer().getEmail(),
+                cc.getCustomer().getName(), cc.getCustomer().getEmailAnzeige(),
                 card.getId(), card.getName(), card.getType().name(),
                 cc.getStamps(), card.getRewardThreshold(),
                 cc.getPointsX100(), PointsMath.formatiere(cc.getPointsX100()),

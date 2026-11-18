@@ -210,6 +210,14 @@ public class ShopService {
         return shopRepo.save(shop);
     }
 
+    /** Karte ohne Anmeldung (ohne Name und E-Mail) ein- oder ausschalten. */
+    @Transactional
+    public Shop updateAnmeldungOhneMail(String shopId, boolean an) {
+        Shop shop = getById(shopId);
+        shop.updateAnmeldungOhneMail(an);
+        return shopRepo.save(shop);
+    }
+
     private static String feldWert(String wert, String feld) {
         if (wert == null || wert.isBlank()) return Shop.FELD_AUS;
         String w = wert.trim().toUpperCase(java.util.Locale.ROOT);

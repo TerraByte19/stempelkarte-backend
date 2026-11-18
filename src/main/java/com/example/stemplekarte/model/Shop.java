@@ -164,6 +164,11 @@ public class Shop {
     @Column(name = "signup_phone", length = 10)
     private String signupPhone;
 
+    // Karte ohne Anmeldung: der Kunde tippt nichts, ein Tipp auf "Karte
+    // holen" reicht. Null = aus (wie bisher mit Name und E-Mail).
+    @Column(name = "signup_ohne_mail")
+    private Boolean signupOhneMail;
+
     // Automatischer Geburtstagsgruss: am Geburtstag eine Kampagne an alle
     // Karten, die heute Geburtstag haben (GeburtstagsService). Null = aus.
     @Column(name = "birthday_greeting_enabled")
@@ -523,6 +528,13 @@ public class Shop {
     public void updateAnmeldefelder(String birthday, String phone) {
         this.signupBirthday = birthday;
         this.signupPhone = phone;
+        this.updatedAt = Instant.now();
+    }
+
+    public boolean isAnmeldungOhneMail() { return Boolean.TRUE.equals(signupOhneMail); }
+
+    public void updateAnmeldungOhneMail(boolean an) {
+        this.signupOhneMail = an;
         this.updatedAt = Instant.now();
     }
 

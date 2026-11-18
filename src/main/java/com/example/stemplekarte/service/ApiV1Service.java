@@ -76,7 +76,7 @@ public class ApiV1Service {
                 .toList();
         // Ein Kunde ohne Karte bei diesem Laden "gibt es" fuer den Laden nicht.
         if (karten.isEmpty()) throw new NoSuchElementException("Kunde nicht gefunden");
-        return new KundeView(c.getId(), c.getName(), c.getEmail(), c.isEmailConfirmed(), karten);
+        return new KundeView(c.getId(), c.getName(), c.getEmailAnzeige(), c.isEmailConfirmed(), karten);
     }
 
     private static KundenkarteView karte(CustomerCard cc, Kundengruppe.Regeln regeln, java.time.Instant jetzt) {

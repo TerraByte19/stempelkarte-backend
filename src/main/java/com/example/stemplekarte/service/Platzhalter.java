@@ -38,7 +38,8 @@ public final class Platzhalter {
 
     static String vorname(CustomerCard cc) {
         String name = cc.getCustomer() != null ? cc.getCustomer().getName() : null;
-        if (name == null) return "";
+        // Kunde ohne Anmeldung heisst nur "Kunde 12345" - das ist kein Vorname.
+        if (name == null || cc.getCustomer().isOhneMail()) return "";
         String[] teile = name.trim().split("\\s+");
         return teile.length > 0 ? teile[0] : "";
     }

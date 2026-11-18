@@ -64,6 +64,8 @@ class KundenServiceTest {
         when(c.getId()).thenReturn(id);
         when(c.getName()).thenReturn(name);
         when(c.getEmail()).thenReturn(email);
+        // Die Kundenliste zeigt die Anzeige-Adresse (null bei Kunden ohne E-Mail).
+        when(c.getEmailAnzeige()).thenReturn(email);
         when(c.isEmailConfirmed()).thenReturn(true);
         CustomerCard cc = CustomerCard.create(c, karte);
         for (int i = 0; i < stempel; i++) cc.addStamp();

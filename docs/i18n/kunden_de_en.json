@@ -800,7 +800,19 @@
   "en": "Signing you in. You can close this window."
  },
  "signup.oder": {
-  "de": "oder",
-  "en": "or"
+  "de": "oder mit E-Mail",
+  "en": "or with email"
+ },
+ "signup.direct_text": {
+  "de": "Ein Tipp, und deine Karte ist da. Ohne Anmeldung, ohne E-Mail.",
+  "en": "One tap and your card is ready. No sign-up, no email."
+ },
+ "signup.text_schnell": {
+  "de": "Einmal tippen, und die Stempelkarte ist direkt in deiner Wallet.",
+  "en": "One tap and the stamp card is straight in your wallet."
+ },
+ "signup.text_gift_schnell": {
+  "de": "Hol dir die Karte in die Wallet. Zeig sie an der Kasse, und das Geschenk gehört dir. Danach sammelst du Stempel.",
+  "en": "Get the card into your wallet. Show it at the till and the gift is yours. After that you collect stamps."
  }
 }

@@ -244,6 +244,70 @@ public class StampDesignController {
         return out;
     }
 
+    // ── Weiteres Stempel-Bild anhaengen ───────────────────────────────────
+    // Die Bilder wechseln sich im Raster der Reihe nach ab (Feld 1 = Bild 1,
+    // Feld 2 = Bild 2, ..., danach von vorn). Eigene Public-ID je Upload,
+    // damit kein Bild ein anderes ueberschreibt.
+    @PostMapping("/cards/{cardId}/stamp-icons")
+    public Map<String, Object> addCardStampIcon(@PathVariable String cardId,
+                                                @RequestBody ImageUploadRequest req,
+                                                Authentication auth) {
+        Shop shop = currentShop(auth);
+        Card card = cardService.getByIdAndShop(cardId, shop);
+        java.util.List<String> liste = new java.util.ArrayList<>(card.getStampIconListe());
+        // Vor dem Hochladen pruefen - sonst liegt das Bild schon bei
+        // Cloudinary, obwohl es abgelehnt wird.
+        if (liste.size() >= Card.MAX_STEMPEL_BILDER) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Hoechstens " + Card.MAX_STEMPEL_BILDER + " Stempel-Bilder");
+        }
+        String url = cloudinary.upload(req.base64(),
+                "stamp-" + card.getId() + "-" + System.currentTimeMillis(),
+                CloudinaryService.ImageType.STAMP);
+        liste.add(url);
+        card.setStampIconListe(liste);
+        cardService.save(card);
+        // Wie beim einzelnen Stempel-Bild: nur Apple-Streifen, Google unberuehrt.
+        return stempelBilder(card);
+    }
+
+    public record StampIconsRequest(java.util.List<String> urls) {}
+
+    // ── Reihenfolge aendern oder Bilder entfernen ─────────────────────────
+    // Nimmt nur Adressen an, die schon an dieser Karte haengen. Neue Bilder
+    // kommen ausschliesslich ueber den Upload - so kann hier niemand eine
+    // fremde Adresse unterschieben, die der Server spaeter abruft.
+    @PutMapping("/cards/{cardId}/stamp-icons")
+    public Map<String, Object> setCardStampIcons(@PathVariable String cardId,
+                                                 @RequestBody StampIconsRequest req,
+                                                 Authentication auth) {
+        Shop shop = currentShop(auth);
+        Card card = cardService.getByIdAndShop(cardId, shop);
+        if (req == null || req.urls() == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "urls fehlt");
+        }
+        java.util.List<String> vorhanden = card.getStampIconListe();
+        java.util.Set<String> gesehen = new java.util.HashSet<>();
+        for (String url : req.urls()) {
+            if (url == null || !vorhanden.contains(url) || !gesehen.add(url)) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "Unbekanntes oder doppeltes Stempel-Bild");
+            }
+        }
+        card.setStampIconListe(req.urls());
+        cardService.save(card);
+        return stempelBilder(card);
+    }
+
+    private Map<String, Object> stempelBilder(Card card) {
+        Map<String, Object> out = new HashMap<>();
+        out.put("stampIconUrls", card.getStampIconListe());
+        out.put("stampIconUrl", card.getStampIconUrl() != null ? card.getStampIconUrl() : "");
+        out.put("stampIconOriginalUrl",
+                card.getStampIconOriginalUrl() != null ? card.getStampIconOriginalUrl() : "");
+        return out;
+    }
+
     // ── Alte Shop-weite Endpoints (Rückwärtskompatibilität) ────────────────
     @GetMapping("/design")
     public Map<String, Object> getShopDesign(Authentication auth) {
@@ -294,6 +358,7 @@ public class StampDesignController {
         map.put("stampColor", card.getStampColor());
         map.put("emptyStampStyle", card.getEmptyStampStyle());
         map.put("stampIconUrl", card.getStampIconUrl() != null ? card.getStampIconUrl() : "");
+        map.put("stampIconUrls", card.getStampIconListe());
         map.put("colorBackground", card.getColorBackground());
         map.put("colorForeground", card.getColorForeground());
         map.put("colorLabel", card.getColorLabel());

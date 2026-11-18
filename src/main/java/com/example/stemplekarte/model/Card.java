@@ -82,6 +82,16 @@ public class Card {
     @Column(name = "stamp_icon_original_url")
     private String stampIconOriginalUrl;
 
+    // Mehrere eigene Stempel-Bilder in fester Reihenfolge, eine Adresse je
+    // Zeile. NULL = wie bisher nur stampIconUrl. Ist die Liste gesetzt, ist
+    // stampIconUrl immer ihr erster Eintrag - aeltere Stellen und ein
+    // aelteres Panel sehen so weiter ein gueltiges Bild.
+    @Column(name = "stamp_icon_urls", length = 4000)
+    private String stampIconUrls;
+
+    /** Mehr Bilder als Felder in einer Reihe ergeben kein ruhiges Raster mehr. */
+    public static final int MAX_STEMPEL_BILDER = 10;
+
     @Column(name = "stamp_color", length = 32)
     private String stampColor;
 
@@ -435,7 +445,60 @@ public class Card {
     public void setRewardThreshold(int rewardThreshold) { this.rewardThreshold = rewardThreshold; }
     public void setLogoUrl(String logoUrl) { this.logoUrl = logoUrl; }
     public void setHeroImageUrl(String heroImageUrl) { this.heroImageUrl = heroImageUrl; }
-    public void setStampIconUrl(String stampIconUrl) { this.stampIconUrl = stampIconUrl; }
+    /**
+     * Setzt das (erste) Stempel-Bild. Gibt es schon eine Liste, wird ihr
+     * erster Eintrag ersetzt - sonst liefen Liste und Einzelfeld auseinander.
+     */
+    public void setStampIconUrl(String stampIconUrl) {
+        this.stampIconUrl = stampIconUrl;
+        if (stampIconUrls != null && !stampIconUrls.isBlank()
+                && stampIconUrl != null && !stampIconUrl.isBlank()) {
+            java.util.List<String> liste = new java.util.ArrayList<>(getStampIconListe());
+            liste.set(0, stampIconUrl);
+            this.stampIconUrls = String.join("\n", liste);
+        }
+    }
+
+    /**
+     * Alle eigenen Stempel-Bilder in Reihenfolge, nie null. Ohne Liste das
+     * eine Bild von frueher, ohne Bild leer.
+     */
+    public java.util.List<String> getStampIconListe() {
+        java.util.List<String> liste = new java.util.ArrayList<>();
+        if (stampIconUrls != null && !stampIconUrls.isBlank()) {
+            for (String zeile : stampIconUrls.split("\n")) {
+                if (!zeile.isBlank()) liste.add(zeile.trim());
+            }
+        }
+        if (liste.isEmpty() && stampIconUrl != null && !stampIconUrl.isBlank()) {
+            liste.add(stampIconUrl);
+        }
+        return liste;
+    }
+
+    /**
+     * Ersetzt die ganze Liste. Das erste Bild steht zusaetzlich im alten
+     * Einzelfeld. Wechselt das erste Bild, passt das gespeicherte Original
+     * (zum erneuten Zuschneiden) nicht mehr dazu und faellt weg.
+     */
+    public void setStampIconListe(java.util.List<String> urls) {
+        java.util.List<String> sauber = new java.util.ArrayList<>();
+        if (urls != null) {
+            for (String u : urls) {
+                if (u != null && !u.isBlank()) sauber.add(u.trim());
+            }
+        }
+        if (sauber.size() > MAX_STEMPEL_BILDER) {
+            throw new IllegalArgumentException(
+                    "Hoechstens " + MAX_STEMPEL_BILDER + " Stempel-Bilder");
+        }
+        String erstes = sauber.isEmpty() ? null : sauber.get(0);
+        if (!java.util.Objects.equals(erstes, this.stampIconUrl)) {
+            this.stampIconOriginalUrl = null;
+        }
+        this.stampIconUrl = erstes;
+        this.stampIconUrls = sauber.isEmpty() ? null : String.join("\n", sauber);
+    }
     public void setLogoOriginalUrl(String v) { this.logoOriginalUrl = v; }
     public void setHeroOriginalUrl(String v) { this.heroOriginalUrl = v; }
     public void setStripImageUrl(String v) { this.stripImageUrl = v; }

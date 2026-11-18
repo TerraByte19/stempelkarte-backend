@@ -144,6 +144,43 @@ public class LandingController {
         return Map.of("status", "ok", "url", "/karte/" + cc.getCustomer().getId() + "/" + req.cardId());
     }
 
+    public record DirektRequest(String cardId, String ref, String language) {}
+
+    // Offener Endpunkt, der bei jedem Aufruf einen Kunden anlegt: je Adresse
+    // begrenzen. Grosszuegiger als bei Google/Apple, weil im Laden viele
+    // Kunden ueber dasselbe WLAN (eine Adresse) kommen koennen.
+    private static final com.example.stemplekarte.service.Drossel DIREKT_DROSSEL =
+            new com.example.stemplekarte.service.Drossel(60, java.time.Duration.ofMinutes(10));
+
+    /**
+     * Karte ohne Anmeldung: nur wenn der Laden es eingeschaltet hat. Kein
+     * Name, keine E-Mail, keine Mail - die Antwort traegt den Link zur Karte
+     * und die Kunden-ID, die sich die Anmeldeseite im Browser merkt.
+     */
+    @PostMapping("/karte-neu/register-direkt")
+    public Map<String, Object> registerDirekt(@RequestBody DirektRequest req,
+                                              jakarta.servlet.http.HttpServletRequest http) {
+        if (req == null || req.cardId() == null || req.cardId().isBlank()) {
+            throw new IllegalArgumentException("cardId fehlt");
+        }
+        DIREKT_DROSSEL.pruefe(clientIp(http), java.time.Instant.now());
+        CustomerCard cc = customerService.registerOhneMail(req.cardId(), req.ref(), Texts.gewaehlt(req.language()));
+        String customerId = cc.getCustomer().getId();
+        log.info("[DIREKT] Anmeldung ohne E-Mail karte={} kunde={}", req.cardId(), customerId);
+        return Map.of("status", "ok", "customerId", customerId,
+                "url", "/karte/" + customerId + "/" + req.cardId());
+    }
+
+    /**
+     * Fragt die Anmeldeseite, bevor sie auf eine gemerkte Karte weiterleitet:
+     * gibt es die Karte noch? Ohne diese Frage landete ein Kunde, dessen
+     * Karte geloescht wurde, fuer immer auf "Karte nicht gefunden".
+     */
+    @GetMapping("/karte-neu/vorhanden/{customerId}/{cardId}")
+    public Map<String, Object> karteVorhanden(@PathVariable String customerId, @PathVariable String cardId) {
+        return Map.of("vorhanden", customerService.hatKarte(customerId, cardId));
+    }
+
     /** Adresse des Aufrufers; hinter Render steht sie im X-Forwarded-For. */
     private static String clientIp(jakarta.servlet.http.HttpServletRequest http) {
         String forwarded = http != null ? http.getHeader("X-Forwarded-For") : null;
@@ -882,6 +919,16 @@ public class LandingController {
             String bgColor = farbeVon(card);
             String logoUrl = logoVon(card);
 
+            // Laden gibt Karten ohne Anmeldung aus: eigene, kleine Seite mit
+            // einem Knopf. Die Seite darunter bleibt fuer alle anderen Laeden
+            // Zeichen fuer Zeichen wie bisher.
+            if (card.getShop().isAnmeldungOhneMail()) {
+                return ResponseEntity.ok()
+                        .header(org.springframework.http.HttpHeaders.CACHE_CONTROL, "no-cache")
+                        .body(mitKontrast(direktSeite(lang, explizit, card, cardId, ref, shopName, bgColor, logoUrl),
+                                bgColor, card.getShop().getNameColor()));
+            }
+
             String html = """
                     <!DOCTYPE html>
                     <html%s>
@@ -1172,6 +1219,133 @@ public class LandingController {
         } catch (Exception e) {
             return ResponseEntity.ok("<html><body style='font-family:sans-serif;padding:40px;text-align:center'><h2>Karte nicht gefunden</h2></body></html>");
         }
+    }
+
+    /**
+     * Anmeldeseite ohne Formular: ein Knopf "Karte holen".
+     *
+     * Ohne E-Mail erkennt der Server niemanden wieder. Deshalb merkt sich
+     * die Seite die Kunden-ID im Browser (localStorage, je Karte) und leitet
+     * beim naechsten Aufruf auf die vorhandene Karte weiter, statt eine
+     * zweite, leere auszugeben. Vorher fragt sie den Server, ob es die Karte
+     * noch gibt. Ist der Speicher gesperrt (privates Fenster) oder geleert,
+     * gibt es eine neue Karte - das laesst sich ohne Anmeldung nicht aendern.
+     *
+     * Der Knopf ist Absicht: legte schon der Seitenaufruf eine Karte an,
+     * erzeugte jede Link-Vorschau (WhatsApp, Suchmaschine) einen Kunden.
+     */
+    static String direktSeite(String lang, String explizit, Card card, String cardId, String ref,
+                              String shopName, String bgColor, String logoUrl) {
+        return """
+                <!DOCTYPE html>
+                <html%s>
+                <head>
+                    <meta charset="UTF-8">
+                    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                    <title>%s - %s</title>
+                    <style>
+                        * { margin: 0; padding: 0; box-sizing: border-box; }
+                        body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: #f5f5f7;
+                               min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px; }
+                        .card { background: %s; border-radius: 20px; padding: 28px; width: 100%%; max-width: 380px;
+                                color: rgb(var(--ink)); box-shadow: 0 20px 60px rgba(0,0,0,0.3); }
+                        .header { display: flex; align-items: center; gap: 12px; margin-bottom: 24px; }
+                        .logo { width: 50px; height: 50px; border-radius: 12px; object-fit: cover; }
+                        .shop-name { font-size: 20px; font-weight: 600; }
+                        .info { background: rgba(var(--ink),0.15); border-radius: 12px; padding: 16px;
+                                margin-bottom: 20px; text-align: center; }
+                        .info-title { font-size: 16px; font-weight: 600; margin-bottom: 6px; }
+                        .info-text { font-size: 13px; opacity: 0.85; line-height: 1.5; }
+                        .form { display: none; flex-direction: column; gap: 12px; }
+                        .btn { padding: 16px; border-radius: 12px; border: none; background: rgb(var(--ink));
+                               color: rgb(var(--ink-gegen)); font-size: 16px; font-weight: 600; cursor: pointer; width: 100%%; }
+                        .btn:disabled { opacity: 0.6; }
+                        .error { background: rgba(255,0,0,0.2); padding: 10px; border-radius: 8px; font-size: 13px;
+                                 text-align: center; display: none; margin-bottom: 12px; }
+                    </style>
+                </head>
+                <body>
+                    <div class="card">
+                        <div class="header">
+                            %s
+                            <div><div class="shop-name">%s</div></div>
+                        </div>
+                        <div class="info">
+                            <div class="info-title">%s</div>
+                            <div class="info-text">%s</div>
+                        </div>
+                        <div class="error" id="error"></div>
+                        <div class="form" id="form">
+                            <button class="btn" id="btn" onclick="karteHolen()">%s</button>
+                        </div>
+                        %s
+                        %s
+                    </div>
+                    <script>
+                        const CARD_ID = %s;
+                        const LANG = %s;
+                        const ERR = %s;
+                        const MERK = 'stampit_karte_' + CARD_ID;
+                        function zeigKnopf() { document.getElementById('form').style.display = 'flex' }
+                        function gemerkt() { try { return localStorage.getItem(MERK) } catch (e) { return null } }
+                        // Zurueck-Taste: der Browser zeigt die Seite aus dem Zwischenspeicher,
+                        // mit gesperrtem Knopf. Neu laden, dann greift die Weiterleitung.
+                        window.addEventListener('pageshow', function (e) { if (e.persisted) location.reload() });
+                        (async function () {
+                            const alt = gemerkt()
+                            if (!alt) { zeigKnopf(); return }
+                            try {
+                                const r = await fetch('/karte-neu/vorhanden/' + encodeURIComponent(alt) + '/' + encodeURIComponent(CARD_ID))
+                                const j = await r.json()
+                                if (r.ok && j.vorhanden === true) {
+                                    location.replace('/karte/' + encodeURIComponent(alt) + '/' + encodeURIComponent(CARD_ID))
+                                    return
+                                }
+                                // Nur bei einem klaren Nein vergessen - nicht bei einem Netzfehler.
+                                if (r.ok && j.vorhanden === false) { try { localStorage.removeItem(MERK) } catch (e) {} }
+                            } catch (e) {}
+                            zeigKnopf()
+                        })()
+                        async function karteHolen() {
+                            const knopf = document.getElementById('btn')
+                            const errorEl = document.getElementById('error')
+                            // Doppeltipp darf keine zwei Karten anlegen.
+                            if (knopf.disabled) return
+                            knopf.disabled = true
+                            errorEl.style.display = 'none'
+                            try {
+                                const res = await fetch('/karte-neu/register-direkt', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({
+                                        cardId: CARD_ID,
+                                        language: LANG,
+                                        ref: new URLSearchParams(location.search).get('ref') || null
+                                    })
+                                })
+                                const j = await res.json().catch(function () { return {} })
+                                if (!res.ok || !j.url || !j.customerId) throw new Error(j.error || ERR)
+                                try { localStorage.setItem(MERK, j.customerId) } catch (e) {}
+                                location.href = j.url
+                            } catch (e) {
+                                errorEl.style.display = 'block'
+                                errorEl.textContent = (e && e.message) ? e.message : ERR
+                                knopf.disabled = false
+                            }
+                        }
+                    </script>
+                </body>
+                </html>
+                """.formatted(
+                Texts.htmlAttrs(lang), escapeHtml(shopName), t(lang, "signup.title"), safeCssColor(bgColor),
+                logoUrl.isBlank() ? "" : "<img src='" + escapeHtml(logoUrl) + "' class='logo' alt='Logo'>",
+                escapeHtml(shopName),
+                t(lang, "signup.headline"), t(lang, "signup.direct_text"),
+                t(lang, "signup.button"),
+                bewertungsLink(lang, card.getShop()),
+                sprachenLeiste(lang, com.example.stemplekarte.config.KundenLink.anmeldePfad(cardId), ref),
+                toJsString(cardId), explizit != null ? toJsString(explizit) : "null",
+                toJsString(t(lang, "signup.err_generic")));
     }
 
     /**

@@ -60,6 +60,42 @@ public class Customer {
         return c;
     }
 
+    /**
+     * Endung der Platzhalter-Adresse eines Kunden ohne E-Mail. Die Spalte
+     * email ist in der Datenbank Pflicht und eindeutig, deshalb bekommt so
+     * ein Kunde eine erfundene, eindeutige Adresse. ".invalid" ist dafuer
+     * reserviert und nie zustellbar - trotzdem darf an diese Adresse nie
+     * eine Mail gehen (siehe isOhneMail, EmailService).
+     */
+    public static final String OHNE_MAIL_ENDUNG = "@ohne-mail.stampit.invalid";
+
+    /**
+     * Kunde ohne Anmeldung (Laden hat "Karte ohne E-Mail" eingeschaltet):
+     * kein Name, keine Adresse. Als Name steht "Kunde 12345", damit Scanner
+     * und Kundenliste etwas anzeigen koennen.
+     */
+    public static Customer createOhneMail() {
+        Customer c = new Customer();
+        String uuid = UUID.randomUUID().toString();
+        c.id = "CUST-" + uuid.toUpperCase();
+        int nummer = java.util.concurrent.ThreadLocalRandom.current().nextInt(10000, 100000);
+        c.name = "Kunde " + nummer;
+        c.email = "k-" + UUID.randomUUID().toString().toLowerCase() + OHNE_MAIL_ENDUNG;
+        c.createdAt = Instant.now();
+        // Kein Bestaetigungs-Token: es gibt nichts zu bestaetigen.
+        return c;
+    }
+
+    /** Kunde ohne echte E-Mail-Adresse - nie anschreiben. */
+    public boolean isOhneMail() {
+        return email != null && email.endsWith(OHNE_MAIL_ENDUNG);
+    }
+
+    /** Adresse fuer Anzeige und Schnittstellen: null statt der Platzhalter-Adresse. */
+    public String getEmailAnzeige() {
+        return isOhneMail() ? null : email;
+    }
+
     private static String newToken() {
         return UUID.randomUUID().toString().replace("-", "");
     }

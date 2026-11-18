@@ -150,7 +150,6 @@ public class PassTemplateGenerator {
         String stampColor = card.getStampColor();
         String stampIconType = card.getStampIconType();
         String stampPreset = card.getStampPreset();
-        String stampIconUrl = card.getStampIconUrl();
         String emptyStampStyle = card.getEmptyStampStyle();
 
         String passDir = uploadPath + "/pass-templates/" + cc.getId() + ".pass";
@@ -176,7 +175,8 @@ public class PassTemplateGenerator {
         } else if (brauchtStreifen(walletStyle, cc)) {
             if ("grid".equalsIgnoreCase(walletStyle)) {
                 generateStripImages(stamps, threshold, walletStyle, stampColor,
-                        stampIconType, stampPreset, stampIconUrl, emptyStampStyle, templatePath);
+                        stampIconType, stampPreset, card.getStampIconListe(),
+                        emptyStampStyle, templatePath);
             } else {
                 generateFortschrittStreifen(walletStyle, fortschritt(card, cc),
                         stampColor, card.getStripImageUrl(), templatePath);
@@ -220,40 +220,73 @@ public class PassTemplateGenerator {
     private void generateStripImages(int stamps, int threshold,
                                      String walletStyle, String stampColor,
                                      String stampIconType, String stampPreset,
-                                     String stampIconUrl, String emptyStampStyle,
+                                     java.util.List<String> stampIconUrls, String emptyStampStyle,
                                      Path templatePath) throws IOException {
-        BufferedImage customIcon = loadCustomIcon(stampIconType, stampIconUrl);
+        java.util.List<BufferedImage> customIcons = loadCustomIcons(stampIconType, stampIconUrls);
         // 375x144 Punkte laut Apple, also 375/750/1125 Pixel breit. Vorher stand
         // hier 320x110 - die Masse alter Geraete. Auf heutigen iPhones wurde das
         // Bild hochskaliert und wirkte weich.
         ImageIO.write(renderStrip(stamps, threshold, stampColor, stampIconType,
-                        stampPreset, stampIconUrl, emptyStampStyle, 375, 144, customIcon),
+                        stampPreset, emptyStampStyle, 375, 144, customIcons),
                 "PNG", templatePath.resolve("strip.png").toFile());
         ImageIO.write(renderStrip(stamps, threshold, stampColor, stampIconType,
-                        stampPreset, stampIconUrl, emptyStampStyle, 750, 288, customIcon),
+                        stampPreset, emptyStampStyle, 750, 288, customIcons),
                 "PNG", templatePath.resolve("strip@2x.png").toFile());
         ImageIO.write(renderStrip(stamps, threshold, stampColor, stampIconType,
-                        stampPreset, stampIconUrl, emptyStampStyle, 1125, 432, customIcon),
+                        stampPreset, emptyStampStyle, 1125, 432, customIcons),
                 "PNG", templatePath.resolve("strip@3x.png").toFile());
     }
 
-    private BufferedImage loadCustomIcon(String stampIconType, String stampIconUrl) {
-        if ("upload".equalsIgnoreCase(stampIconType)
-                && notBlank(stampIconUrl)) {
-            try {
-                return ladeBild("stempel-icon", stampIconUrl);
-            } catch (Exception e) {
-                return null;
+    // Stempel-Bilder im Speicher behalten. Ein Pass wird bei jedem Stempel
+    // neu gebaut; mit mehreren Bildern waeren das sonst jedes Mal mehrere
+    // Abrufe nacheinander. Die Adresse traegt die Cloudinary-Version - ein
+    // neu hochgeladenes Bild hat eine neue Adresse und trifft den Speicher
+    // nicht. Klein gehalten (400x400 je Bild, rund 0,6 MB).
+    private static final int ICON_SPEICHER_MAX = 16;
+    private static final java.util.Map<String, BufferedImage> ICON_SPEICHER =
+            java.util.Collections.synchronizedMap(
+                    new java.util.LinkedHashMap<>(32, 0.75f, true) {
+                        @Override
+                        protected boolean removeEldestEntry(
+                                java.util.Map.Entry<String, BufferedImage> aeltester) {
+                            return size() > ICON_SPEICHER_MAX;
+                        }
+                    });
+
+    /**
+     * Laedt die eigenen Stempel-Bilder in Reihenfolge. Ein Bild, das sich
+     * nicht laden laesst, faellt aus der Liste - die uebrigen wechseln sich
+     * dann allein ab. Bleibt keines uebrig, zeichnet das Raster wie bisher
+     * das eingebaute Symbol. Der Pass selbst scheitert daran nie.
+     */
+    private java.util.List<BufferedImage> loadCustomIcons(String stampIconType,
+                                                          java.util.List<String> urls) {
+        java.util.List<BufferedImage> bilder = new java.util.ArrayList<>();
+        if (!"upload".equalsIgnoreCase(stampIconType) || urls == null) return bilder;
+        for (String url : urls) {
+            if (!notBlank(url)) continue;
+            BufferedImage bild = ICON_SPEICHER.get(url);
+            if (bild == null) {
+                try {
+                    bild = ladeBild("stempel-icon", url);
+                } catch (Exception e) {
+                    bild = null;
+                }
+                if (bild != null) ICON_SPEICHER.put(url, bild);
             }
+            if (bild != null) bilder.add(bild);
         }
-        return null;
+        return bilder;
     }
 
-    private BufferedImage renderStrip(int stamps, int threshold,
-                                      String stampColorHex, String stampIconType,
-                                      String stampPreset, String stampIconUrl,
-                                      String emptyStampStyle,
-                                      int w, int h, BufferedImage customIcon) {
+    /**
+     * Zeichnet das Raster. Mehrere eigene Bilder wechseln sich der Reihe nach
+     * ab: Feld 1 = Bild 1, Feld 2 = Bild 2, ..., danach wieder von vorn.
+     */
+    BufferedImage renderStrip(int stamps, int threshold,
+                              String stampColorHex, String stampIconType,
+                              String stampPreset, String emptyStampStyle,
+                              int w, int h, java.util.List<BufferedImage> customIcons) {
         BufferedImage img = new BufferedImage(w, h, BufferedImage.TYPE_INT_ARGB);
         Graphics2D g = img.createGraphics();
         g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
@@ -270,7 +303,8 @@ public class PassTemplateGenerator {
 
         Color stampColor = hexToColor(stampColorHex != null ? stampColorHex : "#6F4E37");
         String emptyStyle = emptyStampStyle == null ? "number" : emptyStampStyle;
-        boolean useCustom = "upload".equalsIgnoreCase(stampIconType) && customIcon != null;
+        boolean useCustom = "upload".equalsIgnoreCase(stampIconType)
+                && customIcons != null && !customIcons.isEmpty();
         String preset = stampPreset == null ? "coffee" : stampPreset;
 
         for (int i = 0; i < threshold; i++) {
@@ -280,6 +314,7 @@ public class PassTemplateGenerator {
             double cx = padX + rowOffset + c * cellW + cellW / 2;
             double cy = padY + r * cellH + cellH / 2;
             boolean filled = i < stamps;
+            BufferedImage customIcon = useCustom ? customIcons.get(i % customIcons.size()) : null;
             drawStamp(g, filled, i + 1, cx, cy, diameter,
                     useCustom, customIcon, preset, stampColor, emptyStyle);
         }

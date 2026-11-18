@@ -110,6 +110,50 @@ public class CustomerService {
         return anmelden(name, email, cardId, marketingConsent, birthday, phone, refCode, language, true);
     }
 
+    /**
+     * Karte ohne Anmeldung: der Laden hat eingeschaltet, dass der Kunde
+     * nichts eintippt. Jeder Aufruf legt einen NEUEN Kunden an - es gibt
+     * keine Adresse, an der man ihn wiedererkennen koennte. Dass derselbe
+     * Kunde nicht bei jedem Scan eine neue Karte bekommt, regelt die
+     * Anmeldeseite (sie merkt sich die Karte im Browser).
+     *
+     * Keine Mail, kein Willkommensgeschenk (liesse sich sonst beliebig oft
+     * holen), keine Werbe-Einwilligung.
+     */
+    @Transactional
+    public CustomerCard registerOhneMail(String cardId, String refCode, String language) {
+        Card card = cardRepo.findById(cardId)
+                .orElseThrow(() -> new NoSuchElementException("Karte nicht gefunden: " + cardId));
+        if (!card.getShop().isAnmeldungOhneMail()) {
+            throw new IllegalArgumentException("Bei diesem Laden braucht die Karte eine Anmeldung.");
+        }
+
+        Customer customer = Customer.createOhneMail();
+        String gewaehlt = com.example.stemplekarte.i18n.Texts.gewaehlt(language);
+        if (gewaehlt != null) customer.setLanguage(gewaehlt);
+        customer = customerRepo.save(customer);
+
+        CustomerCard cc = CustomerCard.create(customer, card);
+        empfehlung.codeVergeben(cc);
+        empfehlung.verknuepfen(cc, refCode, java.time.Instant.now());
+        cc = customerCardRepo.save(cc);
+        webhook(card.getShop(), "customer.signup", WebhookService.daten(
+                "customerId", customer.getId(), "cardId", card.getId(), "customerCardId", cc.getId(),
+                "name", customer.getName(), "email", null,
+                "marketingConsent", false, "geworben", cc.getGeworbenVon() != null));
+        return cc;
+    }
+
+    /** Gibt es diese Kundenkarte (noch)? Legt nichts an. */
+    @Transactional(readOnly = true)
+    public boolean hatKarte(String customerId, String cardId) {
+        if (customerId == null || cardId == null) return false;
+        Customer customer = customerRepo.findById(customerId).orElse(null);
+        Card card = cardRepo.findById(cardId).orElse(null);
+        if (customer == null || card == null) return false;
+        return customerCardRepo.findByCustomerAndCard(customer, card).isPresent();
+    }
+
     /** Sprache des Kunden setzen (Sprachleiste auf der Kartenseite). Unbekannt = nichts. */
     @Transactional
     public void spracheSetzen(Customer customer, String language) {
@@ -188,7 +232,9 @@ public class CustomerService {
      */
     private static CustomerCard neueKundenkarte(Customer customer, Card card) {
         CustomerCard cc = CustomerCard.create(customer, card);
-        if (card.isWillkommenAktiv()) {
+        // Kein Geschenk, solange der Laden Karten ohne Anmeldung ausgibt:
+        // es liesse sich sonst mit jeder neuen Karte noch einmal holen.
+        if (card.isWillkommenAktiv() && !card.getShop().isAnmeldungOhneMail()) {
             cc.willkommenVormerken(card.getWillkommenText());
         }
         return cc;

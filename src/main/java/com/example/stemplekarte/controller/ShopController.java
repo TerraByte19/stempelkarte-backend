@@ -101,7 +101,9 @@ public class ShopController {
             String logoUrl, String heroImageUrl,
             String type, Integer pointsPerEuroX100, String pointsRounding,
             // 10er-Karte: Einheit der Besuche ("Kurse"); rewardThreshold = Paketgroesse.
-            String paketEinheit
+            String paketEinheit,
+            // Alle eigenen Stempel-Bilder in Reihenfolge; stampIconUrl ist das erste.
+            java.util.List<String> stampIconUrls
     ) {
         static CardResponse from(Card c) {
             return new CardResponse(
@@ -116,7 +118,8 @@ public class ShopController {
                     c.getType().name(),
                     c.getPointsPerEuroX100(),
                     c.isPoints() ? c.getPointsRounding().name() : null,
-                    c.isPackage() ? c.getPaketEinheit() : null
+                    c.isPackage() ? c.getPaketEinheit() : null,
+                    c.getStampIconListe()
             );
         }
     }
@@ -219,6 +222,7 @@ public class ShopController {
         map.put("kioskSperreStunden", shop.getKioskSperreStunden());
         map.put("signupBirthday", shop.getSignupBirthday());
         map.put("signupPhone", shop.getSignupPhone());
+        map.put("signupOhneMail", shop.isAnmeldungOhneMail());
         map.put("birthdayGreetingEnabled", shop.isGeburtstagsgrussAktiv());
         map.put("birthdayGreetingText", shop.getBirthdayGreetingText());
         map.put("birthdayGreetingDefault", Shop.GEBURTSTAG_STANDARD);
@@ -276,6 +280,18 @@ public class ShopController {
         out.put("signupBirthday", updated.getSignupBirthday());
         out.put("signupPhone", updated.getSignupPhone());
         return out;
+    }
+
+    public record OhneMailRequest(boolean enabled) {}
+
+    @Operation(summary = "Karte ohne Anmeldung ein- oder ausschalten",
+            description = "An: auf /karte-neu/{cardId} tippt der Kunde nichts ein, ein Tipp auf "
+                    + "\"Karte holen\" reicht. Solche Kunden haben keinen Namen und keine E-Mail "
+                    + "(kein Newsletter, keine Wiederherstellung) und bekommen kein Willkommensgeschenk.")
+    @PutMapping("/me/anmeldung-ohne-mail")
+    public Map<String, Object> updateAnmeldungOhneMail(@RequestBody OhneMailRequest req, Authentication auth) {
+        Shop updated = shopService.updateAnmeldungOhneMail(currentShop(auth).getId(), req.enabled());
+        return Map.of("signupOhneMail", updated.isAnmeldungOhneMail());
     }
 
     public record GoogleReviewRequest(String url) {}

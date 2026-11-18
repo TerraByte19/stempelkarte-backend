@@ -199,5 +199,8 @@
  "signup.google_error": "Google ile giriş başarısız oldu. E-posta yolunu kullan.",
  "signup.apple_error": "Apple ile giriş başarısız oldu. E-posta yolunu kullan.",
  "signup.apple_close": "Giriş yapılıyor. Bu pencereyi kapatabilirsin.",
- "signup.oder": "veya"
+ "signup.oder": "veya e-posta ile",
+ "signup.direct_text": "Tek dokunuşla kartın hazır. Kayıt yok, e-posta yok.",
+ "signup.text_schnell": "Tek dokunuşla damga kartın direkt cüzdanında.",
+ "signup.text_gift_schnell": "Kartı cüzdanına ekle. Kasada göster, hediye senin. Sonra damga toplamaya başlarsın."
 }
