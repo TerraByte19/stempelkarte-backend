@@ -535,7 +535,10 @@ public class GoogleWalletService {
                 .setId(objectId)
                 .setClassId(classId)
                 .setState("ACTIVE")
-                .setAccountName(cc.getCustomer().getName())
+                // Ohne Namen (Karte ohne Anmeldung): ausdruecklich leeren. Ein
+                // weggelassenes Feld bliebe beim Patch mit dem alten Wert stehen.
+                .setAccountName(cc.getCustomer().getName() == null || cc.getCustomer().getName().isBlank()
+                        ? Data.NULL_STRING : cc.getCustomer().getName())
                 .setAccountId(cc.getId())
                 .setLoyaltyPoints(haupt)
                 .setSecondaryLoyaltyPoints(neben)

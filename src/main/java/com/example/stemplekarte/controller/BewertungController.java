@@ -215,12 +215,12 @@ public class BewertungController {
                 logoUrl.isBlank() ? ""
                         : "<img src='" + escapeHtml(logoUrl) + "' class='shop-logo' alt='Logo'>",
                 escapeHtml(shop.getName()),
-                Texts.t(lang, "review.question", escapeHtml(cc.getCustomer().getName())),
+                ohneLuecke(Texts.t(lang, "review.question", escapeHtml(cc.getCustomer().getName()))),
                 sterne.toString(),
                 Rueckmeldung.TEXT_MAX, escapeHtml(Texts.t(lang, "review.placeholder")),
                 Texts.t(lang, "review.send"),
                 Texts.t(lang, "review.private_hint", escapeHtml(shop.getName())),
-                Texts.t(lang, "review.thanks", escapeHtml(cc.getCustomer().getName())),
+                ohneLuecke(Texts.t(lang, "review.thanks", escapeHtml(cc.getCustomer().getName()))),
                 Texts.t(lang, "review.received", escapeHtml(shop.getName())),
                 LandingController.bewertungsLink(lang, shop),
                 zurueck, Texts.t(lang, "review.back"),
@@ -265,5 +265,15 @@ public class BewertungController {
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }
+    }
+
+    /**
+     * Kunde ohne Namen (Karte ohne Anmeldung): aus "Hallo , wie war dein
+     * Besuch?" wird "Hallo, wie war dein Besuch?", aus "Danke, !" wird
+     * "Danke!". Mit Namen aendert sich nichts.
+     */
+    static String ohneLuecke(String text) {
+        if (text == null) return "";
+        return text.replaceAll(" +([,،.!?:])", "$1").replaceAll("[,،:]\\s*([.!?])", "$1");
     }
 }

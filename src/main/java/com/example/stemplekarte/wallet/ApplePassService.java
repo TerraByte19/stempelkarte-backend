@@ -360,9 +360,7 @@ public class ApplePassService {
                             .value(stampRatio)
                             .changeMessage(changeMsg))
                     .secondaryFieldBuilder(PKField.builder()
-                            .key("reward").label(Texts.t(lang, "pass.reward_label")).value(reward))
-                    .auxiliaryFieldBuilder(PKField.builder()
-                            .key("name").label(Texts.t(lang, "pass.customer_label")).value(cc.getCustomer().getName()));
+                            .key("reward").label(Texts.t(lang, "pass.reward_label")).value(reward));
         } else {
             genericPass
                     .headerFieldBuilder(PKField.builder()
@@ -372,10 +370,9 @@ public class ApplePassService {
                     .primaryFieldBuilder(PKField.builder()
                             .key("stamps-big").label(countdownLabel).value(countdownValue))
                     .secondaryFieldBuilder(PKField.builder()
-                            .key("reward").label(Texts.t(lang, "pass.reward_label")).value(reward))
-                    .auxiliaryFieldBuilder(PKField.builder()
-                            .key("name").label(Texts.t(lang, "pass.customer_label")).value(cc.getCustomer().getName()));
+                            .key("reward").label(Texts.t(lang, "pass.reward_label")).value(reward));
         }
+        kundenFeld(genericPass, cc, lang);
 
         nachrichtFeld(genericPass, card.getShop(), cc);
         rueckmeldungFeld(genericPass, card, cc);
@@ -406,7 +403,7 @@ public class ApplePassService {
                 : cc.paketFrischAufgeladen()
                         ? Texts.t(lang, "pass.msg_package_loaded", einheit)
                         : Texts.t(lang, "pass.msg_package_debit", einheit);
-        return PKGenericPass.builder()
+        PKGenericPassBuilder pass = PKGenericPass.builder()
                 .passType(PKPassType.PKStoreCard)
                 .headerFieldBuilder(PKField.builder()
                         .key("rest-header").label(Texts.t(lang, "pass.left_label"))
@@ -416,9 +413,21 @@ public class ApplePassService {
                         .key("rest-big").label(Texts.t(lang, rest > 0 ? "pass.left_big_label" : "pass.package_label"))
                         .value(rest > 0 ? String.valueOf(rest) : Texts.t(lang, "pass.package_empty")))
                 .secondaryFieldBuilder(PKField.builder()
-                        .key("paket").label(Texts.t(lang, "pass.package_label")).value(card.paketText()))
-                .auxiliaryFieldBuilder(PKField.builder()
-                        .key("name").label(Texts.t(lang, "pass.customer_label")).value(cc.getCustomer().getName()));
+                        .key("paket").label(Texts.t(lang, "pass.package_label")).value(card.paketText()));
+        kundenFeld(pass, cc, lang);
+        return pass;
+    }
+
+    /**
+     * Feld "Kunde" mit dem Namen - nur wenn es einen gibt. Kunden ohne
+     * Anmeldung haben keinen; ein Feld "KUNDE" ohne Wert (oder mit einer
+     * erfundenen Nummer) saehe auf der Karte nach einem Fehler aus.
+     */
+    private static void kundenFeld(PKGenericPassBuilder pass, CustomerCard cc, String lang) {
+        String name = cc.getCustomer() != null ? cc.getCustomer().getName() : null;
+        if (name == null || name.isBlank()) return;
+        pass.auxiliaryFieldBuilder(PKField.builder()
+                .key("name").label(Texts.t(lang, "pass.customer_label")).value(name));
     }
 
     private PKGenericPassBuilder baueFelderMitglied(CustomerCard cc) {
@@ -428,14 +437,19 @@ public class ApplePassService {
                 : "";
         String nummer = cc.getId() != null && cc.getId().startsWith("CC-") ? cc.getId().substring(3) : cc.getId();
         String lang = Texts.sprache(cc.getCustomer(), cc.getCard() != null ? cc.getCard().getShop() : null);
-        return PKGenericPass.builder()
+        PKGenericPassBuilder pass = PKGenericPass.builder()
                 .passType(PKPassType.PKStoreCard)
                 .headerFieldBuilder(PKField.builder()
                         .key("visits-header").label(Texts.t(lang, "pass.visits_label"))
                         .value(String.valueOf(cc.getStamps()))
-                        .changeMessage(Texts.t(lang, "pass.msg_visit")))
-                .primaryFieldBuilder(PKField.builder()
-                        .key("member-name").label(Texts.t(lang, "pass.member_label")).value(cc.getCustomer().getName()))
+                        .changeMessage(Texts.t(lang, "pass.msg_visit")));
+        // Ohne Namen (Karte ohne Anmeldung) bleibt die Mitte frei.
+        String mitgliedName = cc.getCustomer() != null ? cc.getCustomer().getName() : null;
+        if (mitgliedName != null && !mitgliedName.isBlank()) {
+            pass.primaryFieldBuilder(PKField.builder()
+                    .key("member-name").label(Texts.t(lang, "pass.member_label")).value(mitgliedName));
+        }
+        return pass
                 .secondaryFieldBuilder(PKField.builder()
                         .key("member-since").label(Texts.t(lang, "pass.member_since_label")).value(seit))
                 .auxiliaryFieldBuilder(PKField.builder()
@@ -536,8 +550,8 @@ public class ApplePassService {
             pass.secondaryFieldBuilder(PKField.builder()
                     .key("welcome-how").label(Texts.t(lang, "pass.gift_how_label")).value(card.getWillkommenHinweis()));
         }
-        return pass.auxiliaryFieldBuilder(PKField.builder()
-                .key("name").label(Texts.t(lang, "pass.customer_label")).value(cc.getCustomer().getName()));
+        kundenFeld(pass, cc, lang);
+        return pass;
     }
 
     /**
@@ -625,8 +639,7 @@ public class ApplePassService {
                     .key("points-big").label(Texts.t(lang, "pass.points_label")).value(standText));
         }
 
-        genericPass.auxiliaryFieldBuilder(PKField.builder()
-                .key("name").label(Texts.t(lang, "pass.customer_label")).value(cc.getCustomer().getName()));
+        kundenFeld(genericPass, cc, lang);
 
         // ── Rueckseite: der ganze Katalog ─────────────────────────────────
         // Das sind die ERSTEN Rueckseitenfelder ueberhaupt in diesem Pass.

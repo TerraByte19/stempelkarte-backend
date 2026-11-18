@@ -1463,7 +1463,7 @@ public class LandingController {
                 Texts.htmlAttrs(lang), escapeHtml(shopName), t(lang, "member.title"), safeCssColor(bgColor),
                 logoUrl.isBlank() ? ""
                         : "<img src='" + escapeHtml(logoUrl) + "' class='shop-logo' alt='Logo'>",
-                escapeHtml(shopName), escapeHtml(card.getName()), t(lang, "member.label"),
+                escapeHtml(shopName), escapeHtml(card.getName()), ohneName(customer) ? "" : t(lang, "member.label"),
                 escapeHtml(customer.getName()), t(lang, "member.since"), seit, t(lang, "member.visits"), besuche,
                 escapeHtml(applePassUrl), t(lang, "card.apple"),
                 googleSaveUrl.isBlank() ? ""
@@ -1560,7 +1560,7 @@ public class LandingController {
                 rest, escapeHtml(card.getPaketEinheit()),
                 hinweis,
                 t(lang, "package.package"), escapeHtml(card.paketText()), t(lang, "package.used"), cc.getStamps(),
-                t(lang, "package.name"), escapeHtml(customer.getName()),
+                ohneName(customer) ? "" : t(lang, "package.name"), escapeHtml(customer.getName()),
                 escapeHtml(applePassUrl), t(lang, "card.apple"),
                 googleSaveUrl.isBlank() ? ""
                         : "<a href='" + escapeHtml(googleSaveUrl) + "' class='btn btn-google' id='google-btn'>" +
@@ -1872,7 +1872,17 @@ public class LandingController {
         return mitKontrastNurInk(html, bgColor);
     }
 
+    /** Kunde ohne Namen (Karte ohne Anmeldung)? Dann fallen die Namenszeilen weg. */
+    private static boolean ohneName(Customer customer) {
+        String name = customer != null ? customer.getName() : null;
+        return name == null || name.isBlank();
+    }
+
     private static String mitKontrastNurInk(String html, String bgColor) {
+        // Kunde ohne Namen: keine leere Namenszeile stehen lassen (nur das
+        // Symbol bzw. eine Zeile ohne Beschriftung und Wert).
+        html = html.replace("<div class=\"customer-name\">👤 </div>", "")
+                .replace("<div class=\"zeile\"><span></span><b></b></div>", "");
         String ink = inkFuer(bgColor);
         String gegen = ink.equals("255,255,255") ? "26,26,46" : "255,255,255";
         return html.replaceFirst("<body>",

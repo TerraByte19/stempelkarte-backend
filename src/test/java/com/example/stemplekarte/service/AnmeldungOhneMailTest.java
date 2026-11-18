@@ -68,7 +68,9 @@ class AnmeldungOhneMailTest {
         // Spalte ist eindeutig: zwei Kunden duerfen nie dieselbe Adresse tragen.
         assertThat(a.getEmail()).isNotEqualTo(b.getEmail());
         assertThat(a.getId()).isNotEqualTo(b.getId());
-        assertThat(a.getName()).matches("Kunde \\d{5}");
+        // Kein erfundener Name ("Kunde 12345" war dem User zu viel): leer.
+        assertThat(a.getName()).isEmpty();
+        assertThat(a.hatName()).isFalse();
         assertThat(a.isEmailConfirmed()).isFalse();
         assertThat(a.getConfirmToken()).isNull();
     }

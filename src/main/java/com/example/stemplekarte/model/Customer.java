@@ -71,15 +71,15 @@ public class Customer {
 
     /**
      * Kunde ohne Anmeldung (Laden hat "Karte ohne E-Mail" eingeschaltet):
-     * kein Name, keine Adresse. Als Name steht "Kunde 12345", damit Scanner
-     * und Kundenliste etwas anzeigen koennen.
+     * kein Name, keine Adresse. Der Name bleibt leer (User 2026-11-19: kein
+     * erfundenes "Kunde 12345") - Karte, Wallet und Kundenseite lassen das
+     * Namensfeld dann ganz weg.
      */
     public static Customer createOhneMail() {
         Customer c = new Customer();
         String uuid = UUID.randomUUID().toString();
         c.id = "CUST-" + uuid.toUpperCase();
-        int nummer = java.util.concurrent.ThreadLocalRandom.current().nextInt(10000, 100000);
-        c.name = "Kunde " + nummer;
+        c.name = "";
         c.email = "k-" + UUID.randomUUID().toString().toLowerCase() + OHNE_MAIL_ENDUNG;
         c.createdAt = Instant.now();
         // Kein Bestaetigungs-Token: es gibt nichts zu bestaetigen.
@@ -136,7 +136,17 @@ public class Customer {
 
 
     public String getId() { return id; }
-    public String getName() { return name; }
+    /**
+     * Leer bei Kunden ohne Anmeldung - auch bei den ersten, die noch als
+     * "Kunde 12345" gespeichert wurden.
+     */
+    public String getName() { return isOhneMail() ? "" : name; }
+
+    /** Hat der Kunde einen Namen, den man anzeigen kann? */
+    public boolean hatName() {
+        String n = getName();
+        return n != null && !n.isBlank();
+    }
     public String getEmail() { return email; }
     public Instant getCreatedAt() { return createdAt; }
     public boolean isEmailConfirmed() { return emailConfirmed; }
