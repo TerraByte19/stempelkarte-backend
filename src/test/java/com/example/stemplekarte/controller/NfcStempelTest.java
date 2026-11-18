@@ -103,13 +103,13 @@ class NfcStempelTest {
 
     private MockHttpServletRequest mitCookie(String wert) {
         MockHttpServletRequest req = new MockHttpServletRequest();
-        req.setCookies(new Cookie(KundenCookie.NAME, wert));
+        req.setCookies(new Cookie(KundenCookie.name(KARTE), wert));
         return req;
     }
 
     private String echtesCookie() {
         MockHttpServletResponse res = new MockHttpServletResponse();
-        KundenCookie.setzen(res, KUNDE, SECRET, false);
+        KundenCookie.setzen(res, KARTE, KUNDE, SECRET, false);
         String header = res.getHeader("Set-Cookie");
         return header.substring(header.indexOf('=') + 1, header.indexOf(';'));
     }
@@ -254,7 +254,7 @@ class NfcStempelTest {
     @Test
     void cookieTraegtKundenIdUndSignatur() {
         MockHttpServletResponse res = new MockHttpServletResponse();
-        KundenCookie.setzen(res, KUNDE, SECRET, true);
+        KundenCookie.setzen(res, KARTE, KUNDE, SECRET, true);
         String header = res.getHeader("Set-Cookie");
 
         assertTrue(header.contains("HttpOnly"), "ohne HttpOnly liest jedes Skript die Kunden-ID");
@@ -262,8 +262,8 @@ class NfcStempelTest {
         assertTrue(header.contains("Secure"));
 
         MockHttpServletRequest req = mitCookie(echtesCookie());
-        assertTrue(KundenCookie.lesen(req, SECRET).isPresent());
-        assertFalse(KundenCookie.lesen(req, "anderes-geheimnis-aber-lang-genug-32").isPresent());
+        assertTrue(KundenCookie.lesen(req, KARTE, SECRET).isPresent());
+        assertFalse(KundenCookie.lesen(req, KARTE, "anderes-geheimnis-aber-lang-genug-32").isPresent());
     }
     /**
      * Ohne eigenen Geheimwert bleibt NFC aus. Mit einem bekannten Vorgabewert
@@ -279,5 +279,46 @@ class NfcStempelTest {
             org.assertj.core.api.Assertions.assertThat(html).contains("abgeschaltet");
         }
         verify(service, never()).processScan(any(QrPayload.class), any(Shop.class), anyInt());
+    }
+    /**
+     * Ein Cookie je Karte: die Karte eines anderen Ladens darf die Zuordnung
+     * dieses Ladens nicht ueberschreiben oder ersetzen.
+     */
+    @Test
+    void cookieEinerAnderenKarte_zaehltHierNicht() {
+        NfcController c = controller(120);
+        MockHttpServletRequest req = new MockHttpServletRequest();
+        req.setCookies(new Cookie(KundenCookie.name("CARD-ANDERER-LADEN"), echtesCookie()));
+
+        String html = c.tippen(TOKEN, req, new MockHttpServletResponse()).getBody();
+
+        org.assertj.core.api.Assertions.assertThat(html).contains("Noch keine Karte");
+        verify(service, never()).processScan(any(QrPayload.class), any(Shop.class), anyInt());
+    }
+
+    /**
+     * Von einer fremden Seite geschickt darf eine bestehende Zuordnung nicht
+     * auf einen anderen Kunden umgestellt werden - sonst sammelt der Absender
+     * des Links die Stempel fremder Leute.
+     */
+    @Test
+    void fremdeSeite_darfNichtUmstellen_eigeneUndDirekteAufrufeSchon() {
+        MockHttpServletRequest fremd = new MockHttpServletRequest();
+        fremd.addHeader("Sec-Fetch-Site", "cross-site");
+        assertFalse(KundenCookie.darfWechseln(fremd));
+
+        for (String erlaubt : new String[] {"none", "same-origin", "same-site"}) {
+            MockHttpServletRequest req = new MockHttpServletRequest();
+            req.addHeader("Sec-Fetch-Site", erlaubt);
+            assertTrue(KundenCookie.darfWechseln(req), erlaubt);
+        }
+        // Alter Browser ohne den Kopf: wie bisher.
+        assertTrue(KundenCookie.darfWechseln(new MockHttpServletRequest()));
+    }
+
+    @Test
+    void cookieNameTraegtDieKarteUndNurHarmloseZeichen() {
+        org.assertj.core.api.Assertions.assertThat(KundenCookie.name("CARD-AB12")).isEqualTo("sk_kunde_CARD-AB12");
+        org.assertj.core.api.Assertions.assertThat(KundenCookie.name("CARD;=x y")).isEqualTo("sk_kunde_CARDxy");
     }
 }

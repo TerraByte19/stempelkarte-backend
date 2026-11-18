@@ -29,7 +29,36 @@ public final class KundenCookie {
 
     private static final Logger log = LoggerFactory.getLogger(KundenCookie.class);
 
+    /** Anfang des Cookie-Namens; dahinter steht die Karte (siehe name). */
     public static final String NAME = "sk_kunde";
+
+    /**
+     * Ein Cookie je Karte. Ein Kunde ohne Anmeldung hat bei jedem Laden
+     * eine eigene Kunden-ID; mit EINEM Cookie fuer alles ueberschriebe die
+     * zuletzt geoeffnete Karte die anderen, und das Antippen im ersten
+     * Laden liefe auf eine neue, leere Karte statt auf die in der Wallet.
+     */
+    public static String name(String cardId) {
+        String sauber = cardId == null ? "" : cardId.replaceAll("[^A-Za-z0-9_-]", "");
+        return NAME + "_" + sauber;
+    }
+
+    /**
+     * Darf diese Anfrage eine BESTEHENDE Zuordnung auf einen anderen
+     * Kunden umstellen?
+     *
+     * <p>Nicht, wenn der Aufruf von einer fremden Seite kommt. Sonst
+     * schickt jemand einem Stammkunden den Link zu seiner EIGENEN Karte;
+     * der Kunde tippt darauf, und ab da laufen seine Stempel am Tresen auf
+     * die Karte des Absenders. Aus der Wallet, aus dem Verlauf, aus einer
+     * Mail-App oder von unserer eigenen Anmeldeseite heisst der Kopf
+     * "none" bzw. "same-origin" - das bleibt erlaubt. Fehlt der Kopf (alte
+     * Browser), wird umgestellt, wie bei darfSetzen.
+     */
+    public static boolean darfWechseln(HttpServletRequest request) {
+        String site = request.getHeader("Sec-Fetch-Site");
+        return site == null || site.isBlank() || !"cross-site".equalsIgnoreCase(site.trim());
+    }
 
     /** Ein Jahr. Stammkunden kommen unregelmaessig - kuerzer waere laestig. */
     private static final int MAX_AGE_SEKUNDEN = 365 * 24 * 60 * 60;
@@ -59,7 +88,7 @@ public final class KundenCookie {
      * Setzt das Cookie auf die Antwort. {@code secure} nur bei HTTPS, sonst
      * verwirft der Browser es beim lokalen Testen auf http://localhost.
      */
-    public static void setzen(HttpServletResponse response, String customerId,
+    public static void setzen(HttpServletResponse response, String cardId, String customerId,
                               String secret, boolean secure) {
         String wert = customerId + "." + signatur(customerId, secret);
 
@@ -67,7 +96,7 @@ public final class KundenCookie {
         // kennt die Servlet-API nicht, und ohne SameSite=Lax schickt Safari
         // das Cookie beim NFC-Aufruf womoeglich nicht mit.
         StringBuilder sb = new StringBuilder();
-        sb.append(NAME).append('=').append(wert);
+        sb.append(name(cardId)).append('=').append(wert);
         sb.append("; Max-Age=").append(MAX_AGE_SEKUNDEN);
         sb.append("; Path=/");
         sb.append("; HttpOnly");
@@ -78,12 +107,13 @@ public final class KundenCookie {
     }
 
     /** Kunden-ID aus dem Cookie, wenn Signatur stimmt. Sonst leer. */
-    public static Optional<String> lesen(HttpServletRequest request, String secret) {
+    public static Optional<String> lesen(HttpServletRequest request, String cardId, String secret) {
+        String name = name(cardId);
         Cookie[] cookies = request.getCookies();
         if (cookies == null) return Optional.empty();
 
         for (Cookie c : cookies) {
-            if (!NAME.equals(c.getName())) continue;
+            if (!name.equals(c.getName())) continue;
 
             String wert = c.getValue();
             if (wert == null) continue;
@@ -103,8 +133,8 @@ public final class KundenCookie {
     }
 
     /** Loescht das Cookie - fuer den Fall, dass die Kunden-ID nicht mehr existiert. */
-    public static void loeschen(HttpServletResponse response) {
-        response.addHeader("Set-Cookie", NAME + "=; Max-Age=0; Path=/; HttpOnly; SameSite=Lax");
+    public static void loeschen(HttpServletResponse response, String cardId) {
+        response.addHeader("Set-Cookie", name(cardId) + "=; Max-Age=0; Path=/; HttpOnly; SameSite=Lax");
     }
 
     static boolean gueltig(String customerId, String signatur, String secret) {

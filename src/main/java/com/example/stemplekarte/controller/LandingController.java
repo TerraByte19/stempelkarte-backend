@@ -594,12 +594,18 @@ public class LandingController {
             if (nfcCookieSecret != null && !nfcCookieSecret.isBlank()
                     && request != null && response != null
                     && KundenCookie.darfSetzen(request)) {
-                KundenCookie.lesen(request, nfcCookieSecret)
-                        .filter(alt -> !alt.equals(customerId))
-                        .ifPresent(alt -> log.warn(
-                                "[NFC] Kunden-Cookie wechselt von {} auf {}", alt, customerId));
-                KundenCookie.setzen(response, customerId, nfcCookieSecret,
-                        baseUrl.startsWith("https://"));
+                String bisher = KundenCookie.lesen(request, cardId, nfcCookieSecret).orElse(null);
+                boolean wechsel = bisher != null && !bisher.equals(customerId);
+                if (wechsel && !KundenCookie.darfWechseln(request)) {
+                    // Von einer fremden Seite hierher geschickt: die bestehende
+                    // Zuordnung bleibt, siehe KundenCookie#darfWechseln.
+                    log.warn("[NFC] Kunden-Cookie bleibt bei {} (Aufruf von fremder Seite fuer {})",
+                            bisher, customerId);
+                } else {
+                    if (wechsel) log.warn("[NFC] Kunden-Cookie wechselt von {} auf {}", bisher, customerId);
+                    KundenCookie.setzen(response, cardId, customerId, nfcCookieSecret,
+                            baseUrl.startsWith("https://"));
+                }
             }
 
             CustomerCard cc = customerService.getOrCreateCustomerCard(customerId, cardId);

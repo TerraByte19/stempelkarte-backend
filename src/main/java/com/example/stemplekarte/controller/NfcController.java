@@ -115,7 +115,7 @@ public class NfcController {
 
         // Wer ist das Handy? Ohne Cookie kennt der Server den Kunden nicht -
         // die NFC-Karte sagt nur, in welchem Laden getippt wurde.
-        Optional<String> kunde = KundenCookie.lesen(request, props.nfc().cookieSecret());
+        Optional<String> kunde = KundenCookie.lesen(request, card.getId(), props.nfc().cookieSecret());
         if (kunde.isEmpty()) {
             return seite("Noch keine Karte",
                     "Leg kurz deine Treuekarte an, dann zählt jedes Antippen.",
@@ -131,7 +131,7 @@ public class NfcController {
             // das Cookie zeigt ins Leere und muss weg, sonst laeuft der Kunde
             // bei jedem Antippen in denselben Fehler.
             log.warn("[NFC] Cookie zeigt auf unbekannten Kunden {} - wird geloescht", customerId);
-            KundenCookie.loeschen(response);
+            KundenCookie.loeschen(response, card.getId());
             return seite("Noch keine Karte",
                     "Leg kurz deine Treuekarte an, dann zählt jedes Antippen.",
                     shop, false, anlegenKnopf(card));
@@ -174,7 +174,10 @@ public class NfcController {
         String titel = voll ? "Karte voll!" : "Stempel erhalten";
         String text = voll
                 ? card.getRewardText() + " wartet auf dich."
-                : "Steht schon in deiner Wallet.";
+                // Der Stand steht dabei, damit auffaellt, wenn das Handy einer
+                // anderen Karte zugeordnet ist als der in der Wallet.
+                : "Du hast jetzt " + cc.getStamps() + " von " + card.getRewardThreshold()
+                        + " Stempeln. Steht schon in deiner Wallet.";
         // War die Karte schon voll, loest das Antippen die Praemie ein (wie
         // der QR-Scan). Das muss auf dem Bildschirm stehen - sonst sieht es
         // nach einem gewoehnlichen Stempel aus und die Praemie ist weg.
