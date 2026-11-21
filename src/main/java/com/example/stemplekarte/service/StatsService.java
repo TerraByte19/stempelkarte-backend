@@ -417,6 +417,10 @@ public class StatsService {
      * am Protokoll scheitern), die Namen kommen hier dazu. Ein Kunde, der
      * sich inzwischen geloescht hat, bleibt als leerer Name stehen.
      */
+    private static boolean istLeer(String name) {
+        return name == null || name.isBlank();
+    }
+
     public Map<String, Object> aktivitaet(Shop shop) {
         List<ScanLog> scans = scanLogRepo.findTop15ByShopIdOrderByScannedAtDesc(shop.getId());
 
@@ -433,6 +437,9 @@ public class StatsService {
             Map<String, Object> m = new HashMap<>();
             m.put("zeit", sl.getScannedAt().toString());
             m.put("kunde", kundenNamen.getOrDefault(sl.getCustomerId(), ""));
+            // Kunde da, aber ohne Namen = Karte ohne Anmeldung, nicht geloescht.
+            m.put("anonym", kundenNamen.containsKey(sl.getCustomerId())
+                    && istLeer(kundenNamen.get(sl.getCustomerId())));
             m.put("karte", kartenNamen.getOrDefault(sl.getCardId(), ""));
             m.put("stempel", sl.getStampsAdded());
             m.put("praemien", sl.getRewardsEarned());
@@ -445,6 +452,7 @@ public class StatsService {
             Customer k = cc.getCustomer();
             Map<String, Object> m = new HashMap<>();
             m.put("name", k != null ? k.getName() : "");
+            m.put("anonym", k != null && istLeer(k.getName()));
             m.put("karte", cc.getCard().getName());
             m.put("seit", cc.getCreatedAt() != null ? cc.getCreatedAt().toString() : null);
             m.put("gesperrt", cc.isWillkommenOffen());

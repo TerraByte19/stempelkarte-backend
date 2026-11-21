@@ -170,5 +170,33 @@ class VorzeitraumTest {
         List<Map<String, Object>> scans = (List<Map<String, Object>>) dienst.aktivitaet(shop).get("scans");
         assertThat(scans.get(0).get("kunde")).isEqualTo("");
         assertThat(scans.get(0).get("karte")).isEqualTo("");
+        assertThat(scans.get(0).get("anonym")).isEqualTo(false);
+    }
+
+    /**
+     * Karte ohne Anmeldung: der Kunde existiert, hat aber keinen Namen. Das
+     * Dashboard darf ihn nicht als "geloescht" zeigen - deshalb das Merkmal
+     * anonym, getrennt vom geloeschten Kunden (gar nicht mehr da).
+     */
+    @Test
+    void aktivitaet_ohneAnmeldung_istAnonymNichtGeloescht() {
+        ScanLog sl = scan(0, 1, 0);
+        when(sl.getCustomerId()).thenReturn("CUST-ANON");
+        when(scanLogRepo.findTop15ByShopIdOrderByScannedAtDesc("SHOP-1")).thenReturn(List.of(sl));
+        Customer anon = mock(Customer.class);
+        when(anon.getId()).thenReturn("CUST-ANON");
+        when(anon.getName()).thenReturn(null);
+        when(customerRepo.findAllById(any())).thenReturn(List.of(anon));
+        Card card = Card.create(shop, "Kaffee", "x", 10, "Gratis Kaffee");
+        when(cardRepo.findAllById(any())).thenReturn(List.of(card));
+        when(ccRepo.findTop5ByCard_ShopOrderByCreatedAtDesc(shop)).thenReturn(List.of(CustomerCard.create(anon, card)));
+
+        Map<String, Object> a = dienst.aktivitaet(shop);
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> scans = (List<Map<String, Object>>) a.get("scans");
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> neue = (List<Map<String, Object>>) a.get("neueKunden");
+        assertThat(scans.get(0).get("anonym")).isEqualTo(true);
+        assertThat(neue.get(0).get("anonym")).isEqualTo(true);
     }
 }
