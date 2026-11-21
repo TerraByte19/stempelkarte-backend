@@ -103,6 +103,12 @@ public class KampagnenController {
         Shop shop = currentShop(auth);
         com.example.stemplekarte.service.TarifPruefung.pruefe(shop,
                 com.example.stemplekarte.model.Tarif.Funktion.KAMPAGNEN);
+        // Interne Gruppen der Automaten (Bewertung, Tagesangebot, Geburtstag,
+        // AUTO_*) sind fuer den Laden tabu - die Bewertung ignoriert sogar
+        // das Tageslimit.
+        if (!com.example.stemplekarte.service.Zielgruppe.von(req.gruppe()).waehlbar()) {
+            throw new IllegalArgumentException("Unbekannte Zielgruppe: " + req.gruppe());
+        }
         Instant geplant = null;
         if (req.geplantAm() != null && !req.geplantAm().isBlank()) {
             try {

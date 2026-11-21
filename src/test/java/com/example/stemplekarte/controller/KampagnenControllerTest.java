@@ -87,6 +87,21 @@ class KampagnenControllerTest {
         assertThat(item.fertigAm()).isNull();
     }
 
+    /**
+     * Die internen Gruppen der Automaten (Bewertung ignoriert sogar das
+     * Tageslimit) darf der Laden nicht selbst waehlen - sonst koennte er
+     * beliebigen Text mehrmals am Tag an alle schicken.
+     */
+    @Test
+    void interneGruppen_abgelehnt() {
+        for (String intern : new String[]{"bewertung", "TAGESANGEBOT", "geburtstag_heute", "automation"}) {
+            assertThatThrownBy(() -> controller.starte(
+                    new KampagnenController.KampagneRequest("Spam", intern, null, null), auth))
+                    .as(intern).isInstanceOf(IllegalArgumentException.class);
+        }
+        org.mockito.Mockito.verifyNoInteractions(service);
+    }
+
     @Test
     void planen_parstDenZeitpunkt() {
         Instant wann = Instant.parse("2026-12-24T15:00:00Z");
