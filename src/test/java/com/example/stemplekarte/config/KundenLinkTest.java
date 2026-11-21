@@ -36,6 +36,27 @@ class KundenLinkTest {
                 .isEqualTo("https://karte.stampit-app.de/CARD-1?ref=ABC234");
     }
 
+    /**
+     * Der NFC-Tag muss auf dieselbe Adresse zeigen, auf der sich der Kunde
+     * angemeldet hat - nur dort kennt sein Handy ihn (Cookie je Adresse).
+     */
+    @Test
+    void nfcLink_folgtDerKundenadresse() {
+        assertThat(KundenLink.nfc(SERVER, "tok1")).isEqualTo(SERVER + "/t/tok1");
+        KundenLink.setze("https://karte.stampit-app.de");
+        assertThat(KundenLink.nfc(SERVER, "tok1")).isEqualTo("https://karte.stampit-app.de/t/tok1");
+    }
+
+    @Test
+    void istKundenHost_nurDieEigeneAdresse() {
+        assertThat(KundenLink.istKundenHost("stempelkarte-backend.onrender.com")).isTrue();
+        KundenLink.setze("https://karte.stampit-app.de");
+        assertThat(KundenLink.istKundenHost("karte.stampit-app.de")).isTrue();
+        assertThat(KundenLink.istKundenHost("KARTE.stampit-app.de")).isTrue();
+        assertThat(KundenLink.istKundenHost("stempelkarte-backend.onrender.com")).isFalse();
+        assertThat(KundenLink.istKundenHost(null)).isFalse();
+    }
+
     @Test
     void ungewohnteKartenId_behaeltDenLangenPfad() {
         KundenLink.setze("https://karte.stampit-app.de");

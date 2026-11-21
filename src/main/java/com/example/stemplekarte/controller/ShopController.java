@@ -640,7 +640,7 @@ public class ShopController {
             card.neuerNfcToken();
             cardService.save(card);
         }
-        return new NfcResponse(baseUrl + "/t/" + card.getNfcToken(), card.getNfcToken());
+        return new NfcResponse(com.example.stemplekarte.config.KundenLink.nfc(baseUrl, card.getNfcToken()), card.getNfcToken());
     }
 
     @Operation(summary = "Neuen NFC-Schluessel erzeugen",
@@ -651,7 +651,7 @@ public class ShopController {
         Card card = cardService.getByIdAndShop(cardId, currentShop(auth));
         String token = card.neuerNfcToken();
         cardService.save(card);
-        return new NfcResponse(baseUrl + "/t/" + token, token);
+        return new NfcResponse(com.example.stemplekarte.config.KundenLink.nfc(baseUrl, token), token);
     }
 
     @Operation(summary = "Praemien einer Karte auflisten")

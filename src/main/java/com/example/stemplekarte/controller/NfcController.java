@@ -1,6 +1,7 @@
 package com.example.stemplekarte.controller;
 
 import com.example.stemplekarte.config.AppProperties;
+import com.example.stemplekarte.config.KundenLink;
 import com.example.stemplekarte.model.Card;
 import com.example.stemplekarte.model.CustomerCard;
 import com.example.stemplekarte.model.ScanResult;
@@ -117,6 +118,22 @@ public class NfcController {
         // die NFC-Karte sagt nur, in welchem Laden getippt wurde.
         Optional<String> kunde = KundenCookie.lesen(request, card.getId(), props.nfc().cookieSecret());
         if (kunde.isEmpty()) {
+            // Das Cookie gilt nur fuer die Adresse, die es gesetzt hat. Kommt
+            // ein alter Tag ueber die Serveradresse, liegt es bei Kunden, die
+            // sich ueber die Kundenadresse angemeldet haben, dort - also
+            // einmal hinueber. Auf der Kundenadresse selbst nie (Schleife).
+            // "weiter=1" markiert die Weiterleitung: reicht der Hoster den
+            // Hostnamen anders durch als erwartet, bleibt es bei einem Sprung.
+            if (!KundenLink.istKundenHost(request.getServerName())
+                    && request.getParameter("weiter") == null) {
+                log.info("[NFC] kein Kunden-Cookie auf {} - weiter zur Kundenadresse, laden={} karte={}",
+                        request.getServerName(), shop.getId(), card.getId());
+                return ResponseEntity.status(302)
+                        .header(HttpHeaders.LOCATION, KundenLink.nfc(props.baseUrl(), token) + "?weiter=1")
+                        .build();
+            }
+            log.info("[NFC] kein Kunden-Cookie - Noch keine Karte, laden={} karte={} host={}",
+                    shop.getId(), card.getId(), request.getServerName());
             return seite("Noch keine Karte",
                     "Leg kurz deine Treuekarte an, dann zählt jedes Antippen.",
                     shop, false, anlegenKnopf(card));
@@ -190,7 +207,9 @@ public class NfcController {
     }
 
     private String anlegenKnopf(Card card) {
-        return "<a class='knopf' href='" + props.baseUrl() + "/karte-neu/" + card.getId()
+        // Kundenadresse, nicht Serveradresse: dort entsteht beim Anmelden das
+        // Cookie, das der Tag beim naechsten Antippen lesen muss.
+        return "<a class='knopf' href='" + KundenLink.anmeldung(props.baseUrl(), card.getId())
                 + "'>Karte anlegen</a>";
     }
 

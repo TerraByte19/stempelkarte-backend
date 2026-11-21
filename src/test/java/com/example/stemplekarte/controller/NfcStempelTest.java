@@ -316,6 +316,88 @@ class NfcStempelTest {
         assertTrue(KundenCookie.darfWechseln(new MockHttpServletRequest()));
     }
 
+    // ── Zwei Adressen: Serveradresse und Kundenadresse ──────────────────────
+    // Das Handy schickt das Kunden-Cookie nur an die Adresse, die es gesetzt
+    // hat. Laufen Anmeldung und Tag ueber verschiedene Adressen, kennt der
+    // Tag den Kunden nie ("Noch keine Karte" in Dauerschleife).
+
+    @org.junit.jupiter.api.AfterEach
+    void kundenadresseZuruecksetzen() {
+        com.example.stemplekarte.config.KundenLink.setze(null);
+    }
+
+    /** Alte Tags (Serveradresse) schicken Kunden ohne Cookie zur Kundenadresse - dort liegt es. */
+    @Test
+    void ohneCookie_aufServeradresse_leitetZurKundenadresseWeiter() {
+        com.example.stemplekarte.config.KundenLink.setze("https://karte.test");
+        NfcController c = controller(120);
+        MockHttpServletRequest req = new MockHttpServletRequest();
+        req.setServerName("stempelkarte-backend.onrender.com");
+
+        ResponseEntity<String> antwort = c.tippen(TOKEN, req, new MockHttpServletResponse());
+
+        org.assertj.core.api.Assertions.assertThat(antwort.getStatusCode().value()).isEqualTo(302);
+        org.assertj.core.api.Assertions.assertThat(antwort.getHeaders().getLocation())
+                .hasToString("https://karte.test/t/" + TOKEN + "?weiter=1");
+        verify(service, never()).processScan(any(QrPayload.class), any(Shop.class), anyInt());
+    }
+
+    /**
+     * Schleifenschutz: reicht der Hoster den Hostnamen anders durch als
+     * erwartet, saehe jede Anfrage wie "Serveradresse" aus. Die Weiterleitung
+     * markiert sich deshalb und passiert hoechstens einmal.
+     */
+    @Test
+    void weiterleitungPassiertHoechstensEinmal() {
+        com.example.stemplekarte.config.KundenLink.setze("https://karte.test");
+        NfcController c = controller(120);
+        MockHttpServletRequest erste = new MockHttpServletRequest();
+        erste.setServerName("intern.render");
+        ResponseEntity<String> weiter = c.tippen(TOKEN, erste, new MockHttpServletResponse());
+        String ziel = weiter.getHeaders().getLocation().toString();
+        org.assertj.core.api.Assertions.assertThat(ziel).startsWith("https://karte.test/t/" + TOKEN);
+
+        MockHttpServletRequest zweite = new MockHttpServletRequest();
+        zweite.setServerName("intern.render");
+        zweite.setQueryString(ziel.substring(ziel.indexOf('?') + 1));
+        zweite.setParameter("weiter", "1");
+
+        ResponseEntity<String> antwort = c.tippen(TOKEN, zweite, new MockHttpServletResponse());
+
+        org.assertj.core.api.Assertions.assertThat(antwort.getStatusCode().value()).isEqualTo(200);
+        org.assertj.core.api.Assertions.assertThat(antwort.getBody()).contains("Noch keine Karte");
+    }
+
+    /** Auf der Kundenadresse selbst: keine Weiterleitung (sonst Schleife), Anlegen bleibt dort. */
+    @Test
+    void ohneCookie_aufKundenadresse_anlegenKnopfBleibtAufKundenadresse() {
+        com.example.stemplekarte.config.KundenLink.setze("https://karte.test");
+        NfcController c = controller(120);
+        MockHttpServletRequest req = new MockHttpServletRequest();
+        req.setServerName("karte.test");
+
+        String html = c.tippen(TOKEN, req, new MockHttpServletResponse()).getBody();
+
+        org.assertj.core.api.Assertions.assertThat(html).contains("Noch keine Karte");
+        org.assertj.core.api.Assertions.assertThat(html).contains("href='https://karte.test/" + KARTE + "'");
+        org.assertj.core.api.Assertions.assertThat(html).doesNotContain("localhost");
+    }
+
+    /** Wer sein Cookie noch von der Serveradresse hat (alte Kunden, alte Tags), stempelt dort weiter. */
+    @Test
+    void mitCookie_aufServeradresse_stempeltOhneWeiterleitung() {
+        com.example.stemplekarte.config.KundenLink.setze("https://karte.test");
+        NfcController c = controller(120);
+        when(scanLogRepo.findFirstByCustomerIdAndCardIdOrderByScannedAtDesc(KUNDE, KARTE))
+                .thenReturn(Optional.empty());
+        MockHttpServletRequest req = mitCookie(echtesCookie());
+        req.setServerName("stempelkarte-backend.onrender.com");
+
+        ResponseEntity<String> antwort = c.tippen(TOKEN, req, new MockHttpServletResponse());
+
+        org.assertj.core.api.Assertions.assertThat(antwort.getBody()).contains("Stempel erhalten");
+    }
+
     @Test
     void cookieNameTraegtDieKarteUndNurHarmloseZeichen() {
         org.assertj.core.api.Assertions.assertThat(KundenCookie.name("CARD-AB12")).isEqualTo("sk_kunde_CARD-AB12");

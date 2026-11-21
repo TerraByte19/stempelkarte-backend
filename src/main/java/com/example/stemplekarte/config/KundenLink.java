@@ -60,6 +60,28 @@ public class KundenLink {
         return basis(baseUrl) + anmeldePfad(cardId);
     }
 
+    /**
+     * Adresse fuer den NFC-Tag am Tresen. Muss auf der Kundenadresse liegen:
+     * das Handy schickt das Kunden-Cookie nur an die Adresse, auf der der
+     * Kunde sich angemeldet hat.
+     */
+    public static String nfc(String baseUrl, String token) {
+        return basis(baseUrl) + "/t/" + token;
+    }
+
+    /**
+     * Kam die Anfrage ueber die Kundenadresse? Ohne eigene Kundenadresse gibt
+     * es nur eine Adresse, dann immer ja.
+     */
+    public static boolean istKundenHost(String host) {
+        if (eigene == null) return true;
+        if (host == null) return false;
+        String ohneSchema = eigene.substring(eigene.indexOf("://") + 3);
+        int doppelpunkt = ohneSchema.indexOf(':');
+        String eigenerHost = doppelpunkt < 0 ? ohneSchema : ohneSchema.substring(0, doppelpunkt);
+        return eigenerHost.equalsIgnoreCase(host);
+    }
+
     /** Der kurze Pfad gilt nur fuer Karten-IDs, die die Kurz-Route auch annimmt. */
     static boolean kurzMoeglich(String cardId) {
         return cardId != null && cardId.matches(KURZ_MUSTER);
