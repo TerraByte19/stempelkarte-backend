@@ -188,12 +188,6 @@ public class Shop {
     @Column(name = "max_orte")
     private Integer maxOrte;
 
-    // Private Rueckmeldung (Sterne + Satz) vom Kunden an den Laden. Vom
-    // Laden selbst eingeschaltet. Null = aus: kein Link auf Kartenseite
-    // und Wallet-Karte, die Seite nimmt nichts an.
-    @Column(name = "rueckmeldung_aktiv")
-    private Boolean rueckmeldungAktiv;
-
     // Vom Admin befreit: kein Ladenort noetig, keine Geo-Pruefung beim Scan.
     // Null = nicht befreit, also Pflicht wie fuer alle.
     @Column(name = "geo_befreit")
@@ -591,15 +585,6 @@ public class Shop {
     /** Vom Admin. Bereich prueft der Aufrufer. */
     public void setMaxOrte(int maxOrte) {
         this.maxOrte = maxOrte;
-        this.updatedAt = Instant.now();
-    }
-
-    // ── Rueckmeldung ────────────────────────────────────────────────────
-
-    public boolean isRueckmeldungAktiv() { return Boolean.TRUE.equals(rueckmeldungAktiv); }
-
-    public void setRueckmeldungAktiv(boolean aktiv) {
-        this.rueckmeldungAktiv = aktiv;
         this.updatedAt = Instant.now();
     }
 

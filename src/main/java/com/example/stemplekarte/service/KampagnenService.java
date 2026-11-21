@@ -128,7 +128,11 @@ public class KampagnenService {
     List<CustomerCard> empfaenger(Shop shop, Zielgruppe gruppe, Instant jetzt) {
         Function<Card, List<Reward>> katalog = katalogCache();
         List<CustomerCard> basis = customerCardRepo.findKampagnenBasis(shop);
-        Set<String> heute = heuteBenachrichtigt(basis, tagesbeginn(jetzt));
+        // Die Google-Bewertung kommt pro Person nur einmal im Leben und
+        // ignoriert das Tageslimit - sonst kaeme sie bei einem Laden mit
+        // taeglichem Tagesangebot nie an.
+        Set<String> heute = gruppe == Zielgruppe.BEWERTUNG
+                ? Set.of() : heuteBenachrichtigt(basis, tagesbeginn(jetzt));
         Map<String, CustomerCard> proKunde = new LinkedHashMap<>();
         for (CustomerCard cc : basis) {
             if (!gruppe.passt(cc, jetzt, katalog)) continue;

@@ -487,7 +487,7 @@ public class LandingController {
                 googleSaveUrl.isBlank() ? ""
                         : "<a href='" + escapeHtml(googleSaveUrl) + "' class='btn-google' id='google-btn'>" +
                                 t(lang, "card.google") + "</a>",
-                stufenZeile(lang, card, cc) + bewertungsLinks(lang, card.getShop(), customerId, cardId)
+                stufenZeile(lang, card, cc) + bewertungsLink(lang, card.getShop())
                         + empfehlungsBlock(lang, card, cc) + demoBlock(lang, card, customerId, cardId)
                         + sprachenLeiste(lang, "/karte/" + customerId + "/" + cardId, null),
                 // Die beiden IDs stehen in JS-Zeichenketten. toJsString
@@ -906,7 +906,7 @@ public class LandingController {
                     googleSaveUrl.isBlank() ? ""
                             : "<a href='" + escapeHtml(googleSaveUrl) + "' class='btn-google' id='google-btn'>" +
                                     t(lang, "card.google") + "</a>",
-                    stufenZeile(lang, card, cc) + bewertungsLinks(lang, card.getShop(), customerId, cardId)
+                    stufenZeile(lang, card, cc) + bewertungsLink(lang, card.getShop())
                         + empfehlungsBlock(lang, card, cc) + demoBlock(lang, card, customerId, cardId)
                         + sprachenLeiste(lang, "/karte/" + customerId + "/" + cardId, null),
                     // Parameter fuer das JS: custId, cId, threshold, rewardText (als JS-String), stamps
@@ -1409,26 +1409,6 @@ public class LandingController {
     }
 
     /**
-     * Fuer die Kartenseiten: Google-Link (falls hinterlegt) plus der Link
-     * zur privaten Rueckmeldung, wenn der Laden sie eingeschaltet hat. Die
-     * IDs sind Server-IDs, stehen aber in einem Attribut - escapeHtml.
-     */
-    static String bewertungsLinks(com.example.stemplekarte.model.Shop shop, String customerId, String cardId) {
-        return bewertungsLinks(Texts.STANDARD, shop, customerId, cardId);
-    }
-
-    static String bewertungsLinks(String lang, com.example.stemplekarte.model.Shop shop, String customerId, String cardId) {
-        String google = bewertungsLink(lang, shop);
-        if (shop == null || !shop.isRueckmeldungAktiv()) return google;
-        String rueck = "<a href='/bewertung/" + escapeHtml(customerId) + "/" + escapeHtml(cardId)
-                + "' class='review-link' "
-                + "style='display:block;margin-top:14px;text-align:center;font-size:14px;"
-                + "color:inherit;opacity:.85;text-decoration:underline'>"
-                + t(lang, "card.feedback", escapeHtml(shop.getName())) + "</a>";
-        return rueck + google;
-    }
-
-    /**
      * Kundenseite einer Mitgliedskarte: Name, Mitglied seit, Besuche, die
      * Wallet-Knoepfe. Eigene, kleine Vorlage - die Stempel- und Punkteseiten
      * bleiben unangetastet.
@@ -1509,7 +1489,7 @@ public class LandingController {
                 googleSaveUrl.isBlank() ? ""
                         : "<a href='" + escapeHtml(googleSaveUrl) + "' class='btn btn-google' id='google-btn'>" +
                                 t(lang, "card.google") + "</a>",
-                stufenZeile(lang, card, cc) + bewertungsLinks(lang, card.getShop(), customerId, cardId)
+                stufenZeile(lang, card, cc) + bewertungsLink(lang, card.getShop())
                         + demoBlock(lang, card, customerId, cardId)
                         + sprachenLeiste(lang, "/karte/" + customerId + "/" + cardId, null)
         );
@@ -1605,7 +1585,7 @@ public class LandingController {
                 googleSaveUrl.isBlank() ? ""
                         : "<a href='" + escapeHtml(googleSaveUrl) + "' class='btn btn-google' id='google-btn'>" +
                                 t(lang, "card.google") + "</a>",
-                stufenZeile(lang, card, cc) + bewertungsLinks(lang, card.getShop(), customerId, cardId)
+                stufenZeile(lang, card, cc) + bewertungsLink(lang, card.getShop())
                         + demoBlock(lang, card, customerId, cardId)
                         + sprachenLeiste(lang, "/karte/" + customerId + "/" + cardId, null)
         );

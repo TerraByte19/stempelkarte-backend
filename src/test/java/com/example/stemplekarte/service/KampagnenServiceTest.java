@@ -428,6 +428,24 @@ class KampagnenServiceTest {
         assertThat(alle.heuteSchon()).isEqualTo(1);
     }
 
+    /**
+     * Die Google-Bewertung kommt pro Person nur einmal im Leben - sie darf
+     * nicht am Tageslimit scheitern, sonst kommt sie bei einem Laden mit
+     * taeglichem Tagesangebot nie an.
+     */
+    @Test
+    void bewertung_ignoriertDasTageslimit() {
+        when(shop.getBewertungErinnerungAb()).thenReturn(1);
+        CustomerCard cc = kundenkarte();
+        Instant spaeter = jetzt.plus(java.time.Duration.ofHours(3));
+        cc.kampagneErhalten("Heute: 2 fuer 1", spaeter.minusSeconds(60));
+        basis(cc);
+
+        assertThat(dienst.empfaenger(shop, Zielgruppe.ALLE, spaeter)).isEmpty();
+        assertThat(dienst.empfaenger(shop, Zielgruppe.BEWERTUNG, spaeter))
+                .extracting(CustomerCard::getId).containsExactly(cc.getId());
+    }
+
     @Test
     void zaehle_jeGruppeMitHeuteSchon() {
         CustomerCard a = kundenkarte();

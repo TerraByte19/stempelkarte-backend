@@ -286,7 +286,6 @@ public class ApplePassService {
         if (card.isPoints()) {
             var punkte = baueFelderPunkte(card, cc);
             nachrichtFeld(punkte, card.getShop(), cc);
-            rueckmeldungFeld(punkte, card, cc);
             tagesangebotFeld(punkte, card.getShop(), cc);
             empfehlungFeld(punkte, card, cc);
             statusFeld(punkte, card, cc);
@@ -297,7 +296,6 @@ public class ApplePassService {
         if (card.isMember()) {
             var mitglied = baueFelderMitglied(cc);
             nachrichtFeld(mitglied, card.getShop(), cc);
-            rueckmeldungFeld(mitglied, card, cc);
             tagesangebotFeld(mitglied, card.getShop(), cc);
             statusFeld(mitglied, card, cc);
             return mitglied.build();
@@ -307,7 +305,6 @@ public class ApplePassService {
         if (card.isPackage()) {
             var paket = baueFelderPaket(card, cc);
             nachrichtFeld(paket, card.getShop(), cc);
-            rueckmeldungFeld(paket, card, cc);
             tagesangebotFeld(paket, card.getShop(), cc);
             statusFeld(paket, card, cc);
             return paket.build();
@@ -319,7 +316,6 @@ public class ApplePassService {
         if (cc.isWillkommenOffen()) {
             var gesperrt = baueFelderGesperrt(card, cc, grid);
             nachrichtFeld(gesperrt, card.getShop(), cc);
-            rueckmeldungFeld(gesperrt, card, cc);
             tagesangebotFeld(gesperrt, card.getShop(), cc);
             empfehlungFeld(gesperrt, card, cc);
             statusFeld(gesperrt, card, cc);
@@ -375,7 +371,6 @@ public class ApplePassService {
         kundenFeld(genericPass, cc, lang);
 
         nachrichtFeld(genericPass, card.getShop(), cc);
-        rueckmeldungFeld(genericPass, card, cc);
         tagesangebotFeld(genericPass, card.getShop(), cc);
         empfehlungFeld(genericPass, card, cc);
         statusFeld(genericPass, card, cc);
@@ -501,22 +496,6 @@ public class ApplePassService {
                 .value(angebot != null ? angebot : Texts.t(lang, "pass.today_none")));
     }
 
-    /**
-     * Link zur privaten Rueckmeldung auf der Rueckseite - nur wenn der Laden
-     * sie eingeschaltet hat. Ohne changeMessage: das Feld soll nie klingeln,
-     * es erscheint still beim naechsten Kartenupdate. Apple macht aus der
-     * URL im Wert von selbst einen Link.
-     */
-    private void rueckmeldungFeld(PKGenericPassBuilder pass, Card card, CustomerCard cc) {
-        Shop shop = card.getShop();
-        if (shop == null || !shop.isRueckmeldungAktiv()) return;
-        if (cc.getCustomer() == null || cc.getCustomer().getId() == null) return;
-        String lang = Texts.sprache(cc.getCustomer(), shop);
-        pass.backFieldBuilder(PKField.builder()
-                .key("feedback").label(Texts.t(lang, "pass.feedback_label"))
-                .value(Texts.t(lang, "pass.feedback_text")
-                        + com.example.stemplekarte.config.KundenLink.basis(props.baseUrl()) + "/bewertung/" + cc.getCustomer().getId() + "/" + card.getId()));
-    }
 
     /**
      * Gesperrte Karte: nur Geschenk und QR, keine Stempel.

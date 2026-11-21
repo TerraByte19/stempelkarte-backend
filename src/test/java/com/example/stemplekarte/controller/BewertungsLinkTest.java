@@ -1,5 +1,6 @@
 package com.example.stemplekarte.controller;
 
+import com.example.stemplekarte.i18n.Texts;
 import com.example.stemplekarte.model.Shop;
 import com.example.stemplekarte.repository.ShopRepository;
 import com.example.stemplekarte.service.ShopService;
@@ -38,19 +39,12 @@ class BewertungsLinkTest {
     }
 
     @Test
-    void rueckmeldungsLink_nurWennEingeschaltet_vorDemGoogleLink() {
+    void kartenseite_nurGoogleLink_keinePrivateRueckmeldung() {
         Shop shop = laden();
         shop.updateGoogleReviewUrl("https://g.page/r/abc");
-        String nurGoogle = LandingController.bewertungsLinks(shop, "CUST-1", "CARD-1");
-        assertThat(nurGoogle).doesNotContain("/bewertung/").contains("Bewerte uns bei Google");
-
-        shop.setRueckmeldungAktiv(true);
-        String beide = LandingController.bewertungsLinks(shop, "CUST-1", "CARD'1");
-        assertThat(beide).contains("href='/bewertung/CUST-1/CARD&#39;1'")
-                .contains("Sag es Café Mokka")
-                .contains("Bewerte uns bei Google");
-        assertThat(beide.indexOf("/bewertung/")).isLessThan(beide.indexOf("g.page"));
-        assertThat(LandingController.bewertungsLinks(null, "a", "b")).isEmpty();
+        assertThat(LandingController.bewertungsLink(Texts.STANDARD, shop))
+                .doesNotContain("/bewertung/").contains("Bewerte uns bei Google");
+        assertThat(LandingController.bewertungsLink(Texts.STANDARD, null)).isEmpty();
     }
 
     @Test
