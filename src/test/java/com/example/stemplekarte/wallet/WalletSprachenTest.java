@@ -6,7 +6,6 @@ import com.example.stemplekarte.model.Card;
 import com.example.stemplekarte.model.Customer;
 import com.example.stemplekarte.model.CustomerCard;
 import com.example.stemplekarte.model.Shop;
-import com.example.stemplekarte.service.EmpfehlungService;
 import com.example.stemplekarte.service.PaketService;
 import com.example.stemplekarte.service.RewardService;
 import com.example.stemplekarte.service.Stufen;
@@ -109,9 +108,6 @@ class WalletSprachenTest {
     @Test
     void hilfstexte_inAllenSprachen() {
         for (String lang : Texts.SPRACHEN) {
-            Card card = Card.create(laden(lang), "K", "x", 10, "R");
-            card.updateEmpfehlung(true, 2);
-            assertThat(EmpfehlungService.werbeText(lang, card)).contains("2").isNotBlank();
             Card paket = Card.createPackage(laden(lang), "P", "x", 10, "Kurse");
             CustomerCard cc = CustomerCard.create(kunde(null), paket);
             assertThat(PaketService.restText(lang, paket, cc)).isNotBlank();

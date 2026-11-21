@@ -85,19 +85,6 @@ public interface CustomerCardRepository extends JpaRepository<CustomerCard, Stri
     org.springframework.data.domain.Page<CustomerCard> findKunden(
             Shop shop, String q, org.springframework.data.domain.Pageable seite);
 
-    // Kunde wirbt Kunde: der Werber ueber seinen Code, mit Karte und Laden
-    // (die Pruefung "gleiche Karte, nicht derselbe Kunde" braucht beide).
-    @EntityGraph(attributePaths = {"card", "card.shop", "customer"})
-    Optional<CustomerCard> findByEmpfehlungsCode(String empfehlungsCode);
-    boolean existsByEmpfehlungsCode(String empfehlungsCode);
-    long countByCardAndGeworbenVonIsNotNull(Card card);
-    long countByCardAndEmpfehlungBonusAmIsNotNull(Card card);
-
-    // Die fleissigsten Werber einer Karte: [werberCardId, anzahl].
-    @Query("select cc.geworbenVon, count(cc) from CustomerCard cc where cc.card = :card "
-            + "and cc.geworbenVon is not null group by cc.geworbenVon order by count(cc) desc")
-    List<Object[]> topWerber(Card card, org.springframework.data.domain.Pageable seite);
-
     // Kundenliste mit Gruppenfilter: alle aktiven Karten des Ladens, die
     // Gruppe wird in Java bestimmt (service.Kundengruppe), danach gesucht
     // und seitenweise geschnitten. Gleiche Sortierung wie findKunden.

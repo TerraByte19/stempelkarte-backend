@@ -287,7 +287,6 @@ public class ApplePassService {
             var punkte = baueFelderPunkte(card, cc);
             nachrichtFeld(punkte, card.getShop(), cc);
             tagesangebotFeld(punkte, card.getShop(), cc);
-            empfehlungFeld(punkte, card, cc);
             statusFeld(punkte, card, cc);
             return punkte.build();
         }
@@ -317,7 +316,6 @@ public class ApplePassService {
             var gesperrt = baueFelderGesperrt(card, cc, grid);
             nachrichtFeld(gesperrt, card.getShop(), cc);
             tagesangebotFeld(gesperrt, card.getShop(), cc);
-            empfehlungFeld(gesperrt, card, cc);
             statusFeld(gesperrt, card, cc);
             return gesperrt.build();
         }
@@ -372,7 +370,6 @@ public class ApplePassService {
 
         nachrichtFeld(genericPass, card.getShop(), cc);
         tagesangebotFeld(genericPass, card.getShop(), cc);
-        empfehlungFeld(genericPass, card, cc);
         statusFeld(genericPass, card, cc);
         return genericPass.build();
     }
@@ -464,21 +461,6 @@ public class ApplePassService {
                 .key("status").label(Texts.t(lang, "pass.status_label"))
                 .value(com.example.stemplekarte.service.Stufen.text(
                         lang, s, com.example.stemplekarte.service.Stufen.besuche(card, cc))));
-    }
-
-    /**
-     * Kunde wirbt Kunde auf der Rueckseite: Satz plus Link mit dem Code der
-     * Karte. Nur bei eingeschalteter Empfehlung und wenn die Karte einen
-     * Code traegt. Ohne changeMessage - das Feld soll nie klingeln.
-     */
-    private void empfehlungFeld(PKGenericPassBuilder pass, Card card, CustomerCard cc) {
-        if (!com.example.stemplekarte.service.EmpfehlungService.sichtbar(card, cc)) return;
-        String lang = Texts.sprache(cc.getCustomer(), card.getShop());
-        pass.backFieldBuilder(PKField.builder()
-                .key("empfehlen").label(Texts.t(lang, "pass.referral_label"))
-                .value(com.example.stemplekarte.service.EmpfehlungService.werbeText(lang, card) + " " + Texts.t(lang, "pass.referral_link")
-                        + com.example.stemplekarte.service.EmpfehlungService.linkFuer(
-                                props.baseUrl(), card.getId(), cc.getEmpfehlungsCode())));
     }
 
     /**

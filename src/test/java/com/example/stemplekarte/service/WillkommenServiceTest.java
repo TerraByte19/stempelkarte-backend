@@ -75,7 +75,7 @@ class WillkommenServiceTest {
         when(customerCardRepo.save(any(CustomerCard.class))).thenAnswer(i -> i.getArgument(0));
 
         service = new CustomerService(customerRepo, cardRepo, customerCardRepo,
-                mock(AppleDeviceRepository.class), emailService, scanLogRepo, mock(EmpfehlungService.class));
+                mock(AppleDeviceRepository.class), emailService, scanLogRepo);
     }
 
     private CustomerCard gesperrteKarte() {

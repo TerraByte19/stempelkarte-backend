@@ -47,7 +47,7 @@ class AnmeldungOhneMailTest {
         when(customerRepo.save(any(Customer.class))).thenAnswer(i -> i.getArgument(0));
         when(customerRepo.findByEmail(anyString())).thenReturn(Optional.empty());
         return new CustomerService(customerRepo, cardRepo, ccRepo, mock(AppleDeviceRepository.class),
-                mail, mock(ScanLogRepository.class), mock(EmpfehlungService.class));
+                mail, mock(ScanLogRepository.class));
     }
 
     private Card karte(boolean ohneMail) {
@@ -85,7 +85,7 @@ class AnmeldungOhneMailTest {
 
     @Test
     void mitSchalter_gibtEsSofortEineKarteOhneMail() {
-        CustomerCard cc = dienst(karte(true)).registerOhneMail("CARD-1", null, "tr");
+        CustomerCard cc = dienst(karte(true)).registerOhneMail("CARD-1", "tr");
 
         assertThat(cc.getCustomer().isOhneMail()).isTrue();
         assertThat(cc.getCustomer().getLanguage()).isEqualTo("tr");
@@ -99,8 +99,8 @@ class AnmeldungOhneMailTest {
     void jederAufrufLegtEinenEigenenKundenAn() {
         CustomerService dienst = dienst(karte(true));
 
-        CustomerCard eins = dienst.registerOhneMail("CARD-1", null, null);
-        CustomerCard zwei = dienst.registerOhneMail("CARD-1", null, null);
+        CustomerCard eins = dienst.registerOhneMail("CARD-1", null);
+        CustomerCard zwei = dienst.registerOhneMail("CARD-1", null);
 
         assertThat(eins.getCustomer().getId()).isNotEqualTo(zwei.getCustomer().getId());
     }
@@ -109,7 +109,7 @@ class AnmeldungOhneMailTest {
     void ohneSchalter_istDerWegZu() {
         CustomerService dienst = dienst(karte(false));
 
-        assertThatThrownBy(() -> dienst.registerOhneMail("CARD-1", null, null))
+        assertThatThrownBy(() -> dienst.registerOhneMail("CARD-1", null))
                 .isInstanceOf(IllegalArgumentException.class);
 
         verify(customerRepo, never()).save(any());
@@ -124,7 +124,7 @@ class AnmeldungOhneMailTest {
         ohneSchalter.updateWillkommen(true, "Erster Kaffee gratis");
 
         // Ohne Anmeldung: nie gesperrt.
-        assertThat(dienst(mitSchalter).registerOhneMail("CARD-1", null, null).isWillkommenOffen()).isFalse();
+        assertThat(dienst(mitSchalter).registerOhneMail("CARD-1", null).isWillkommenOffen()).isFalse();
         // Auch der E-Mail-Weg gibt bei diesem Laden kein Geschenk mehr aus.
         assertThat(dienst(mitSchalter).registerForCard("A", "a@example.com", "CARD-1", false).isWillkommenOffen()).isFalse();
         // Laden ohne Schalter: Geschenk wie bisher.
@@ -133,7 +133,7 @@ class AnmeldungOhneMailTest {
 
     @Test
     void platzhalterNameIstKeinVorname() {
-        CustomerCard cc = dienst(karte(true)).registerOhneMail("CARD-1", null, null);
+        CustomerCard cc = dienst(karte(true)).registerOhneMail("CARD-1", null);
 
         assertThat(Platzhalter.fuelle("Danke, {name}! Noch {offen} Stempel.", cc, null))
                 .isEqualTo("Danke! Noch 10 Stempel.");

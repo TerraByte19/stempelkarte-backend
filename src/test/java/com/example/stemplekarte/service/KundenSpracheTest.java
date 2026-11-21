@@ -33,7 +33,7 @@ class KundenSpracheTest {
         when(ccRepo.findByCustomerAndCard(any(), any())).thenReturn(Optional.empty());
         when(customerRepo.save(any(Customer.class))).thenAnswer(i -> i.getArgument(0));
         return new CustomerService(customerRepo, cardRepo, ccRepo, mock(AppleDeviceRepository.class),
-                mock(EmailService.class), mock(ScanLogRepository.class), mock(EmpfehlungService.class));
+                mock(EmailService.class), mock(ScanLogRepository.class));
     }
 
     private Card karteVon(String sprache) {
@@ -51,9 +51,9 @@ class KundenSpracheTest {
         assertThat(ohne.getCustomer().getLanguage()).isNull();
         assertThat(com.example.stemplekarte.i18n.Texts.sprache(ohne.getCustomer(), null)).isEqualTo("de");
 
-        CustomerCard mit = dienst(repo, karteVon("de")).registerForCard("Ayşe", "ayse@example.com", "CARD-1", false, null, null, null, "tr");
+        CustomerCard mit = dienst(repo, karteVon("de")).registerForCard("Ayşe", "ayse@example.com", "CARD-1", false, null, null, "tr");
         assertThat(mit.getCustomer().getLanguage()).isEqualTo("tr");
-        CustomerCard kaputt = dienst(repo, karteVon("de")).registerForCard("Ayşe", "ayse@example.com", "CARD-1", false, null, null, null, "xx");
+        CustomerCard kaputt = dienst(repo, karteVon("de")).registerForCard("Ayşe", "ayse@example.com", "CARD-1", false, null, null, "xx");
         assertThat(kaputt.getCustomer().getLanguage()).isNull();
     }
 
@@ -75,7 +75,7 @@ class KundenSpracheTest {
         CustomerService s = dienst(repo, karteVon("ar"));
         s.registerForCard("Alex", "alex@example.com", "CARD-1", false, null, null, null);
         assertThat(alt.getLanguage()).isEqualTo("de");
-        s.registerForCard("Alex", "alex@example.com", "CARD-1", false, null, null, null, "ar");
+        s.registerForCard("Alex", "alex@example.com", "CARD-1", false, null, null, "ar");
         assertThat(alt.getLanguage()).isEqualTo("ar");
         s.spracheSetzen(alt, "en");
         assertThat(alt.getLanguage()).isEqualTo("en");

@@ -523,13 +523,6 @@ public class GoogleWalletService {
                     .setBody(com.example.stemplekarte.service.Stufen.text(
                             lang, stufe, com.example.stemplekarte.service.Stufen.besuche(card, cc))));
         }
-        // Kunde wirbt Kunde: Satz plus Link mit dem Code dieser Karte.
-        if (com.example.stemplekarte.service.EmpfehlungService.sichtbar(card, cc)) {
-            module.add(new TextModuleData().setId("empfehlen").setHeader(Texts.t(lang, "gw.referral"))
-                    .setBody(com.example.stemplekarte.service.EmpfehlungService.werbeText(lang, card) + " " + Texts.t(lang, "pass.referral_link")
-                            + com.example.stemplekarte.service.EmpfehlungService.linkFuer(
-                                    props.baseUrl(), card.getId(), cc.getEmpfehlungsCode())));
-        }
 
         LoyaltyObject loyaltyObject = new LoyaltyObject()
                 .setId(objectId)

@@ -136,7 +136,7 @@ class WillkommenScanTest {
         CardRepository cardRepo = mock(CardRepository.class);
         PointsService points = new PointsService(ccRepo, cardRepo,
                 mock(PointsBookingRepository.class), mock(ScanLogRepository.class),
-                mock(RewardService.class), mock(com.example.stemplekarte.service.EmpfehlungService.class));
+                mock(RewardService.class));
 
         Card card = Card.create(shop, "Kaffee", "x", 10, "Gratis Kaffee");
         Customer customer = mock(Customer.class);

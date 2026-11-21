@@ -1,6 +1,6 @@
 package com.example.stemplekarte.config;
 
-import com.example.stemplekarte.service.EmpfehlungService;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
@@ -23,7 +23,6 @@ class KundenLinkTest {
         assertThat(KundenLink.basis(SERVER)).isEqualTo(SERVER);
         assertThat(KundenLink.anmeldung(SERVER, "CARD-04C2BFD8")).isEqualTo(SERVER + "/karte-neu/CARD-04C2BFD8");
         assertThat(KundenLink.anmeldePfad("CARD-04C2BFD8")).isEqualTo("/karte-neu/CARD-04C2BFD8");
-        assertThat(EmpfehlungService.linkFuer(SERVER, "CARD-1", "ABC234")).isEqualTo(SERVER + "/karte-neu/CARD-1?ref=ABC234");
     }
 
     @Test
@@ -32,8 +31,6 @@ class KundenLinkTest {
         assertThat(KundenLink.aktiv()).isTrue();
         assertThat(KundenLink.basis(SERVER)).isEqualTo("https://karte.stampit-app.de");
         assertThat(KundenLink.anmeldung(SERVER, "CARD-04C2BFD8")).isEqualTo("https://karte.stampit-app.de/CARD-04C2BFD8");
-        assertThat(EmpfehlungService.linkFuer(SERVER, "CARD-1", "ABC234"))
-                .isEqualTo("https://karte.stampit-app.de/CARD-1?ref=ABC234");
     }
 
     /**

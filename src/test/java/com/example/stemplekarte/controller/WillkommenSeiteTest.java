@@ -39,9 +39,7 @@ class WillkommenSeiteTest {
         cardService = mock(CardService.class);
         GoogleWalletService google = mock(GoogleWalletService.class);
         when(google.generateSaveUrl(any())).thenReturn("");
-        empfehlung = mock(com.example.stemplekarte.service.EmpfehlungService.class);
-        when(empfehlung.link(any())).thenReturn("https://stampit.test/karte-neu/CARD-1?ref=ABC234");
-        controller = new LandingController(customerService, cardService, google, mock(RewardService.class), empfehlung);
+        controller = new LandingController(customerService, cardService, google, mock(RewardService.class));
 
         Shop shop = mock(Shop.class);
         when(shop.getName()).thenReturn("Café Nord");
@@ -49,8 +47,6 @@ class WillkommenSeiteTest {
         customer = mock(Customer.class);
         when(customer.getName()).thenReturn("Ana");
     }
-
-    private com.example.stemplekarte.service.EmpfehlungService empfehlung;
 
     private String kundenseite(CustomerCard cc) {
         when(customerService.getOrCreateCustomerCard("CUST-1", "CARD-1")).thenReturn(cc);
@@ -99,26 +95,14 @@ class WillkommenSeiteTest {
         assertThat(html).contains("id=\"rest\">0<").contains("aufgebraucht");
     }
 
+    /** Kunde wirbt Kunde gibt es nicht mehr: kein Block, kein Teilen-Knopf. */
     @Test
-    void empfehlung_blockNurWennAnUndCodeDa() {
+    void keinEmpfehlungsBlock() {
         CustomerCard cc = CustomerCard.create(customer, card);
         cc.addStamp();
-        assertThat(kundenseite(cc)).doesNotContain("Freunde werben");
-
-        card.updateEmpfehlung(true, 2);
-        assertThat(kundenseite(cc)).doesNotContain("Freunde werben");   // noch kein Code
-
-        cc.empfehlungsCodeSetzen("ABC234");
-        String html = kundenseite(cc);
-        assertThat(html).contains("Freunde werben")
-                .contains("2 Stempel für euch beide")
-                .contains("Dein Code: <b>ABC234</b>")
-                .contains("data-link='https://stampit.test/karte-neu/CARD-1?ref=ABC234'");
-        // Anmeldeseite: Feld fuer den Code nur bei eingeschalteter Empfehlung.
-        assertThat(LandingController.empfehlungsFeld(card)).contains("id='ref'");
-        card.updateEmpfehlung(false, 2);
-        assertThat(LandingController.empfehlungsFeld(card)).isEmpty();
+        assertThat(kundenseite(cc)).doesNotContain("Freunde werben").doesNotContain("empfehlung-btn");
     }
+
 
     @Test
     void gesperrt_zeigtGeschenk_versteckteStempel() {
@@ -156,7 +140,7 @@ class WillkommenSeiteTest {
         card.updateWillkommen(true, "Erster Kaffee geht auf uns");
         when(cardService.getById("CARD-1")).thenReturn(card);
 
-        String html = controller.newCustomerPage("CARD-1", null, null).getBody();
+        String html = controller.newCustomerPage("CARD-1", null).getBody();
 
         assertThat(html).doesNotContain("Karte nicht gefunden");
         assertThat(html).contains("🎁 Erster Kaffee geht auf uns");
@@ -168,7 +152,7 @@ class WillkommenSeiteTest {
     void anmeldeseite_ohneAngebot_wortgleich() {
         when(cardService.getById("CARD-1")).thenReturn(card);
 
-        String html = controller.newCustomerPage("CARD-1", null, null).getBody();
+        String html = controller.newCustomerPage("CARD-1", null).getBody();
 
         assertThat(html).doesNotContain("Karte nicht gefunden");
         assertThat(html).contains("🎉 Stempelkarte holen!");

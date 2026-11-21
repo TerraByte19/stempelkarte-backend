@@ -139,20 +139,6 @@ public class CustomerCard {
     @Column(name = "paket_frisch")
     private Boolean paketFrisch;
 
-    // Kunde wirbt Kunde (service.EmpfehlungService): eigener Code zum
-    // Weitergeben; wer mich geworben hat (customerCardId) und wann; wann der
-    // Bonus fuer beide gebucht wurde (einmal, beim ersten echten Besuch).
-    @Column(name = "empfehlungs_code", length = 12, unique = true)
-    private String empfehlungsCode;
-
-    @Column(name = "geworben_von", length = 40)
-    private String geworbenVon;
-
-    @Column(name = "geworben_am")
-    private Instant geworbenAm;
-
-    @Column(name = "empfehlung_bonus_am")
-    private Instant empfehlungBonusAm;
 
     // ── Willkommensgeschenk ──────────────────────────────────────────────
     // true = Karte gesperrt, bis das Personal das Geschenk einloest.
@@ -416,23 +402,6 @@ public class CustomerCard {
 
     /** Merker des "Paket leer"-Automaten: nach dem naechsten Kauf ist die Karte wieder dran. */
     public void paketLeerGeschickt() { this.autoPaketLeerBei = getPaketeGekauft(); }
-
-    // ── Kunde wirbt Kunde ───────────────────────────────────────────────
-
-    public String getEmpfehlungsCode() { return empfehlungsCode; }
-    public String getGeworbenVon() { return geworbenVon; }
-    public Instant getGeworbenAm() { return geworbenAm; }
-    public Instant getEmpfehlungBonusAm() { return empfehlungBonusAm; }
-
-    /** Nur der Code; kein updatedAt, der Pass soll deswegen nicht neu gebaut werden. */
-    public void empfehlungsCodeSetzen(String code) { this.empfehlungsCode = code; }
-
-    public void geworbenVon(String werberCardId, Instant jetzt) {
-        this.geworbenVon = werberCardId;
-        this.geworbenAm = jetzt;
-    }
-
-    public void empfehlungBelohnt(Instant jetzt) { this.empfehlungBonusAm = jetzt; }
 
     /**
      * Bonus-Stempel, gedeckelt bei der Schwelle: eine volle Karte wird nicht

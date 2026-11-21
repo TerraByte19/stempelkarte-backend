@@ -40,7 +40,7 @@ class AnmeldungOhneMailSeiteTest {
         GoogleWalletService google = mock(GoogleWalletService.class);
         when(google.generateSaveUrl(any())).thenReturn("");
         controller = new LandingController(customerService, cardService, google,
-                mock(RewardService.class), mock(com.example.stemplekarte.service.EmpfehlungService.class));
+                mock(RewardService.class));
         shop = mock(Shop.class);
         when(shop.getName()).thenReturn("Café <Nord>");
         card = Card.create(shop, "Kaffee", "x", 10, "Gratis Kaffee");
@@ -49,7 +49,7 @@ class AnmeldungOhneMailSeiteTest {
 
     @Test
     void ohneSchalter_bleibtDasFormularMitNameUndEmail() {
-        String html = controller.newCustomerPage("CARD-1", null, null).getBody();
+        String html = controller.newCustomerPage("CARD-1", null).getBody();
 
         assertThat(html).contains("id=\"name\"").contains("id=\"email\"").contains("getCard()");
         assertThat(html).doesNotContain("register-direkt").doesNotContain("stampit_karte_");
@@ -59,7 +59,7 @@ class AnmeldungOhneMailSeiteTest {
     void mitSchalter_nurEinKnopfUndKeinFormular() {
         when(shop.isAnmeldungOhneMail()).thenReturn(true);
 
-        String html = controller.newCustomerPage("CARD-1", null, null).getBody();
+        String html = controller.newCustomerPage("CARD-1", null).getBody();
 
         assertThat(html).contains("karteHolen()").contains("/karte-neu/register-direkt")
                 .contains("const CARD_ID = \"CARD-1\"")
@@ -78,7 +78,7 @@ class AnmeldungOhneMailSeiteTest {
     void mitSchalter_inAndererSprache() {
         when(shop.isAnmeldungOhneMail()).thenReturn(true);
 
-        String html = controller.newCustomerPage("CARD-1", "en", null).getBody();
+        String html = controller.newCustomerPage("CARD-1", "en").getBody();
 
         assertThat(html).contains("No sign-up, no email").contains("const LANG = \"en\"");
     }
@@ -87,10 +87,10 @@ class AnmeldungOhneMailSeiteTest {
     void anmeldungLiefertLinkUndKundenId() {
         Customer kunde = Customer.createOhneMail();
         CustomerCard cc = CustomerCard.create(kunde, card);
-        when(customerService.registerOhneMail("CARD-1", "REF1", "tr")).thenReturn(cc);
+        when(customerService.registerOhneMail("CARD-1", "tr")).thenReturn(cc);
 
         Map<String, Object> antwort = controller.registerDirekt(
-                new LandingController.DirektRequest("CARD-1", "REF1", "tr"), null);
+                new LandingController.DirektRequest("CARD-1", "tr"), null);
 
         assertThat(antwort).containsEntry("status", "ok")
                 .containsEntry("customerId", kunde.getId())
@@ -100,10 +100,10 @@ class AnmeldungOhneMailSeiteTest {
     @Test
     void ohneKartenNummer_wirdNichtsAngelegt() {
         assertThatThrownBy(() -> controller.registerDirekt(
-                new LandingController.DirektRequest(" ", null, null), null))
+                new LandingController.DirektRequest(" ", null), null))
                 .isInstanceOf(IllegalArgumentException.class);
 
-        verify(customerService, never()).registerOhneMail(any(), any(), any());
+        verify(customerService, never()).registerOhneMail(any(), any());
     }
 
     @Test

@@ -36,9 +36,7 @@ class KundenSprachenTest {
         cardService = mock(CardService.class);
         GoogleWalletService google = mock(GoogleWalletService.class);
         when(google.generateSaveUrl(any())).thenReturn("https://pay.google.com/save/x");
-        var empfehlung = mock(com.example.stemplekarte.service.EmpfehlungService.class);
-        when(empfehlung.link(any())).thenReturn("https://stampit.test/karte-neu/CARD-1?ref=ABC234");
-        controller = new LandingController(customerService, cardService, google, mock(RewardService.class), empfehlung);
+        controller = new LandingController(customerService, cardService, google, mock(RewardService.class));
 
         shop = mock(Shop.class);
         when(shop.getName()).thenReturn("Kahve Köşesi");
@@ -90,11 +88,12 @@ class KundenSprachenTest {
         when(cardService.getById("CARD-1")).thenReturn(card);
 
         // Ohne Wahl: Deutsch, mit Leiste
-        String deutsch = controller.newCustomerPage("CARD-1", null, "ABC234").getBody();
+        String deutsch = controller.newCustomerPage("CARD-1", null).getBody();
         assertThat(deutsch).contains("<html lang=\"de\" dir=\"ltr\">").contains("placeholder=\"Dein Name\"")
-                .contains("/karte-neu/CARD-1?lang=tr&amp;ref=ABC234").contains("const LANG = null;");
+                .contains("/karte-neu/CARD-1?lang=tr").doesNotContain("&amp;ref=").doesNotContain("id='ref'").contains("const LANG = null;");
 
-        String html = controller.newCustomerPage("CARD-1", "ar", null).getBody();
+
+        String html = controller.newCustomerPage("CARD-1", "ar").getBody();
         assertThat(html).contains("const LANG = \"ar\";");
         assertThat(html).contains("<html lang=\"ar\" dir=\"rtl\">");
         assertThat(html).contains(Texts.t("ar", "signup.headline"));

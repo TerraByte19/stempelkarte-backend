@@ -69,8 +69,8 @@ class PaketTest {
         when(ccRepo.findById(cc.getId())).thenReturn(Optional.of(cc));
         when(ccRepo.save(any(CustomerCard.class))).thenAnswer(i -> i.getArgument(0));
         service = new CustomerService(customerRepo, cardRepo, ccRepo,
-                mock(AppleDeviceRepository.class), mock(EmailService.class), scanLogRepo,
-                mock(EmpfehlungService.class));
+                mock(AppleDeviceRepository.class), mock(EmailService.class), scanLogRepo);
+
         webhooks = mock(WebhookService.class);
         service.webhooks(webhooks);
         pakete = new PaketService(cardRepo, ccRepo, service);
@@ -233,13 +233,6 @@ class PaketTest {
     @Test
     void keinZiel_keineEmpfehlung_korrekturNurGuthaben() {
         assertThat(KartenFortschritt.von(card, cc, mock(RewardService.class))).isNull();
-        assertThat(EmpfehlungService.sichtbar(card, cc)).isFalse();
-        EmpfehlungService empfehlung = new EmpfehlungService(mock(CustomerCardRepository.class),
-                mock(com.example.stemplekarte.config.AppProperties.class),
-                mock(com.example.stemplekarte.wallet.WalletNotifier.class));
-        assertThatThrownBy(() -> empfehlung.einstellen(card, true, 1))
-                .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("Stempel- und Punktekarten");
-
         KundenService kunden = new KundenService(ccRepo, mock(AppleDeviceRepository.class),
                 mock(ScanLogRepository.class), mock(com.example.stemplekarte.repository.ShopRepository.class));
         assertThatThrownBy(() -> kunden.korrigiereStempel(shop, cc.getId(), 3))

@@ -187,8 +187,8 @@ class FilialenTest {
         when(ccRepo.findByCustomerAndCard(customer, card)).thenReturn(Optional.of(cc));
         when(ccRepo.save(any(CustomerCard.class))).thenAnswer(i -> i.getArgument(0));
         CustomerService service = new CustomerService(customerRepo, cardRepo, ccRepo,
-                mock(AppleDeviceRepository.class), mock(EmailService.class), scanLogRepo,
-                mock(EmpfehlungService.class));
+                mock(AppleDeviceRepository.class), mock(EmailService.class), scanLogRepo);
+
         WebhookService webhooks = mock(WebhookService.class);
         service.webhooks(webhooks);
 

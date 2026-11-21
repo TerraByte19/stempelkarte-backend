@@ -44,7 +44,6 @@ public class PointsService {
     private final PointsBookingRepository bookingRepo;
     private final ScanLogRepository scanLogRepo;
     private final RewardService rewardService;
-    private final EmpfehlungService empfehlung;
 
     // Optional (siehe CustomerService): ohne Webhook-Dienst wird nichts gemeldet.
     @org.springframework.beans.factory.annotation.Autowired(required = false)
@@ -60,14 +59,12 @@ public class PointsService {
                          CardRepository cardRepo,
                          PointsBookingRepository bookingRepo,
                          ScanLogRepository scanLogRepo,
-                         RewardService rewardService,
-                         EmpfehlungService empfehlung) {
+                         RewardService rewardService) {
         this.customerCardRepo = customerCardRepo;
         this.cardRepo = cardRepo;
         this.bookingRepo = bookingRepo;
         this.scanLogRepo = scanLogRepo;
         this.rewardService = rewardService;
-        this.empfehlung = empfehlung;
     }
 
     // ── Ausgabe-Typen ─────────────────────────────────────────────────────
@@ -195,13 +192,6 @@ public class PointsService {
 
         PointsBooking booking = bookingRepo.save(
                 PointsBooking.earn(cc, shop.getId(), gebucht, amountCents, kurs, staffLabel));
-
-        // Kunde wirbt Kunde: erster Einkauf des Geworbenen, Bonus fuer beide.
-        // Nicht als Buchungszeile - der Bonus ist kein Einkauf.
-        if (vorher == 0 && cc.getTotalRewards() == 0
-                && empfehlung.belohnen(cc, java.time.Instant.now()) != null) {
-            customerCardRepo.save(cc);
-        }
 
         scanLogSchreiben(shop, card, cc, 0, ortId);
 

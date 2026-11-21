@@ -107,33 +107,6 @@ class ApplePassPunkteTest {
         assertThat(pass.getHeaderFields().get(0).getKey()).isEqualTo("stamps-header");
     }
 
-    // ── Kunde wirbt Kunde: Rueckseitenfeld nur, wenn an und Code da ──────
-
-    @Test
-    void empfehlungFeld_nurWennAnUndCodeDa_ohneChangeMessage() {
-        Shop shop = mock(Shop.class);
-        Card card = Card.create(shop, "Kaffee", "10 Stempel", 10, "Gratis Kaffee");
-        CustomerCard cc = karte(card, 3, 0);
-        AppProperties props = mock(AppProperties.class);
-        when(props.baseUrl()).thenReturn("https://stampit.test");
-        ApplePassService dienst = new ApplePassService(props, mock(PassTemplateGenerator.class),
-                mock(RewardService.class));
-
-        assertThat(dienst.baueFelder(card, cc, false).getBackFields()).isNullOrEmpty();
-        card.updateEmpfehlung(true, 2);
-        assertThat(dienst.baueFelder(card, cc, false).getBackFields()).isNullOrEmpty();   // kein Code
-
-        when(cc.getEmpfehlungsCode()).thenReturn("ABC234");
-        var pass = dienst.baueFelder(card, cc, false);
-        assertThat(pass.getBackFields()).hasSize(1);
-        assertThat(pass.getBackFields().get(0).getKey()).isEqualTo("empfehlen");
-        assertThat(pass.getBackFields().get(0).getValue())
-                .isEqualTo("Für jeden Freund, der mitmacht, gibt's 2 Stempel für euch beide. "
-                        + "Dein Link: https://stampit.test/karte-neu/" + card.getId() + "?ref=ABC234");
-        assertThat(pass.getBackFields().get(0).getChangeMessage()).isNull();
-        assertThat(pass.getHeaderFields().get(0).getKey()).isEqualTo("stamps-header");
-    }
-
     // ── Stufen: Rueckseitenfeld nur bei Karten mit Stufen; nie klingeln ──
 
     @Test

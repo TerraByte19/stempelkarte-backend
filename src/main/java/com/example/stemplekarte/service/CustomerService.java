@@ -26,7 +26,6 @@ public class CustomerService {
     private final AppleDeviceRepository appleDeviceRepo;
     private final EmailService emailService;
     private final ScanLogRepository scanLogRepo;
-    private final EmpfehlungService empfehlung;
 
     // Optional, damit die Unit-Tests den Dienst weiter ohne Spring bauen
     // koennen: ohne Webhook-Dienst wird schlicht nichts gemeldet.
@@ -43,15 +42,13 @@ public class CustomerService {
                            CustomerCardRepository customerCardRepo,
                            AppleDeviceRepository appleDeviceRepo,
                            EmailService emailService,
-                           ScanLogRepository scanLogRepo,
-                           EmpfehlungService empfehlung) {
+                           ScanLogRepository scanLogRepo) {
         this.customerRepo = customerRepo;
         this.cardRepo = cardRepo;
         this.customerCardRepo = customerCardRepo;
         this.appleDeviceRepo = appleDeviceRepo;
         this.emailService = emailService;
         this.scanLogRepo = scanLogRepo;
-        this.empfehlung = empfehlung;
     }
 
     @Transactional
@@ -80,21 +77,13 @@ public class CustomerService {
         return registerForCard(name, email, cardId, marketingConsent, birthday, phone, null);
     }
 
-    /** refCode: Empfehlungscode eines Freundes (Kunde wirbt Kunde), nur bei einer NEUEN Kundenkarte. */
-    @Transactional
-    public CustomerCard registerForCard(String name, String email, String cardId,
-                                        boolean marketingConsent,
-                                        java.time.LocalDate birthday, String phone, String refCode) {
-        return anmelden(name, email, cardId, marketingConsent, birthday, phone, refCode, null, false);
-    }
-
     /** language: vom Kunden auf der Anmeldeseite gewaehlt (de, en, ar, tr) oder null = nichts aendern. */
     @Transactional
     public CustomerCard registerForCard(String name, String email, String cardId,
                                         boolean marketingConsent,
-                                        java.time.LocalDate birthday, String phone, String refCode,
+                                        java.time.LocalDate birthday, String phone,
                                         String language) {
-        return anmelden(name, email, cardId, marketingConsent, birthday, phone, refCode, language, false);
+        return anmelden(name, email, cardId, marketingConsent, birthday, phone, language, false);
     }
 
     /**
@@ -105,9 +94,9 @@ public class CustomerService {
     @Transactional
     public CustomerCard registerForCardBestaetigt(String name, String email, String cardId,
                                                   boolean marketingConsent,
-                                                  java.time.LocalDate birthday, String phone, String refCode,
+                                                  java.time.LocalDate birthday, String phone,
                                                   String language) {
-        return anmelden(name, email, cardId, marketingConsent, birthday, phone, refCode, language, true);
+        return anmelden(name, email, cardId, marketingConsent, birthday, phone, language, true);
     }
 
     /**
@@ -121,7 +110,7 @@ public class CustomerService {
      * holen), keine Werbe-Einwilligung.
      */
     @Transactional
-    public CustomerCard registerOhneMail(String cardId, String refCode, String language) {
+    public CustomerCard registerOhneMail(String cardId, String language) {
         Card card = cardRepo.findById(cardId)
                 .orElseThrow(() -> new NoSuchElementException("Karte nicht gefunden: " + cardId));
         if (!card.getShop().isAnmeldungOhneMail()) {
@@ -133,14 +122,11 @@ public class CustomerService {
         if (gewaehlt != null) customer.setLanguage(gewaehlt);
         customer = customerRepo.save(customer);
 
-        CustomerCard cc = CustomerCard.create(customer, card);
-        empfehlung.codeVergeben(cc);
-        empfehlung.verknuepfen(cc, refCode, java.time.Instant.now());
-        cc = customerCardRepo.save(cc);
+        CustomerCard cc = customerCardRepo.save(CustomerCard.create(customer, card));
         webhook(card.getShop(), "customer.signup", WebhookService.daten(
                 "customerId", customer.getId(), "cardId", card.getId(), "customerCardId", cc.getId(),
                 "name", customer.getName(), "email", null,
-                "marketingConsent", false, "geworben", cc.getGeworbenVon() != null));
+                "marketingConsent", false));
         return cc;
     }
 
@@ -165,7 +151,7 @@ public class CustomerService {
 
     private CustomerCard anmelden(String name, String email, String cardId,
                                   boolean marketingConsent,
-                                  java.time.LocalDate birthday, String phone, String refCode,
+                                  java.time.LocalDate birthday, String phone,
                                   String language, boolean bestaetigt) {
         Card card = cardRepo.findById(cardId)
                 .orElseThrow(() -> new NoSuchElementException("Karte nicht gefunden: " + cardId));
@@ -189,17 +175,11 @@ public class CustomerService {
         CustomerCard cc = customerCardRepo.findByCustomerAndCard(customer, card).orElse(null);
         boolean neu = cc == null;
         if (neu) {
-            cc = neueKundenkarte(customer, card);
-            // Eigener Code fuer die neue Karte; der Code des Freundes wird
-            // nur hier verknuepft - wer die Karte schon hat, wird nicht
-            // nachtraeglich "geworben".
-            empfehlung.codeVergeben(cc);
-            empfehlung.verknuepfen(cc, refCode, java.time.Instant.now());
-            cc = customerCardRepo.save(cc);
+            cc = customerCardRepo.save(neueKundenkarte(customer, card));
             webhook(card.getShop(), "customer.signup", WebhookService.daten(
                     "customerId", customer.getId(), "cardId", card.getId(), "customerCardId", cc.getId(),
                     "name", customer.getName(), "email", customer.getEmail(),
-                    "marketingConsent", marketingConsent, "geworben", cc.getGeworbenVon() != null));
+                    "marketingConsent", marketingConsent));
         }
 
         // Einwilligung speichern (nur wenn neu, nicht ungewollt zurücksetzen)
@@ -255,14 +235,8 @@ public class CustomerService {
         Card card = cardRepo.findById(cardId)
                 .orElseThrow(() -> new NoSuchElementException("Karte nicht gefunden: " + cardId));
         CustomerCard cc = customerCardRepo.findByCustomerAndCard(customer, card).orElse(null);
-        if (cc != null) {
-            // Alte Karte ohne Empfehlungscode: jetzt nachholen.
-            empfehlung.codeSicherstellen(cc);
-            return cc;
-        }
-        cc = CustomerCard.create(customer, card);
-        empfehlung.codeVergeben(cc);
-        return customerCardRepo.save(cc);
+        if (cc != null) return cc;
+        return customerCardRepo.save(CustomerCard.create(customer, card));
     }
 
     public CustomerCard getCustomerCardById(String customerCardId) {
@@ -362,8 +336,6 @@ public class CustomerService {
 
         int threshold = card.getRewardThreshold();
 
-        // Erster echter Besuch: danach wird eine Empfehlung belohnt.
-        boolean ersterBesuch = cc.getStamps() == 0 && cc.getTotalRewards() == 0;
 
         ScanResult result = null;
         int rewardsEarnedThisScan = 0;
@@ -406,16 +378,6 @@ public class CustomerService {
 
         customerCardRepo.save(cc);
 
-        // Kunde wirbt Kunde: beim ersten Besuch des Geworbenen bekommen beide
-        // den Bonus. Der Werber wird im EmpfehlungService gespeichert und
-        // nach dem Commit benachrichtigt.
-        if (ersterBesuch) {
-            EmpfehlungService.Bonus bonus = empfehlung.belohnen(cc, java.time.Instant.now());
-            if (bonus != null) {
-                customerCardRepo.save(cc);
-                result = mitBonus(result, bonus);
-            }
-        }
 
         // Webhook (Kasse, CRM): in derselben Transaktion wie der Stempel.
         String ereignis = switch (result) {
@@ -451,18 +413,6 @@ public class CustomerService {
         return result;
     }
 
-    /** Dieselbe Ergebnisart, nur die Meldung fuer den Scanner um den Bonus ergaenzt. */
-    private static ScanResult mitBonus(ScanResult r, EmpfehlungService.Bonus b) {
-        String msg = r.message() + " · +" + b.bonus() + " Empfehlungsbonus";
-        return switch (r) {
-            case ScanResult.Stamped s -> new ScanResult.Stamped(s.customerCard(), msg, s.rewardsEarnedThisScan());
-            case ScanResult.Full f -> new ScanResult.Full(f.customerCard(), msg, f.rewardsEarnedThisScan());
-            case ScanResult.Redeemed d -> new ScanResult.Redeemed(d.customerCard(), msg, d.rewardsEarnedThisScan());
-            case ScanResult.Visited v -> new ScanResult.Visited(v.customerCard(), msg, v.rewardsEarnedThisScan());
-            case ScanResult.Debited d -> new ScanResult.Debited(d.customerCard(), msg, d.rewardsEarnedThisScan());
-            case ScanResult.Empty e -> e;
-        };
-    }
 
     /**
      * Willkommensgeschenk an der Kasse einloesen: Karte frei, 0 Stempel.

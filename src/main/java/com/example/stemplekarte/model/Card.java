@@ -157,18 +157,6 @@ public class Card {
     @Column(name = "welcome_show_hint")
     private Boolean welcomeShowHint;
 
-    // ── Kunde wirbt Kunde ───────────────────────────────────────────────────
-    // An: jede Kundenkarte traegt Code und Link; wer darueber kommt und zum
-    // ersten Mal da ist, bringt beiden den Bonus (Stempel bzw. Punkte).
-    // Nullable -> alle bestehenden Karten bleiben aus.
-    @Column(name = "empfehlung_aktiv")
-    private Boolean empfehlungAktiv;
-
-    @Column(name = "empfehlung_bonus")
-    private Integer empfehlungBonus;
-
-    public static final int EMPFEHLUNG_BONUS_STANDARD = 1;
-    public static final int EMPFEHLUNG_BONUS_MAX = 10;
 
     // ── Stufen (Bronze, Silber, Gold nach Besuchen) ────────────────────────
     // Nur Stempelkarten. Stufe 1 ab 0 Besuchen, Stufe 2 ab stufe2Ab, Stufe 3
@@ -338,21 +326,6 @@ public class Card {
     public void updateWillkommen(boolean enabled, String text) {
         this.welcomeEnabled = enabled;
         this.welcomeText = (text == null || text.isBlank()) ? null : text.trim();
-    }
-
-    // ── Kunde wirbt Kunde ───────────────────────────────────────────────────
-
-    public boolean isEmpfehlungAktiv() { return Boolean.TRUE.equals(empfehlungAktiv); }
-
-    /** Stempel bei Stempelkarten, ganze Punkte bei Punktekarten. Nie unter 1. */
-    public int getEmpfehlungBonus() {
-        return empfehlungBonus != null && empfehlungBonus > 0 ? empfehlungBonus : EMPFEHLUNG_BONUS_STANDARD;
-    }
-
-    /** Bereich prueft der Aufrufer (EmpfehlungService). */
-    public void updateEmpfehlung(boolean aktiv, int bonus) {
-        this.empfehlungAktiv = aktiv;
-        this.empfehlungBonus = bonus;
     }
 
     // ── Stufen ──────────────────────────────────────────────────────────────

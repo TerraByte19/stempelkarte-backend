@@ -40,7 +40,7 @@ class AppleAnmeldeSeiteTest {
         GoogleWalletService google = mock(GoogleWalletService.class);
         when(google.generateSaveUrl(any())).thenReturn("");
         controller = new LandingController(customerService, cardService, google,
-                mock(RewardService.class), mock(com.example.stemplekarte.service.EmpfehlungService.class));
+                mock(RewardService.class));
         ReflectionTestUtils.setField(controller, "baseUrl", "https://api.example");
         Shop shop = mock(Shop.class);
         when(shop.getName()).thenReturn("Café Nord");
@@ -64,7 +64,7 @@ class AppleAnmeldeSeiteTest {
 
     @Test
     void ohneClientId_keinKnopf() {
-        String html = controller.newCustomerPage("CARD-1", null, null).getBody();
+        String html = controller.newCustomerPage("CARD-1", null).getBody();
         // Das CSS fuer #appleid-signin steht immer da, der Knopf selbst nicht.
         assertThat(html).doesNotContain("appleid.auth.js").doesNotContain("id='appleid-signin'").doesNotContain("class='sozial'");
         assertThat(html).contains("placeholder=\"Dein Name\"");
@@ -75,16 +75,16 @@ class AppleAnmeldeSeiteTest {
                 .contains("Trag deinen Namen und deine E-Mail ein");
 
         apple("");
-        assertThat(controller.newCustomerPage("CARD-1", null, null).getBody()).doesNotContain("appleid.auth.js");
+        assertThat(controller.newCustomerPage("CARD-1", null).getBody()).doesNotContain("appleid.auth.js");
         assertThatThrownBy(() -> controller.registerMitApple(
-                new LandingController.AppleRegisterRequest("gutes-token", "Mo", "CARD-1", false, null, null, null, null), null))
+                new LandingController.AppleRegisterRequest("gutes-token", "Mo", "CARD-1", false, null, null, null), null))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
     void mitClientId_knopfUndDirektZurKarte() {
         apple("de.stampit.web");
-        String html = controller.newCustomerPage("CARD-1", null, null).getBody();
+        String html = controller.newCustomerPage("CARD-1", null).getBody();
         assertThat(html).contains("appleid/1/de_DE/appleid.auth.js")
                 .contains("clientId: \"de.stampit.web\"")
                 .contains("redirectURI: window.location.origin + '/karte-neu/apple'")
@@ -105,21 +105,21 @@ class AppleAnmeldeSeiteTest {
         // Der Text verlangt nicht mehr Name und E-Mail.
         assertThat(html).contains("Einmal tippen, und die Stempelkarte ist direkt in deiner Wallet.")
                 .doesNotContain("Trag deinen Namen");
-        assertThat(controller.newCustomerPage("CARD-1", "tr", null).getBody())
+        assertThat(controller.newCustomerPage("CARD-1", "tr").getBody())
                 .contains("appleid/1/tr_TR/appleid.auth.js");
 
         Customer kunde = mock(Customer.class);
         when(kunde.getId()).thenReturn("CUST-9");
         CustomerCard cc = CustomerCard.create(kunde, card);
         when(customerService.registerForCardBestaetigt(eq("Mo Khalil"), eq("mo@privaterelay.appleid.com"), eq("CARD-1"),
-                anyBoolean(), isNull(), isNull(), isNull(), eq("ar"))).thenReturn(cc);
+                anyBoolean(), isNull(), isNull(), eq("ar"))).thenReturn(cc);
 
         Map<String, Object> out = controller.registerMitApple(
-                new LandingController.AppleRegisterRequest("gutes-token", "Mo Khalil", "CARD-1", true, null, null, null, "ar"), null);
+                new LandingController.AppleRegisterRequest("gutes-token", "Mo Khalil", "CARD-1", true, null, null, "ar"), null);
         assertThat(out).containsEntry("status", "ok").containsEntry("url", "/karte/CUST-9/CARD-1");
 
         assertThatThrownBy(() -> controller.registerMitApple(
-                new LandingController.AppleRegisterRequest("falsch", null, "CARD-1", true, null, null, null, null), null))
+                new LandingController.AppleRegisterRequest("falsch", null, "CARD-1", true, null, null, null), null))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 
@@ -134,7 +134,7 @@ class AppleAnmeldeSeiteTest {
     void skript_zeileMitKlammerAmAnfang_brauchtSemikolonDavor() {
         apple("de.stampit.web");
         google("123-abc.apps.googleusercontent.com");
-        String html = controller.newCustomerPage("CARD-1", null, null).getBody();
+        String html = controller.newCustomerPage("CARD-1", null).getBody();
         String vorherige = "";
         for (String zeile : html.split("\n")) {
             String z = zeile.trim();
@@ -154,7 +154,7 @@ class AppleAnmeldeSeiteTest {
     void beideKnoepfe_einOder() {
         apple("de.stampit.web");
         google("123-abc.apps.googleusercontent.com");
-        String html = controller.newCustomerPage("CARD-1", null, null).getBody();
+        String html = controller.newCustomerPage("CARD-1", null).getBody();
         assertThat(html).contains("gsi/client").contains("appleid.auth.js");
         assertThat(html.split("class='oder'", -1)).hasSize(2);   // genau ein "oder"
         // Google steht vor Apple.

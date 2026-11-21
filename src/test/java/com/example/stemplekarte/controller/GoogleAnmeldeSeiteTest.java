@@ -40,7 +40,7 @@ class GoogleAnmeldeSeiteTest {
         GoogleWalletService google = mock(GoogleWalletService.class);
         when(google.generateSaveUrl(any())).thenReturn("");
         controller = new LandingController(customerService, cardService, google,
-                mock(RewardService.class), mock(com.example.stemplekarte.service.EmpfehlungService.class));
+                mock(RewardService.class));
         Shop shop = mock(Shop.class);
         when(shop.getName()).thenReturn("Café Nord");
         card = Card.create(shop, "Kaffee", "x", 10, "Gratis Kaffee");
@@ -59,21 +59,21 @@ class GoogleAnmeldeSeiteTest {
 
     @Test
     void ohneClientId_keinKnopf() {
-        String html = controller.newCustomerPage("CARD-1", null, null).getBody();
+        String html = controller.newCustomerPage("CARD-1", null).getBody();
         assertThat(html).doesNotContain("gsi/client").doesNotContain("g_id_signin");
         assertThat(html).contains("placeholder=\"Dein Name\"");
 
         google("");
-        assertThat(controller.newCustomerPage("CARD-1", null, null).getBody()).doesNotContain("gsi/client");
+        assertThat(controller.newCustomerPage("CARD-1", null).getBody()).doesNotContain("gsi/client");
         assertThatThrownBy(() -> controller.registerMitGoogle(
-                new LandingController.GoogleRegisterRequest("gutes-token", "CARD-1", false, null, null, null, null), null))
+                new LandingController.GoogleRegisterRequest("gutes-token", "CARD-1", false, null, null, null), null))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
     void mitClientId_knopfUndDirektZurKarte() {
         google("123-abc.apps.googleusercontent.com");
-        String html = controller.newCustomerPage("CARD-1", null, null).getBody();
+        String html = controller.newCustomerPage("CARD-1", null).getBody();
         assertThat(html).contains("gsi/client")
                 .contains("data-client_id='123-abc.apps.googleusercontent.com'")
                 .contains("g_id_signin").contains("onGoogleCredential")
@@ -84,14 +84,14 @@ class GoogleAnmeldeSeiteTest {
         when(kunde.getId()).thenReturn("CUST-9");
         CustomerCard cc = CustomerCard.create(kunde, card);
         when(customerService.registerForCardBestaetigt(eq("Ayşe"), eq("ayse@example.com"), eq("CARD-1"),
-                anyBoolean(), isNull(), isNull(), isNull(), eq("tr"))).thenReturn(cc);
+                anyBoolean(), isNull(), isNull(), eq("tr"))).thenReturn(cc);
 
         Map<String, Object> out = controller.registerMitGoogle(
-                new LandingController.GoogleRegisterRequest("gutes-token", "CARD-1", true, null, null, null, "tr"), null);
+                new LandingController.GoogleRegisterRequest("gutes-token", "CARD-1", true, null, null, "tr"), null);
         assertThat(out).containsEntry("status", "ok").containsEntry("url", "/karte/CUST-9/CARD-1");
 
         assertThatThrownBy(() -> controller.registerMitGoogle(
-                new LandingController.GoogleRegisterRequest("falsch", "CARD-1", true, null, null, null, null), null))
+                new LandingController.GoogleRegisterRequest("falsch", "CARD-1", true, null, null, null), null))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 }

@@ -62,8 +62,8 @@ class MitgliedTest {
         when(ccRepo.findByCustomerAndCard(customer, card)).thenReturn(Optional.of(cc));
         when(ccRepo.save(any(CustomerCard.class))).thenAnswer(i -> i.getArgument(0));
         service = new CustomerService(customerRepo, cardRepo, ccRepo,
-                mock(AppleDeviceRepository.class), mock(EmailService.class), scanLogRepo,
-                mock(EmpfehlungService.class));
+                mock(AppleDeviceRepository.class), mock(EmailService.class), scanLogRepo);
+
     }
 
     @Test
@@ -121,14 +121,6 @@ class MitgliedTest {
         assertThat(Platzhalter.fuelle("Noch {offen} Stempel bis: {praemie}!", cc, c -> List.of()))
                 .isEqualTo("Noch Stempel bis!");
         assertThat(KartenFortschritt.von(card, cc, mock(RewardService.class))).isNull();
-        assertThat(EmpfehlungService.sichtbar(card, cc)).isFalse();
-
-        EmpfehlungService empfehlung = new EmpfehlungService(mock(CustomerCardRepository.class),
-                mock(com.example.stemplekarte.config.AppProperties.class),
-                mock(com.example.stemplekarte.wallet.WalletNotifier.class));
-        assertThatThrownBy(() -> empfehlung.einstellen(card, true, 1))
-                .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("Stempel- und Punktekarten");
-
         CustomerCardRepository ccRepo = mock(CustomerCardRepository.class);
         when(ccRepo.findById(cc.getId())).thenReturn(Optional.of(cc));
         KundenService kunden = new KundenService(ccRepo, mock(AppleDeviceRepository.class),
