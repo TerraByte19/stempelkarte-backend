@@ -58,6 +58,7 @@ public class AdminController {
     private final com.example.stemplekarte.repository.ApiKeyRepository apiKeys;
     private final com.example.stemplekarte.repository.WebhookEreignisRepository webhookEreignisse;
     private final com.example.stemplekarte.repository.AutomationRepository automationen;
+    private final com.example.stemplekarte.repository.FilialZugangRepository filialZugaenge;
 
     @Value("${stempelkarte.admin-secret:admin-geheim-nur-lokal}")
     private String adminSecret;
@@ -87,8 +88,10 @@ public class AdminController {
                            com.example.stemplekarte.repository.AutoNachrichtRepository autoNachrichten,
                            com.example.stemplekarte.repository.ApiKeyRepository apiKeys,
                            com.example.stemplekarte.repository.WebhookEreignisRepository webhookEreignisse,
-                           com.example.stemplekarte.repository.AutomationRepository automationen) {
+                           com.example.stemplekarte.repository.AutomationRepository automationen,
+                           com.example.stemplekarte.repository.FilialZugangRepository filialZugaenge) {
         this.automationen = automationen;
+        this.filialZugaenge = filialZugaenge;
         this.shopOrte = shopOrte;
         this.rueckmeldungen = rueckmeldungen;
         this.autoNachrichten = autoNachrichten;
@@ -669,6 +672,8 @@ public class AdminController {
         }
         kampagnen.deleteByShop(shop);
         shopOrte.deleteByShop(shop);
+        // Logins der Filialen (Tarif Kette) haengen am Laden.
+        filialZugaenge.deleteByShop(shop);
         rueckmeldungen.deleteByShop(shop);
         autoNachrichten.deleteByShop(shop);
         automationen.deleteByShop(shop);

@@ -42,6 +42,12 @@ public class ShopOrt {
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
+    // Nur fuer Ketten: eine Filiale kann eingetragen, aber noch nicht
+    // eingeschaltet sein. Null = aktiv, damit bestehende Standorte bleiben,
+    // wie sie sind.
+    @Column
+    private Boolean aktiv;
+
     protected ShopOrt() {}
 
     public static ShopOrt create(Shop shop, String label, double latitude, double longitude) {
@@ -61,4 +67,7 @@ public class ShopOrt {
     public double getLatitude() { return latitude; }
     public double getLongitude() { return longitude; }
     public Instant getCreatedAt() { return createdAt; }
+
+    public boolean isAktiv() { return aktiv == null || aktiv; }
+    public void setAktiv(boolean aktiv) { this.aktiv = aktiv; }
 }
