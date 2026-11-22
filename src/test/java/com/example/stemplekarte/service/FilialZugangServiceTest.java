@@ -3,16 +3,20 @@ package com.example.stemplekarte.service;
 import com.example.stemplekarte.model.FilialZugang;
 import com.example.stemplekarte.model.Shop;
 import com.example.stemplekarte.model.ShopOrt;
+import com.example.stemplekarte.model.StaffToken;
 import com.example.stemplekarte.model.Tarif;
 import com.example.stemplekarte.repository.FilialZugangRepository;
 import com.example.stemplekarte.repository.ShopOrtRepository;
+import com.example.stemplekarte.repository.StaffTokenRepository;
 import com.example.stemplekarte.security.JwtService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.Optional;
 
@@ -27,6 +31,7 @@ class FilialZugangServiceTest {
 
     private FilialZugangRepository zugaenge;
     private ShopOrtRepository orte;
+    private StaffTokenRepository staffTokens;
     private PasswordEncoder encoder;
     private JwtService jwt;
     private FilialZugangService service;
@@ -36,9 +41,10 @@ class FilialZugangServiceTest {
     void aufbau() {
         zugaenge = mock(FilialZugangRepository.class);
         orte = mock(ShopOrtRepository.class);
+        staffTokens = mock(StaffTokenRepository.class);
         encoder = new BCryptPasswordEncoder(4);
         jwt = new JwtService(SECRET);
-        service = new FilialZugangService(zugaenge, orte, encoder, jwt);
+        service = new FilialZugangService(zugaenge, orte, staffTokens, encoder, jwt);
         kette = Shop.create("z@kette.de", "HASH", "BackBaron", 3);
         kette.setTarif(Tarif.KETTE);
         when(zugaenge.save(any())).thenAnswer(a -> a.getArgument(0));
@@ -163,6 +169,43 @@ class FilialZugangServiceTest {
         when(zugaenge.findByIdAndShop("FZ-FREMD", kette)).thenReturn(Optional.empty());
         assertThatThrownBy(() -> service.sperren(kette, "FZ-FREMD", true)).isInstanceOf(NoSuchElementException.class);
         assertThatThrownBy(() -> service.loeschen(kette, "FZ-FREMD")).isInstanceOf(NoSuchElementException.class);
+    }
+
+    @Test
+    void sperren_gibtDenGeraetenDerFilialeNeueSchluessel() {
+        ShopOrt nord = ShopOrt.create(kette, "Nord", 52.5, 13.4);
+        StaffToken imNorden = StaffToken.create(kette, "Kasse Nord", StaffToken.ROLLE_AUSHILFE);
+        imNorden.ort(nord.getId());
+        StaffToken woanders = StaffToken.create(kette, "Kasse Sued");
+        woanders.ort("ORT-SUED");
+        StaffToken haupt = StaffToken.create(kette, "Zentrale");
+        when(staffTokens.findByShop(kette)).thenReturn(List.of(imNorden, woanders, haupt));
+        FilialZugang z = vorhanden("backbaron-nord", "geheim123", nord.getId());
+
+        service.sperren(kette, z.getId(), true);
+
+        verify(staffTokens).delete(imNorden);
+        verify(staffTokens, never()).delete(woanders);
+        verify(staffTokens, never()).delete(haupt);
+        ArgumentCaptor<StaffToken> neu = ArgumentCaptor.forClass(StaffToken.class);
+        verify(staffTokens).save(neu.capture());
+        assertThat(neu.getValue().getToken()).isNotEqualTo(imNorden.getToken());
+        assertThat(neu.getValue().getLabel()).isEqualTo("Kasse Nord");
+        assertThat(neu.getValue().getRolle()).isEqualTo(StaffToken.ROLLE_AUSHILFE);
+        assertThat(neu.getValue().getOrtId()).isEqualTo(nord.getId());
+
+        // Nochmal sperren oder freigeben fasst die Geraete nicht noch einmal an.
+        service.sperren(kette, z.getId(), true);
+        service.sperren(kette, z.getId(), false);
+        verify(staffTokens, times(1)).save(any());
+    }
+
+    @Test
+    void sperren_amHauptstandortBleibenDieGeraeteDesHauptkontos() {
+        FilialZugang z = vorhanden("backbaron-haupt", "geheim123", null);
+        service.sperren(kette, z.getId(), true);
+        assertThat(z.isGesperrt()).isTrue();
+        verifyNoInteractions(staffTokens);
     }
 
     @Test

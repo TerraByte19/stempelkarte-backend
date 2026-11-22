@@ -5,7 +5,9 @@ import com.example.stemplekarte.model.Shop;
 import com.example.stemplekarte.model.ShopOrt;
 import com.example.stemplekarte.model.Tarif;
 import com.example.stemplekarte.repository.FilialZugangRepository;
+import com.example.stemplekarte.model.StaffToken;
 import com.example.stemplekarte.repository.ShopOrtRepository;
+import com.example.stemplekarte.repository.StaffTokenRepository;
 import com.example.stemplekarte.security.JwtService;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -33,13 +35,16 @@ public class FilialZugangService {
 
     private final FilialZugangRepository zugaenge;
     private final ShopOrtRepository orte;
+    private final StaffTokenRepository staffTokens;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
 
     public FilialZugangService(FilialZugangRepository zugaenge, ShopOrtRepository orte,
+                               StaffTokenRepository staffTokens,
                                PasswordEncoder passwordEncoder, JwtService jwtService) {
         this.zugaenge = zugaenge;
         this.orte = orte;
+        this.staffTokens = staffTokens;
         this.passwordEncoder = passwordEncoder;
         this.jwtService = jwtService;
     }
@@ -100,8 +105,31 @@ public class FilialZugangService {
     @Transactional
     public FilialZugang sperren(Shop shop, String id, boolean gesperrt) {
         FilialZugang z = eigener(shop, id);
+        boolean neuGesperrt = gesperrt && !z.isGesperrt();
         z.sperre(gesperrt);
+        if (neuGesperrt) geraeteErneuern(shop, z.getOrtId());
         return zugaenge.save(z);
+    }
+
+    /**
+     * Eine Login-Sperre soll wirklich sperren: die Scanner-Geraete der Filiale
+     * bekommen einen neuen Schluessel, der alte gilt sofort nicht mehr. Die
+     * Geraete bleiben mit Name und Rolle in der Liste und werden ueber den
+     * neuen Einrichtungs-Link wieder verbunden.
+     *
+     * Der Hauptstandort (ortId null) bleibt aussen vor: dort haengen die
+     * Geraete des Hauptkontos selbst.
+     */
+    private void geraeteErneuern(Shop shop, String ortId) {
+        if (ortId == null) return;
+        List<StaffToken> alte = staffTokens.findByShop(shop).stream()
+                .filter(t -> ortId.equals(t.getOrtId())).toList();
+        for (StaffToken alt : alte) {
+            StaffToken neu = StaffToken.create(shop, alt.getLabel(), alt.getRolle());
+            neu.ort(ortId);
+            staffTokens.delete(alt);
+            staffTokens.save(neu);
+        }
     }
 
     @Transactional
