@@ -27,7 +27,7 @@ public class FilialZugangService {
 
     public static final int PASSWORT_MIN = 8;
     public static final String LOGIN_FALSCH = "Benutzername oder Passwort falsch";
-    public static final String FILIALE_AUS = "Diese Filiale ist nicht eingeschaltet.";
+    public static final String FILIALE_AUS = FilialenService.FILIALE_AUS;
     static final String GESPERRT = "Dieser Zugang ist gesperrt.";
     static final String NUR_KETTE = "Unterkonten gibt es nur im Tarif Kette.";
 
@@ -76,6 +76,9 @@ public class FilialZugangService {
         String name = FilialZugang.benutzernameSauber(benutzername);
         pruefePasswort(passwort);
         String ort = ortSauber(shop, ortId);
+        if (ort == null && !shop.isHauptIstFiliale()) {
+            throw new IllegalArgumentException("Der Hauptstandort ist keine Filiale. Bitte eine Filiale wählen.");
+        }
         if (zugaenge.existsByBenutzername(name)) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Dieser Benutzername ist schon vergeben.");
         }

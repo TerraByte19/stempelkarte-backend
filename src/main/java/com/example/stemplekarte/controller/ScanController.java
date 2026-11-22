@@ -53,6 +53,14 @@ public class ScanController {
         return filialen != null ? filialen.ortFuer(staff, shop, lat, lon) : staff.getOrtId();
     }
 
+    /** Kette: an einer ausgeschalteten Filiale wird nicht gestempelt. */
+    private void pruefeFiliale(com.example.stemplekarte.model.StaffToken staff, Shop shop) {
+        if (filialen != null && filialen.filialeAus(staff, shop)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                    com.example.stemplekarte.service.FilialenService.FILIALE_AUS);
+        }
+    }
+
     public ScanController(CustomerService service, WalletNotifier notifier,
                           PointsService pointsService,
                           com.example.stemplekarte.service.GeoPruefung geoPruefung,
@@ -158,6 +166,7 @@ public class ScanController {
         Shop shop = ((StaffTokenFilter.StaffPrincipal) auth.getPrincipal()).staff().getShop();
         // Gratis-Testphase vorbei: kein Stempel (Laeden ohne Testphase: nie).
         com.example.stemplekarte.service.TarifPruefung.pruefeTestphase(shop);
+        pruefeFiliale(((StaffTokenFilter.StaffPrincipal) auth.getPrincipal()).staff(), shop);
 
         // Ohne Ladenort laeuft die Geo-Pruefung ins Leere - dann ist das
         // Stempeln selbst der Hebel, der fehlt.
@@ -273,6 +282,7 @@ public class ScanController {
         }
         Shop shop = staff.getShop();
         com.example.stemplekarte.service.TarifPruefung.pruefeTestphase(shop);
+        pruefeFiliale(staff, shop);
         if (!com.example.stemplekarte.service.StandortPflicht.darfScannen(shop, java.time.Instant.now())) {
             log.warn("[SCAN] GESPERRT laden={} grund=kein_standort", shop.getId());
             throw new ResponseStatusException(HttpStatus.FORBIDDEN,
@@ -328,6 +338,7 @@ public class ScanController {
         }
         Shop shop = staff.getShop();
         com.example.stemplekarte.service.TarifPruefung.pruefeTestphase(shop);
+        pruefeFiliale(staff, shop);
         if (!com.example.stemplekarte.service.StandortPflicht.darfScannen(shop, java.time.Instant.now())) {
             log.warn("[SCAN] GESPERRT laden={} grund=kein_standort", shop.getId());
             throw new ResponseStatusException(HttpStatus.FORBIDDEN,
@@ -371,6 +382,7 @@ public class ScanController {
         }
 
         var staff = ((StaffTokenFilter.StaffPrincipal) auth.getPrincipal()).staff();
+        pruefeFiliale(staff, staff.getShop());
         // Zuruecksetzen = Praemie eingeloest, neue Karte. Das darf eine
         // Aushilfe nicht - sonst gaebe es den Gratis-Artikel ohne Kontrolle.
         if (!staff.darfEinloesen()) {

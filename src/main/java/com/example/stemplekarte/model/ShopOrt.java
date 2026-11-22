@@ -21,6 +21,7 @@ import java.util.UUID;
 public class ShopOrt {
 
     public static final int LABEL_MAX = 40;
+    public static final int ADRESSE_MAX = 200;
 
     @Id
     @Column(length = 64)
@@ -48,6 +49,11 @@ public class ShopOrt {
     @Column
     private Boolean aktiv;
 
+    // Adresse, wie sie beim Eintragen per Liste angegeben wurde. Nur zur
+    // Anzeige; gerechnet wird mit den Koordinaten.
+    @Column(length = ADRESSE_MAX)
+    private String adresse;
+
     protected ShopOrt() {}
 
     public static ShopOrt create(Shop shop, String label, double latitude, double longitude) {
@@ -70,4 +76,17 @@ public class ShopOrt {
 
     public boolean isAktiv() { return aktiv == null || aktiv; }
     public void setAktiv(boolean aktiv) { this.aktiv = aktiv; }
+
+    public String getAdresse() { return adresse; }
+    public void setAdresse(String adresse) {
+        String a = adresse == null ? "" : adresse.replaceAll("\\p{Cntrl}", " ").trim();
+        this.adresse = a.isEmpty() ? null : (a.length() > ADRESSE_MAX ? a.substring(0, ADRESSE_MAX) : a);
+    }
+
+    /** Name und Lage pruefen die Aufrufer (OrteService). */
+    public void umbenennen(String label) { this.label = label; }
+    public void verlegen(double latitude, double longitude) {
+        this.latitude = latitude;
+        this.longitude = longitude;
+    }
 }

@@ -68,9 +68,7 @@ public class FilialenService {
                 ? GeoPruefung.distanzMeter(shop.getLatitude(), shop.getLongitude(), lat, lon)
                 : Long.MAX_VALUE;
         String bestId = null;
-        int n = 0;
-        for (ShopOrt o : ortRepo.findByShopOrderByCreatedAtAsc(shop)) {
-            if (n++ >= erlaubt) break;
+        for (ShopOrt o : OrteService.geltende(shop, ortRepo.findByShopOrderByCreatedAtAsc(shop))) {
             long d = GeoPruefung.distanzMeter(o.getLatitude(), o.getLongitude(), lat, lon);
             if (d < best) {
                 best = d;
@@ -78,6 +76,19 @@ public class FilialenService {
             }
         }
         return best <= GeoPruefung.RADIUS_METER ? bestId : null;
+    }
+
+    public static final String FILIALE_AUS = "Diese Filiale ist nicht eingeschaltet.";
+
+    /**
+     * Kette: haengt das Geraet an einer Filiale, die das Hauptkonto
+     * ausgeschaltet hat? Dann wird dort nicht gestempelt und nicht gebucht.
+     * Alle anderen Laeden: nie.
+     */
+    public boolean filialeAus(StaffToken staff, Shop shop) {
+        if (staff == null || shop == null || staff.getOrtId() == null) return false;
+        if (!OrteService.kette(shop)) return false;
+        return ortRepo.findById(staff.getOrtId()).map(o -> !o.isAktiv()).orElse(false);
     }
 
     // ── Uebersicht ──────────────────────────────────────────────────────

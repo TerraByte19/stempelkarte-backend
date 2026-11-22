@@ -682,12 +682,13 @@ public class ApplePassService {
                 .relevantText(text)
                 .build());
         if (ortRepo != null) {
-            // Nur so viele, wie der Tarif erlaubt: senkt der Admin die Zahl,
-            // verschwinden die hinteren Orte aus dem Pass, ohne dass jemand
-            // sie loeschen muss.
-            int erlaubt = Math.min(MAX_ORTE - 1, com.example.stemplekarte.service.OrteService.erlaubt(shop));
-            for (com.example.stemplekarte.model.ShopOrt o : ortRepo.findByShopOrderByCreatedAtAsc(shop)) {
-                if (orte.size() >= MAX_ORTE || orte.size() > erlaubt) break;
+            // Nur die geltenden Orte: senkt der Admin die Zahl (oder schaltet
+            // eine Kette eine Filiale aus), verschwinden sie aus dem Pass,
+            // ohne dass jemand sie loeschen muss.
+            for (com.example.stemplekarte.model.ShopOrt o
+                    : com.example.stemplekarte.service.OrteService.geltende(
+                            shop, ortRepo.findByShopOrderByCreatedAtAsc(shop))) {
+                if (orte.size() >= MAX_ORTE) break;
                 orte.add(PKLocation.builder()
                         .latitude(o.getLatitude())
                         .longitude(o.getLongitude())

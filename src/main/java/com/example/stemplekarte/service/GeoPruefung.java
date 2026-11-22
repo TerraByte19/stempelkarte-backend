@@ -95,11 +95,10 @@ public class GeoPruefung {
             } else {
                 long naechster = distanzMeter(shop.getLatitude(), shop.getLongitude(), scanLat, scanLon);
                 if (ortRepo != null && OrteService.erlaubt(shop) > 0) {
-                    // Nur die vom Tarif erlaubten Orte zaehlen (gleiche Regel wie im Pass).
-                    int erlaubt = OrteService.erlaubt(shop);
-                    int n = 0;
-                    for (com.example.stemplekarte.model.ShopOrt o : ortRepo.findByShopOrderByCreatedAtAsc(shop)) {
-                        if (n++ >= erlaubt) break;
+                    // Nur die geltenden Orte zaehlen (gleiche Regel wie im Pass):
+                    // vom Tarif erlaubt, bei Ketten eingeschaltet.
+                    for (com.example.stemplekarte.model.ShopOrt o
+                            : OrteService.geltende(shop, ortRepo.findByShopOrderByCreatedAtAsc(shop))) {
                         naechster = Math.min(naechster, distanzMeter(o.getLatitude(), o.getLongitude(), scanLat, scanLon));
                     }
                 }

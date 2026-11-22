@@ -168,6 +168,11 @@ public class PointsController {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN,
                     com.example.stemplekarte.model.StaffToken.NUR_PERSONAL_TEXT);
         }
+        // Kette: an einer ausgeschalteten Filiale wird nicht gebucht.
+        if (filialen != null && filialen.filialeAus(p.staff(), p.staff().getShop())) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                    com.example.stemplekarte.service.FilialenService.FILIALE_AUS);
+        }
         return new Staff(p.staff().getShop(), p.staff().getLabel(), p.staff().istAushilfe(), p.staff());
     }
 

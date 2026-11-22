@@ -227,6 +227,8 @@ public class ShopController {
         map.put("birthdayGreetingText", shop.getBirthdayGreetingText());
         map.put("birthdayGreetingDefault", Shop.GEBURTSTAG_STANDARD);
         map.put("tarif", shop.getTarif().name());
+        // Tarif Kette: zaehlt der Hauptstandort als Filiale (sonst immer true).
+        map.put("hauptIstFiliale", shop.isHauptIstFiliale());
         // Testphase: null = keine, 0 = vorbei (nichts gesperrt, nur Hinweis).
         map.put("testBis", shop.getTestBis() != null ? shop.getTestBis().toString() : null);
         map.put("testTage", shop.testTageUebrig(java.time.Instant.now()));

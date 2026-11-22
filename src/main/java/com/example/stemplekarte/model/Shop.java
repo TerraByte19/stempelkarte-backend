@@ -188,6 +188,12 @@ public class Shop {
     @Column(name = "max_orte")
     private Integer maxOrte;
 
+    // Nur Tarif Kette: zaehlt der Hauptstandort selbst als Filiale (mit
+    // Kunden, Statistik, Login)? Null = ja, wie bei jedem anderen Laden.
+    // Nein, wenn der Hauptstandort nur die Zentrale ist.
+    @Column(name = "haupt_ist_filiale")
+    private Boolean hauptIstFiliale;
+
     // Vom Admin befreit: kein Ladenort noetig, keine Geo-Pruefung beim Scan.
     // Null = nicht befreit, also Pflicht wie fuer alle.
     @Column(name = "geo_befreit")
@@ -585,6 +591,14 @@ public class Shop {
     /** Vom Admin. Bereich prueft der Aufrufer. */
     public void setMaxOrte(int maxOrte) {
         this.maxOrte = maxOrte;
+        this.updatedAt = Instant.now();
+    }
+
+    /** Nur im Tarif Kette von Belang; sonst immer ja. */
+    public boolean isHauptIstFiliale() { return !Boolean.FALSE.equals(hauptIstFiliale); }
+
+    public void setHauptIstFiliale(boolean ja) {
+        this.hauptIstFiliale = ja;
         this.updatedAt = Instant.now();
     }
 
