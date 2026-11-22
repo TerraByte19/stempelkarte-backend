@@ -23,6 +23,8 @@ public class AdminZugriff {
 
     public static final String ZUGANG = "ZUGANG";
     public static final String EMAIL = "EMAIL";
+    /** Eingriff in eine Kette: Filiale angelegt/geschaltet, Filial-Login angelegt/gesperrt/Passwort neu. */
+    public static final String KETTE = "KETTE";
 
     @Id
     @Column(length = 40)

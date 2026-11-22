@@ -301,3 +301,40 @@ Gepusht wird nur auf Ansage, Backend vor Frontend.
 
 Keine. Geklärt am 2026-11-22: Aktiv-Schalter nur Hauptkonto und Admin,
 Hauptstandort per Schalter, Korrektur frei mit Protokoll.
+
+## Abweichungen beim Bauen (2026-11-22)
+
+- **Korrekturen stehen in einer eigenen Tabelle `korrektur_logs`, nicht als
+  `ScanLog.art`.** Grund: am ScanLog haengen Sperrzeiten (Tablet, NFC),
+  Besuchszaehler und "aktive Kunden". Eine Korrektur als ScanLog-Zeile haette
+  z. B. die NFC-Sperre von 12 Stunden ausgeloest. `ScanLog.eingeloest` gibt es
+  wie geplant; ein Reset schreibt weiterhin nichts ins Protokoll.
+- **Geraete-Kennung ist abgeleitet (SHA-256 des Tokens, 16 Zeichen), keine
+  neue Spalte.** Stabil, nicht umkehrbar, alte Zugaenge brauchen keine Pflege.
+- **Mails aus sperrt die Anmeldung mit E-Mail ganz** (nicht nur zusammen mit
+  "Karte ohne Anmeldung"): ohne Bestaetigungsmail kaeme die Karte nie an.
+  Solche Laeden geben Karten immer ohne Anmeldung aus. `funktionen.newsletter`
+  bleibt nach Tarif, neu ist `funktionen.mails`.
+- **Sammel-Vorschau: hoechstens 40 Zeilen je Aufruf**, die Suche laeuft im
+  Aufruf (rund 1 Sekunde je Adresse). Fuer viele Ketten spaeter als
+  Hintergrund-Auftrag.
+- **Punktekarten:** eine zurueckgenommene Einloesung zieht die Zahl
+  "eingeloeste Praemien je Filiale" nicht wieder ab.
+- **Admin:** eigene Endpunkte unter `/api/admin/shops/{id}/kette`.
+
+## Endpunkte (Stand nach dem Backend-Durchgang)
+
+Unterkonto (`ROLE_FILIALE`): `GET /api/filiale/ich`, `GET /api/filiale/statistik`,
+`GET|POST /api/filiale/geraete`, `PUT|DELETE /api/filiale/geraete/{kennung}`,
+`POST /api/filiale/korrektur/karte`, `PUT /api/filiale/korrektur/{customerCardId}`.
+
+Hauptkonto (`ROLE_SHOP`): `GET|POST /api/shop/filial-zugaenge`,
+`PUT /api/shop/filial-zugaenge/{id}/passwort|sperre`, `DELETE .../{id}`,
+`PUT /api/shop/me/orte/{id}`, `POST /api/shop/me/orte/vorschau|sammel`,
+`PUT /api/shop/me/orte/haupt`, `GET /api/shop/filialen/statistik`,
+`GET /api/shop/filialen/korrekturen`.
+
+Admin: `POST /api/admin/shops/{id}/mails`, `GET /api/admin/shops/{id}/kette`,
+`POST .../kette/filialen`, `.../filialen/{ortId}/aktiv`, `.../logins`,
+`.../logins/{id}/passwort|sperre`, `.../geraete-je-filiale`.
+
