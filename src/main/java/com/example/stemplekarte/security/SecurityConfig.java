@@ -24,6 +24,8 @@ public class SecurityConfig {
     private final ShopRepository shopRepo;
     private final StaffTokenRepository staffTokenRepo;
     private final com.example.stemplekarte.repository.ApiKeyRepository apiKeyRepo;
+    private final com.example.stemplekarte.repository.FilialZugangRepository filialZugangRepo;
+    private final com.example.stemplekarte.repository.ShopOrtRepository shopOrtRepo;
 
     // Komma-getrennte Liste von erlaubten Frontend-URLs
     // z.B. FRONTEND_URL=https://stempelkarte-frontend.onrender.com
@@ -32,7 +34,11 @@ public class SecurityConfig {
 
     public SecurityConfig(JwtService jwtService, ShopRepository shopRepo,
                           StaffTokenRepository staffTokenRepo,
-                          com.example.stemplekarte.repository.ApiKeyRepository apiKeyRepo) {
+                          com.example.stemplekarte.repository.ApiKeyRepository apiKeyRepo,
+                          com.example.stemplekarte.repository.FilialZugangRepository filialZugangRepo,
+                          com.example.stemplekarte.repository.ShopOrtRepository shopOrtRepo) {
+        this.filialZugangRepo = filialZugangRepo;
+        this.shopOrtRepo = shopOrtRepo;
         this.jwtService = jwtService;
         this.shopRepo = shopRepo;
         this.staffTokenRepo = staffTokenRepo;
@@ -113,6 +119,9 @@ public class SecurityConfig {
                         .requestMatchers("/api/public/**").permitAll()
                         .requestMatchers("/api/admin/login").permitAll()
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")
+                        // Unterkonten der Filialen (Tarif Kette). Eigener Bereich:
+                        // unter /api/shop/** bleibt ALLES beim Inhaber.
+                        .requestMatchers("/api/filiale/**").hasRole("FILIALE")
                         .requestMatchers("/api/shop/**").hasRole("SHOP")
                         // Externe API fuer Kassen, CRM, Zapier: X-Api-Key (ApiKeyFilter).
                         .requestMatchers("/api/v1/**").hasRole("API")
@@ -123,7 +132,7 @@ public class SecurityConfig {
                         .anyRequest().denyAll()
                 )
                 .headers(h -> h.frameOptions(f -> f.disable()))
-                .addFilterBefore(new JwtAuthFilter(jwtService, shopRepo),
+                .addFilterBefore(new JwtAuthFilter(jwtService, shopRepo, filialZugangRepo, shopOrtRepo),
                         UsernamePasswordAuthenticationFilter.class)
                 .addFilterBefore(new StaffTokenFilter(staffTokenRepo),
                         JwtAuthFilter.class)

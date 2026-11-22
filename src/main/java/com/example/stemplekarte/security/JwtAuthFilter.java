@@ -1,6 +1,11 @@
 package com.example.stemplekarte.security;
 
+import com.example.stemplekarte.model.FilialZugang;
 import com.example.stemplekarte.model.Shop;
+import com.example.stemplekarte.model.ShopOrt;
+import com.example.stemplekarte.model.Tarif;
+import com.example.stemplekarte.repository.FilialZugangRepository;
+import com.example.stemplekarte.repository.ShopOrtRepository;
 import com.example.stemplekarte.repository.ShopRepository;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -18,10 +23,20 @@ public class JwtAuthFilter extends OncePerRequestFilter {
 
     private final JwtService jwtService;
     private final ShopRepository shopRepo;
+    // Beide null = Unterkonten sind aus (alte Aufrufer, Tests).
+    private final FilialZugangRepository filialRepo;
+    private final ShopOrtRepository ortRepo;
 
     public JwtAuthFilter(JwtService jwtService, ShopRepository shopRepo) {
+        this(jwtService, shopRepo, null, null);
+    }
+
+    public JwtAuthFilter(JwtService jwtService, ShopRepository shopRepo,
+                         FilialZugangRepository filialRepo, ShopOrtRepository ortRepo) {
         this.jwtService = jwtService;
         this.shopRepo = shopRepo;
+        this.filialRepo = filialRepo;
+        this.ortRepo = ortRepo;
     }
 
     @Override
@@ -56,11 +71,47 @@ public class JwtAuthFilter extends OncePerRequestFilter {
                         );
                         SecurityContextHolder.getContext().setAuthentication(auth);
                     });
+                } else if ("FILIALE".equals(rolle)) {
+                    filialeAnmelden(token);
                 }
             }
         }
         chain.doFilter(req, resp);
     }
 
+    /**
+     * Unterkonto einer Filiale. Jede Bedingung wird bei JEDER Anfrage neu
+     * geprueft: Sperre, Passwortwechsel (Version), Tarifwechsel, gesperrter
+     * Laden und ausgeschaltete Filiale wirken sofort, nicht erst wenn der
+     * Token ablaeuft.
+     */
+    private void filialeAnmelden(String token) {
+        if (filialRepo == null || ortRepo == null) return;
+        Integer version = jwtService.extractVersion(token);
+        if (version == null) return;
+        filialRepo.findWithShopById(jwtService.extractShopId(token))
+                .filter(z -> !z.isGesperrt())
+                .filter(z -> z.getTokenVersion() == version)
+                .filter(z -> z.getShop().isActive())
+                .filter(z -> z.getShop().getTarif() == Tarif.KETTE)
+                .filter(this::ortAktiv)
+                .ifPresent(z -> {
+                    var auth = new UsernamePasswordAuthenticationToken(
+                            new FilialPrincipal(z, z.getShop()),
+                            null,
+                            List.of(new SimpleGrantedAuthority("ROLE_FILIALE"))
+                    );
+                    SecurityContextHolder.getContext().setAuthentication(auth);
+                });
+    }
+
+    /** Hauptstandort ist immer an; eine geloeschte Filiale ist aus. */
+    private boolean ortAktiv(FilialZugang z) {
+        if (z.getOrtId() == null) return true;
+        return ortRepo.findById(z.getOrtId()).map(ShopOrt::isAktiv).orElse(false);
+    }
+
     public record ShopPrincipal(Shop shop) {}
+
+    public record FilialPrincipal(FilialZugang zugang, Shop shop) {}
 }
