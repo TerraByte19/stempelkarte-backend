@@ -92,6 +92,14 @@ class FilialImportServiceTest {
     }
 
     @Test
+    void riesigerText_wirdAbgewiesen_ohneEineSuche() {
+        String riesig = "Mitte, Weg 1\n" + "x".repeat(FilialImportService.MAX_ZEICHEN);
+        assertThatThrownBy(() -> dienst.vorschau(kette, riesig))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThat(gesucht).isEmpty();
+    }
+
+    @Test
     void antwortDesKartendienstes_wirdGelesen() {
         Optional<Geocoder.Punkt> p = NominatimGeocoder.lies(
                 "[{\"lat\":\"52.5170365\",\"lon\":\"13.3888599\",\"display_name\":\"Berlin, Deutschland\"}]");

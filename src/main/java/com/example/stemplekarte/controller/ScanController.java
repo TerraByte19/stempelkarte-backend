@@ -121,6 +121,9 @@ public class ScanController {
         if (auth == null || !(auth.getPrincipal() instanceof StaffTokenFilter.StaffPrincipal p)) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Kein gueltiger Staff-Token");
         }
+        // Auch das Nachschlagen einer Karte (Kundenname, Stand) ist an einer
+        // ausgeschalteten Filiale zu.
+        pruefeFiliale(p.staff(), p.staff().getShop());
         return pointsService.state(req.qrPayload(), p.staff().getShop());
     }
 

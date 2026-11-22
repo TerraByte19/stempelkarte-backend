@@ -121,6 +121,13 @@ class FilialTokenFilterTest {
     }
 
     @Test
+    void hauptstandortIstKeineFilialeMehr_loginAmHauptstandortGiltNicht() throws Exception {
+        assertThat(anmelden(token())).isNotNull();
+        kette.setHauptIstFiliale(false);
+        assertThat(anmelden(token())).isNull();
+    }
+
+    @Test
     void geloeschterZugang_giltNicht() throws Exception {
         String t = token();
         when(zugaenge.findWithShopById(zugang.getId())).thenReturn(Optional.empty());

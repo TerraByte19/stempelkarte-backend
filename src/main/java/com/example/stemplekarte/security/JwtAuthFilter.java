@@ -105,9 +105,12 @@ public class JwtAuthFilter extends OncePerRequestFilter {
                 });
     }
 
-    /** Hauptstandort ist immer an; eine geloeschte Filiale ist aus. */
+    /**
+     * Hauptstandort: an, solange er als Filiale zaehlt (Shop.hauptIstFiliale).
+     * Eine geloeschte Filiale ist aus. Dieselbe Regel wie FilialZugangService.ortAktiv.
+     */
     private boolean ortAktiv(FilialZugang z) {
-        if (z.getOrtId() == null) return true;
+        if (z.getOrtId() == null) return z.getShop().isHauptIstFiliale();
         return ortRepo.findById(z.getOrtId()).map(ShopOrt::isAktiv).orElse(false);
     }
 

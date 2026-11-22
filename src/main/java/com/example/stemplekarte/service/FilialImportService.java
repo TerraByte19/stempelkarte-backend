@@ -24,6 +24,8 @@ public class FilialImportService {
 
     /** Je Aufruf. Die Suche braucht rund eine Sekunde je Adresse. */
     public static final int MAX_ZEILEN = 40;
+    /** Obergrenze fuer den eingefuegten Text insgesamt. */
+    public static final int MAX_ZEICHEN = MAX_ZEILEN * 300;
     static final long PAUSE_MS = 1100;
 
     private final Geocoder geocoder;
@@ -45,18 +47,20 @@ public class FilialImportService {
 
     public List<Zeile> vorschau(Shop shop, String text) {
         if (!OrteService.kette(shop)) throw new IllegalArgumentException(OrteService.NUR_KETTE);
+        String zuViel = "Bitte höchstens " + MAX_ZEILEN + " Filialen auf einmal einfügen.";
+        // Erst die Laenge, dann zerlegen: ein riesiger Text wird gar nicht
+        // erst gelesen. Und beim Zaehlen sofort aufhoeren.
+        if (text != null && text.length() > MAX_ZEICHEN) throw new IllegalArgumentException(zuViel);
         List<String> zeilen = new ArrayList<>();
         if (text != null) {
             for (String z : text.split("\\R")) {
                 String s = z.replaceAll("\\p{Cntrl}", " ").trim();
-                if (!s.isEmpty()) zeilen.add(s);
+                if (s.isEmpty()) continue;
+                if (zeilen.size() >= MAX_ZEILEN) throw new IllegalArgumentException(zuViel);
+                zeilen.add(s);
             }
         }
         if (zeilen.isEmpty()) throw new IllegalArgumentException("Die Liste ist leer.");
-        if (zeilen.size() > MAX_ZEILEN) {
-            throw new IllegalArgumentException(
-                    "Bitte höchstens " + MAX_ZEILEN + " Filialen auf einmal einfügen.");
-        }
         List<Zeile> out = new ArrayList<>();
         boolean gesucht = false;
         int nr = 0;

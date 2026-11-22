@@ -141,6 +141,16 @@ class FilialZugangServiceTest {
     }
 
     @Test
+    void hauptstandortKeineFiliale_keinLoginDortUndKeinNeuer() {
+        vorhanden("backbaron-haupt", "geheim123", null);
+        kette.setHauptIstFiliale(false);
+        assertThatThrownBy(() -> service.login("backbaron-haupt", "geheim123"))
+                .isInstanceOf(IllegalArgumentException.class).hasMessage(FilialZugangService.FILIALE_AUS);
+        assertThatThrownBy(() -> service.anlegen(kette, "backbaron-zentrale", "geheim123", "HAUPT"))
+                .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("Hauptstandort");
+    }
+
+    @Test
     void passwortSetzen_machtAlteTokensUngueltig() {
         FilialZugang z = vorhanden("backbaron-mitte", "geheim123", null);
         service.passwortSetzen(kette, z.getId(), "ganzneu123");
