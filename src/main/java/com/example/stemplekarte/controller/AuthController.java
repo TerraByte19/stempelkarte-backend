@@ -1,7 +1,10 @@
 package com.example.stemplekarte.controller;
 
+import com.example.stemplekarte.model.FilialZugang;
 import com.example.stemplekarte.model.Shop;
 import com.example.stemplekarte.security.LoginAttemptService;
+import com.example.stemplekarte.service.FilialZugangService;
+import com.example.stemplekarte.service.FilialenService;
 import com.example.stemplekarte.service.ShopService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -25,10 +28,13 @@ public class AuthController {
 
     private final ShopService shopService;
     private final LoginAttemptService loginAttemptService;
+    private final FilialZugangService filialZugangService;
 
-    public AuthController(ShopService shopService, LoginAttemptService loginAttemptService) {
+    public AuthController(ShopService shopService, LoginAttemptService loginAttemptService,
+                          FilialZugangService filialZugangService) {
         this.shopService = shopService;
         this.loginAttemptService = loginAttemptService;
+        this.filialZugangService = filialZugangService;
     }
 
     public record RegisterRequest(
@@ -37,12 +43,17 @@ public class AuthController {
             @NotBlank String name
     ) {}
 
+    // "email" bleibt der Feldname (Frontend), darf aber auch der Benutzername
+    // eines Unterkontos sein (Tarif Kette). Mit @ = Laden, ohne @ = Unterkonto.
     public record LoginRequest(
-            @Email @NotBlank String email,
+            @NotBlank @Size(max = 254) String email,
             @NotBlank String password
     ) {}
 
-    public record AuthResponse(String token, String shopId, String name) {}
+    // rolle SHOP oder FILIALE. ortId/ortLabel nur beim Unterkonto
+    // (Hauptstandort = "HAUPT").
+    public record AuthResponse(String token, String shopId, String name,
+                               String rolle, String ortId, String ortLabel) {}
 
     @Operation(summary = "Shop registrieren — deaktiviert, nur über Admin-Panel")
     @PostMapping("/register")
@@ -64,15 +75,30 @@ public class AuthController {
         }
 
         try {
-            String token = shopService.login(req.email(), req.password());
-            Shop shop = shopService.getByEmail(req.email());
+            AuthResponse antwort = req.email().contains("@")
+                    ? ladenLogin(req)
+                    : filialLogin(req);
             loginAttemptService.loginSucceeded(ip); // Zähler zurücksetzen
-            return new AuthResponse(token, shop.getId(), shop.getName());
+            return antwort;
         } catch (Exception e) {
             // Fehlversuch zählen, dann den ursprünglichen Fehler weiterreichen
             loginAttemptService.loginFailed(ip);
             throw e;
         }
+    }
+
+    private AuthResponse ladenLogin(LoginRequest req) {
+        String token = shopService.login(req.email(), req.password());
+        Shop shop = shopService.getByEmail(req.email());
+        return new AuthResponse(token, shop.getId(), shop.getName(), "SHOP", null, null);
+    }
+
+    private AuthResponse filialLogin(LoginRequest req) {
+        FilialZugangService.Anmeldung a = filialZugangService.login(req.email(), req.password());
+        FilialZugang z = a.zugang();
+        String ortId = z.getOrtId() != null ? z.getOrtId() : FilialenService.HAUPT;
+        return new AuthResponse(a.token(), z.getShop().getId(), z.getShop().getName(),
+                "FILIALE", ortId, a.ortLabel());
     }
 
     /**
