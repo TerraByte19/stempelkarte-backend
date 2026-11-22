@@ -68,6 +68,16 @@ public class ApplePassService {
     // bauen - dann gibt es nur den Hauptort.
     private final com.example.stemplekarte.repository.ShopOrtRepository ortRepo;
 
+    // Besuche des Kunden je Filiale - nur fuer Ketten (KettenOrte). Als Feld
+    // und optional, damit Konstruktor und bestehende Tests bleiben, wie sie sind.
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.example.stemplekarte.repository.ScanLogRepository scanLogRepo;
+
+    /** Nur fuer Tests. */
+    void setScanLogRepo(com.example.stemplekarte.repository.ScanLogRepository scanLogRepo) {
+        this.scanLogRepo = scanLogRepo;
+    }
+
     public ApplePassService(AppProperties props, PassTemplateGenerator templateGenerator,
                             RewardService rewardService) {
         this(props, templateGenerator, rewardService, null);
@@ -643,7 +653,7 @@ public class ApplePassService {
         if (cc.isWillkommenOffen()) {
             String geschenk = cc.getWillkommenText() != null
                     ? cc.getWillkommenText() : Card.WILLKOMMEN_STANDARD;
-            return orte(shop, Texts.t(lang, "geo.gift", geschenk));
+            return orte(shop, cc, Texts.t(lang, "geo.gift", geschenk));
         }
 
         KartenFortschritt f = KartenFortschritt.von(card, cc, rewardService);
@@ -664,7 +674,7 @@ public class ApplePassService {
                     : Texts.t(lang, "geo.progress", f.offen(), f.einheit(lang), f.belohnung());
         }
 
-        return orte(shop, hinweis);
+        return orte(shop, cc, hinweis);
     }
 
     /** Apple nimmt hoechstens zehn Orte pro Pass. */
@@ -674,7 +684,11 @@ public class ApplePassService {
      * Hauptort plus weitere Orte (ShopOrt), alle mit demselben Text. Mehr als
      * zehn verwirft iOS - dann lieber die ersten zehn als gar keinen.
      */
-    private List<PKLocation> orte(Shop shop, String text) {
+    private List<PKLocation> orte(Shop shop, CustomerCard cc, String text) {
+        if (ortRepo != null && scanLogRepo != null
+                && com.example.stemplekarte.service.OrteService.kette(shop)) {
+            return kettenOrte(shop, cc, text);
+        }
         List<PKLocation> orte = new java.util.ArrayList<>();
         orte.add(PKLocation.builder()
                 .latitude(shop.getLatitude())
@@ -695,6 +709,39 @@ public class ApplePassService {
                         .relevantText(text)
                         .build());
             }
+        }
+        return orte;
+    }
+
+    /**
+     * Kette: die zehn Filialen, die zu DIESEM Kunden passen (KettenOrte).
+     * Vor dem ersten Stempel keine. Eine Abfrage je Pass, gedeckt durch den
+     * Index idx_scanlog_kunde.
+     */
+    private List<PKLocation> kettenOrte(Shop shop, CustomerCard cc, String text) {
+        String haupt = com.example.stemplekarte.service.FilialenService.HAUPT;
+        List<KettenOrte.Filiale> waehlbar = new java.util.ArrayList<>();
+        if (shop.isHauptIstFiliale() && shop.getLatitude() != null && shop.getLongitude() != null) {
+            waehlbar.add(new KettenOrte.Filiale(haupt, shop.getLatitude(), shop.getLongitude()));
+        }
+        for (com.example.stemplekarte.model.ShopOrt o
+                : com.example.stemplekarte.service.OrteService.geltende(
+                        shop, ortRepo.findByShopOrderByCreatedAtAsc(shop))) {
+            waehlbar.add(new KettenOrte.Filiale(o.getId(), o.getLatitude(), o.getLongitude()));
+        }
+        List<KettenOrte.Besuch> besuche = new java.util.ArrayList<>();
+        for (Object[] r : scanLogRepo.besucheJeFiliale(
+                shop.getId(), cc.getCustomer().getId(), cc.getCard().getId())) {
+            besuche.add(new KettenOrte.Besuch(r[0] == null ? haupt : r[0].toString(),
+                    ((Number) r[1]).longValue(), (java.time.Instant) r[2]));
+        }
+        List<PKLocation> orte = new java.util.ArrayList<>();
+        for (KettenOrte.Filiale f : KettenOrte.waehle(waehlbar, besuche, MAX_ORTE)) {
+            orte.add(PKLocation.builder()
+                    .latitude(f.latitude())
+                    .longitude(f.longitude())
+                    .relevantText(text)
+                    .build());
         }
         return orte;
     }

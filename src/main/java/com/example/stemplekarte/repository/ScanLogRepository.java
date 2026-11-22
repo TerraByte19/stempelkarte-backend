@@ -91,4 +91,14 @@ public interface ScanLogRepository extends JpaRepository<ScanLog, String> {
             + "and sl.scannedAt >= :von and sl.scannedAt < :bis")
     long kundenImZeitraum(@Param("shopId") String shopId,
                           @Param("von") Instant von, @Param("bis") Instant bis);
+
+    /**
+     * Besuche EINES Kunden auf einer Karte je Filiale: [ortId, anzahl, letzter].
+     * Fuer die Orte im Apple-Pass von Ketten (wallet.KettenOrte).
+     */
+    @Query("select sl.ortId, count(sl), max(sl.scannedAt) from ScanLog sl "
+            + "where sl.shopId = :shopId and sl.customerId = :customerId and sl.cardId = :cardId "
+            + "group by sl.ortId")
+    List<Object[]> besucheJeFiliale(@Param("shopId") String shopId,
+                                    @Param("customerId") String customerId, @Param("cardId") String cardId);
 }
