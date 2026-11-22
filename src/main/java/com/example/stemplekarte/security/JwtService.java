@@ -61,6 +61,30 @@ public class JwtService {
                 .compact();
     }
 
+    /**
+     * Unterkonto einer Filiale (Tarif Kette). Subject ist die ID des
+     * FilialZugangs, nicht die des Ladens: so kann dieser Token nie mit einem
+     * Inhaber-Token verwechselt werden. "ver" ist die Token-Version des
+     * Zugangs - nach Passwortwechsel oder Sperre zaehlt sie hoch, und alle
+     * aelteren Tokens sind sofort ungueltig.
+     */
+    public String generateFilialToken(String zugangId, String shopId, int version) {
+        return Jwts.builder()
+                .subject(zugangId)
+                .claim("role", "FILIALE")
+                .claim("shop", shopId)
+                .claim("ver", version)
+                .issuedAt(new Date())
+                .expiration(new Date(System.currentTimeMillis() + EXPIRATION_MS))
+                .signWith(key)
+                .compact();
+    }
+
+    /** Null, wenn der Token keine Version traegt. */
+    public Integer extractVersion(String token) {
+        return parseClaims(token).get("ver", Integer.class);
+    }
+
     public boolean isSupport(String token) {
         try {
             return Boolean.TRUE.equals(parseClaims(token).get("support", Boolean.class));

@@ -34,16 +34,17 @@ public class JwtAuthFilter extends OncePerRequestFilter {
             String token = header.substring(7).trim();
 
             if (jwtService.isValid(token)) {
-                // ── Admin-Token ───────────────────────────────────────────
-                if (jwtService.isAdmin(token)) {
+                // Die Rolle im Token entscheidet. Ohne oder mit unbekannter
+                // Rolle bleibt die Anfrage anonym - nie "im Zweifel Inhaber".
+                String rolle = jwtService.extractRole(token);
+                if ("ADMIN".equals(rolle)) {
                     var auth = new UsernamePasswordAuthenticationToken(
                             "admin",
                             null,
                             List.of(new SimpleGrantedAuthority("ROLE_ADMIN"))
                     );
                     SecurityContextHolder.getContext().setAuthentication(auth);
-                } else {
-                    // ── Shop-Token ────────────────────────────────────────
+                } else if ("SHOP".equals(rolle)) {
                     // filter(isActive): ein vom Admin gesperrter Laden fliegt
                     // sofort raus, nicht erst wenn sein Token ablaeuft.
                     String shopId = jwtService.extractShopId(token);
