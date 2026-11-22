@@ -188,6 +188,11 @@ public class Shop {
     @Column(name = "max_orte")
     private Integer maxOrte;
 
+    // Nur Tarif Kette: wie viele Scanner-Geraete JE FILIALE erlaubt sind (vom
+    // Admin). Null = Standard. Bei allen anderen Laeden zaehlt maxTokens.
+    @Column(name = "max_tokens_je_filiale")
+    private Integer maxTokensJeFiliale;
+
     // Nur Tarif Kette: zaehlt der Hauptstandort selbst als Filiale (mit
     // Kunden, Statistik, Login)? Null = ja, wie bei jedem anderen Laden.
     // Nein, wenn der Hauptstandort nur die Zentrale ist.
@@ -591,6 +596,20 @@ public class Shop {
     /** Vom Admin. Bereich prueft der Aufrufer. */
     public void setMaxOrte(int maxOrte) {
         this.maxOrte = maxOrte;
+        this.updatedAt = Instant.now();
+    }
+
+    public static final int GERAETE_JE_FILIALE_STANDARD = 5;
+    public static final int GERAETE_JE_FILIALE_MAX = 50;
+
+    public int getMaxTokensJeFiliale() {
+        if (maxTokensJeFiliale == null) return GERAETE_JE_FILIALE_STANDARD;
+        return Math.max(1, Math.min(GERAETE_JE_FILIALE_MAX, maxTokensJeFiliale));
+    }
+
+    /** Vom Admin. Bereich prueft der Aufrufer. */
+    public void setMaxTokensJeFiliale(int anzahl) {
+        this.maxTokensJeFiliale = anzahl;
         this.updatedAt = Instant.now();
     }
 

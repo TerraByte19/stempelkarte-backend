@@ -85,6 +85,23 @@ public class StaffToken {
     }
 
     public String getToken() { return token; }
+
+    /**
+     * Kennung des Zugangs fuer Adressen und Listen: aus dem Token abgeleitet,
+     * aber nicht umkehrbar. Das Token selbst ist die Zugangsberechtigung und
+     * gehoert in keine URL (Server-Logs).
+     */
+    public String getKennung() { return kennung(token); }
+
+    public static String kennung(String token) {
+        try {
+            byte[] h = java.security.MessageDigest.getInstance("SHA-256")
+                    .digest(token.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            return java.util.HexFormat.of().formatHex(h, 0, 8);
+        } catch (java.security.NoSuchAlgorithmException e) {
+            throw new IllegalStateException(e);
+        }
+    }
     public Shop getShop() { return shop; }
     public String getLabel() { return label; }
     public Instant getCreatedAt() { return createdAt; }

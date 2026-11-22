@@ -22,11 +22,23 @@ public class FilialenController {
 
     private final FilialenService filialenService;
     private final com.example.stemplekarte.service.FilialStatistikService statistik;
+    private final com.example.stemplekarte.service.FilialKorrekturService korrekturen;
 
     public FilialenController(FilialenService filialenService,
-                              com.example.stemplekarte.service.FilialStatistikService statistik) {
+                              com.example.stemplekarte.service.FilialStatistikService statistik,
+                              com.example.stemplekarte.service.FilialKorrekturService korrekturen) {
         this.filialenService = filialenService;
         this.statistik = statistik;
+        this.korrekturen = korrekturen;
+    }
+
+    @Operation(summary = "Protokoll der Stempel-Korrekturen durch Filialen (die letzten 100)",
+            description = "Wann, welche Filiale, welcher Login, von wie vielen auf wie viele Stempel. Keine Kundennamen.")
+    @GetMapping("/korrekturen")
+    public java.util.List<com.example.stemplekarte.service.FilialKorrekturService.Eintrag> korrekturen(
+            Authentication auth) {
+        Shop shop = ((JwtAuthFilter.ShopPrincipal) auth.getPrincipal()).shop();
+        return korrekturen.protokoll(shop);
     }
 
     @Operation(summary = "Statistik je Filiale im gewaehlten Zeitraum, plus Summe",

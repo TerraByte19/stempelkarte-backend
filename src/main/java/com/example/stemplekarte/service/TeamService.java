@@ -88,6 +88,22 @@ public class TeamService {
     /** ortId null oder HAUPT = Hauptstandort, sonst ein Ort dieses Ladens. */
     @Transactional
     public StaffToken anlegen(Shop shop, String label, String rolle, String ortId) {
+        // Kette: die Grenze gilt je Filiale (Shop.maxTokensJeFiliale), nicht
+        // fuer den ganzen Laden - 33 Filialen passen nicht in drei Zugaenge.
+        if (OrteService.kette(shop)) {
+            String l = labelSauber(label);
+            String r = StaffToken.rolleSauber(rolle);
+            String ziel = ortSauber(shop, ortId);
+            long vorhanden = staffTokenRepo.findByShop(shop).stream()
+                    .filter(x -> java.util.Objects.equals(x.getOrtId(), ziel)).count();
+            if (vorhanden >= shop.getMaxTokensJeFiliale()) {
+                throw new IllegalArgumentException("Je Filiale sind höchstens "
+                        + shop.getMaxTokensJeFiliale() + " Geräte möglich.");
+            }
+            StaffToken neu = StaffToken.create(shop, l, r);
+            neu.ort(ziel);
+            return staffTokenRepo.save(neu);
+        }
         StaffToken t = shopService.createStaffToken(shop.getId(), labelSauber(label), StaffToken.rolleSauber(rolle));
         String ort = ortSauber(shop, ortId);
         if (t != null && ort != null) {
