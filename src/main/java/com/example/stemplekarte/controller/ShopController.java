@@ -223,6 +223,9 @@ public class ShopController {
         map.put("signupBirthday", shop.getSignupBirthday());
         map.put("signupPhone", shop.getSignupPhone());
         map.put("signupOhneMail", shop.isAnmeldungOhneMail());
+        // Vom Admin: keine E-Mails fuer diesen Laden. Dann gibt es Karten
+        // nur ohne Anmeldung, egal wie signupOhneMail steht.
+        map.put("mailsAus", shop.isMailsAus());
         map.put("birthdayGreetingEnabled", shop.isGeburtstagsgrussAktiv());
         map.put("birthdayGreetingText", shop.getBirthdayGreetingText());
         map.put("birthdayGreetingDefault", Shop.GEBURTSTAG_STANDARD);
@@ -809,6 +812,8 @@ public class ShopController {
         Shop shop = currentShop(auth);
         com.example.stemplekarte.service.TarifPruefung.pruefe(shop,
                 com.example.stemplekarte.model.Tarif.Funktion.NEWSLETTER);
+        // Mails aus (Admin): hier abweisen, bevor etwas in die Warteschlange geht.
+        com.example.stemplekarte.service.TarifPruefung.pruefeMails(shop);
 
         // Test-Versand geht NUR an die eigene Shop-E-Mail, wird NICHT im
         // Verlauf gespeichert und zählt nicht als echter Kunden-Versand.
@@ -840,6 +845,8 @@ public class ShopController {
         Shop shop = currentShop(auth);
         com.example.stemplekarte.service.TarifPruefung.pruefe(shop,
                 com.example.stemplekarte.model.Tarif.Funktion.NEWSLETTER);
+        // Mails aus (Admin): hier abweisen, bevor etwas in die Warteschlange geht.
+        com.example.stemplekarte.service.TarifPruefung.pruefeMails(shop);
 
         int alle = newsletterService.empfaenger(shop).size();
         // Double-Opt-In: nur an bestätigte E-Mails senden (gesetzlich Pflicht)

@@ -188,6 +188,12 @@ public class Shop {
     @Column(name = "max_orte")
     private Integer maxOrte;
 
+    // Vom Admin: fuer diesen Laden geht KEINE E-Mail raus - nicht an Kunden,
+    // nicht an den Laden, kein Newsletter. Push auf die Wallet-Karte bleibt.
+    // Karten gibt es dann nur ohne Anmeldung. Null = Mails an.
+    @Column(name = "mails_aus")
+    private Boolean mailsAus;
+
     // Nur Tarif Kette: wie viele Scanner-Geraete JE FILIALE erlaubt sind (vom
     // Admin). Null = Standard. Bei allen anderen Laeden zaehlt maxTokens.
     @Column(name = "max_tokens_je_filiale")
@@ -537,6 +543,15 @@ public class Shop {
     }
 
     public boolean isAnmeldungOhneMail() { return Boolean.TRUE.equals(signupOhneMail); }
+
+    public boolean isMailsAus() { return Boolean.TRUE.equals(mailsAus); }
+
+    /** Vom Admin. */
+    public void setMailsAus(boolean aus) {
+        this.mailsAus = aus;
+        this.updatedAt = Instant.now();
+    }
+
 
     public void updateAnmeldungOhneMail(boolean an) {
         this.signupOhneMail = an;

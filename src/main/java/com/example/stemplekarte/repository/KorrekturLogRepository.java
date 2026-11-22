@@ -10,6 +10,9 @@ public interface KorrekturLogRepository extends JpaRepository<KorrekturLog, Stri
     /** Die juengsten Korrekturen eines Ladens - fuer das Hauptkonto. */
     List<KorrekturLog> findTop100ByShopIdOrderByErstelltAmDesc(String shopId);
 
+    // DSGVO-Loeschung eines Kunden (CustomerService#deleteCustomerData).
+    void deleteByCustomerCardId(String customerCardId);
+
     // Beim Loeschen eines Ladens (AdminController#deleteShop).
     void deleteByShopId(String shopId);
 }

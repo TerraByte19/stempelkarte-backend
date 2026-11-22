@@ -33,7 +33,12 @@ public class FilialGeraeteService {
         this.teamService = teamService;
     }
 
-    /** token: das Unterkonto braucht ihn, um das Geraet einzurichten (Link/QR). */
+    /**
+     * token: das Unterkonto braucht ihn, um das Geraet einzurichten (Link/QR).
+     * Bewusst so: der Zugang gehoert zur EIGENEN Filiale, und was ein Geraet
+     * darf (stempeln, einloesen an dieser Filiale), darf die Filialleitung
+     * ohnehin. Fremde Geraete kommen hier nie vor (eigene()).
+     */
     public record Geraet(String kennung, String label, String rolle, String erstellt,
                          String zuletzt, String token) {
         static Geraet von(StaffToken t) {
@@ -68,9 +73,17 @@ public class FilialGeraeteService {
         return Geraet.von(staffTokenRepo.save(t));
     }
 
+    /**
+     * Dieselbe Regel wie beim Hauptkonto (TeamService.entfernen): der letzte
+     * Zugang des Ladens bleibt, sonst kann niemand mehr stempeln.
+     */
     @Transactional
     public void entfernen(Shop shop, String ortId, String kennung) {
-        staffTokenRepo.delete(eigenes(shop, ortId, kennung));
+        StaffToken t = eigenes(shop, ortId, kennung);
+        if (staffTokenRepo.findByShop(shop).size() <= 1) {
+            throw new IllegalStateException("Der letzte Zugang bleibt, sonst kann niemand mehr stempeln.");
+        }
+        staffTokenRepo.delete(t);
     }
 
     private List<StaffToken> eigene(Shop shop, String ortId) {

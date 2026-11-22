@@ -199,6 +199,9 @@ public class AdminController {
             map.put("standortGesetzt",
                     com.example.stemplekarte.service.StandortPflicht.hatStandort(shop));
             map.put("maxOrte", shop.getMaxOrte());
+            map.put("mailsAus", shop.isMailsAus());
+            map.put("maxTokensJeFiliale", shop.getMaxTokensJeFiliale());
+            map.put("hauptIstFiliale", shop.isHauptIstFiliale());
             map.put("apiFreigeschaltet", shop.isApiFreigeschaltet());
             map.put("tarif", shop.getTarif().name());
             map.put("kundenGrenze", shop.getTarif().kundenGrenze());
@@ -481,6 +484,27 @@ public class AdminController {
         shopRepo.save(shop);
         log.info("[ADMIN] Schnittstelle laden={} frei={}", shop.getId(), req.freigeschaltet());
         return ResponseEntity.ok(Map.of("id", shop.getId(), "apiFreigeschaltet", shop.isApiFreigeschaltet()));
+    }
+
+    public record MailsRequest(boolean aus) {}
+
+    /**
+     * E-Mail-Versand je Laden aus- und einschalten. Aus = fuer diesen Laden
+     * geht keine einzige Mail raus (Bestaetigung, Newsletter, Erinnerung an
+     * die Testphase), im Dashboard verschwindet alles rund um E-Mail, und
+     * Karten gibt es nur ohne Anmeldung. Push auf die Wallet-Karte bleibt.
+     */
+    @PostMapping("/shops/{shopId}/mails")
+    public ResponseEntity<Map<String, Object>> setMails(@PathVariable String shopId,
+                                                        @RequestBody MailsRequest req) {
+        Shop shop = shopRepo.findById(shopId).orElse(null);
+        if (shop == null) {
+            return ResponseEntity.status(404).body(Map.of("error", "Shop nicht gefunden: " + shopId));
+        }
+        shop.setMailsAus(req.aus());
+        shopRepo.save(shop);
+        log.info("[ADMIN] Mails laden={} aus={}", shop.getId(), shop.isMailsAus());
+        return ResponseEntity.ok(Map.of("id", shop.getId(), "mailsAus", shop.isMailsAus()));
     }
 
     @org.springframework.beans.factory.annotation.Autowired(required = false)

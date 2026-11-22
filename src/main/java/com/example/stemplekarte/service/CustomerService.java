@@ -113,7 +113,7 @@ public class CustomerService {
     public CustomerCard registerOhneMail(String cardId, String language) {
         Card card = cardRepo.findById(cardId)
                 .orElseThrow(() -> new NoSuchElementException("Karte nicht gefunden: " + cardId));
-        if (!card.getShop().isAnmeldungOhneMail()) {
+        if (!(card.getShop().isAnmeldungOhneMail() || card.getShop().isMailsAus())) {
             throw new IllegalArgumentException("Bei diesem Laden braucht die Karte eine Anmeldung.");
         }
 
@@ -155,6 +155,15 @@ public class CustomerService {
                                   String language, boolean bestaetigt) {
         Card card = cardRepo.findById(cardId)
                 .orElseThrow(() -> new NoSuchElementException("Karte nicht gefunden: " + cardId));
+
+        // Mails aus (Admin): eine Anmeldung mit E-Mail braucht die
+        // Bestaetigungsmail - die es hier nicht gibt. Die Karte kaeme nie an.
+        // Solche Laeden geben Karten ohne Anmeldung aus (registerOhneMail).
+        // Mit Google/Apple (bestaetigt) geht keine Mail raus, das bleibt erlaubt.
+        if (card.getShop().isMailsAus() && !bestaetigt) {
+            throw new IllegalArgumentException(
+                    "Dieser Laden gibt Karten ohne Anmeldung aus. Bitte die Seite neu laden.");
+        }
 
         Customer customer = getOrCreate(name, email);
         // Sprache nur, wenn der Kunde sie auf der Seite gewaehlt hat. Ohne
@@ -214,7 +223,7 @@ public class CustomerService {
         CustomerCard cc = CustomerCard.create(customer, card);
         // Kein Geschenk, solange der Laden Karten ohne Anmeldung ausgibt:
         // es liesse sich sonst mit jeder neuen Karte noch einmal holen.
-        if (card.isWillkommenAktiv() && !card.getShop().isAnmeldungOhneMail()) {
+        if (card.isWillkommenAktiv() && !(card.getShop().isAnmeldungOhneMail() || card.getShop().isMailsAus())) {
             cc.willkommenVormerken(card.getWillkommenText());
         }
         return cc;
@@ -257,6 +266,10 @@ public class CustomerService {
         return customerCardRepo.findByCustomer(customer);
     }
 
+    // Optional wie der Webhook-Dienst: Tests bauen den Dienst ohne dieses Protokoll.
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.example.stemplekarte.repository.KorrekturLogRepository korrekturLogRepo;
+
     /**
      * DSGVO: Recht auf Loeschung. Entfernt den Kunden vollstaendig aus dem System —
      * seine CustomerCards und die zugehoerigen Apple-Geraeteregistrierungen
@@ -273,6 +286,8 @@ public class CustomerService {
         for (CustomerCard cc : cards) {
             // serialNumber der Apple-Registrierung == CustomerCard-ID
             appleDeviceRepo.deleteBySerialNumber(cc.getId());
+            // Korrektur-Protokoll der Filialen haengt an der Kundenkarte.
+            if (korrekturLogRepo != null) korrekturLogRepo.deleteByCustomerCardId(cc.getId());
         }
         customerCardRepo.deleteAll(cards);
         customerRepo.delete(customer);

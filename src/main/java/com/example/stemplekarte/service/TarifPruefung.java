@@ -45,6 +45,20 @@ public final class TarifPruefung {
         public TestVorbei() { super(TEST_VORBEI_TEXT); }
     }
 
+    /**
+     * Fuer diesen Laden gehen keine E-Mails raus (Shop.mailsAus, vom Admin).
+     * 402 mit code MAILS_AUS - wie oben bewusst nicht 403.
+     */
+    public static class MailsAus extends RuntimeException {
+        public MailsAus() { super(MAILS_AUS_TEXT); }
+    }
+
+    public static final String MAILS_AUS_TEXT = "Für diesen Laden ist der E-Mail-Versand ausgeschaltet.";
+
+    public static void pruefeMails(Shop shop) {
+        if (shop.isMailsAus()) throw new MailsAus();
+    }
+
     public static final String TEST_VORBEI_TEXT =
             "Die Gratis-Testphase ist vorbei. Bitte melde dich bei Stampit, dann geht es sofort weiter.";
 
@@ -89,6 +103,9 @@ public final class TarifPruefung {
         for (Tarif.Funktion f : Tarif.Funktion.values()) {
             funktionen.put(f.name().toLowerCase(Locale.ROOT), t.erlaubt(f));
         }
+        // Kein Tarif-Punkt, sondern der Schalter des Admins: false = alles
+        // rund um E-Mail im Dashboard ausblenden (Newsletter, Mail-Hinweise).
+        funktionen.put("mails", !shop.isMailsAus());
         return new Stand(t.name(), grenze, kunden, grenze != null && kunden >= grenze, funktionen,
                 testVorbei(shop, Instant.now()));
     }

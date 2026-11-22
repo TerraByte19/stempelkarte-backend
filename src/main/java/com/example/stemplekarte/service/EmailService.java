@@ -82,6 +82,7 @@ public class EmailService {
     public void sendConfirmationMail(Customer customer, Shop shop, String cardId,
                                      String willkommenText) {
         if (customer.getConfirmToken() == null) return; // schon bestätigt
+        if (mailsAus(shop)) return;
 
         String lang = Texts.sprache(customer, shop);
         String shopName = shop.getName();
@@ -126,6 +127,19 @@ public class EmailService {
     // ── 2. Lösch-Bestätigungs-Mail (Schritt 2, Sicherheits-Mail) ─────────
     // Generische StampIT-Mail, kein Laden-Branding (kontoweit, nicht
     // kartenspezifisch).
+    /**
+     * Sicherheitsnetz: fuer einen Laden mit "Mails aus" (Shop.mailsAus, vom
+     * Admin) geht hier nichts raus. Die Aufrufer sperren schon vorher - das
+     * hier faengt den Fall, dass ein neuer Aufrufer es vergisst.
+     */
+    private static boolean mailsAus(Shop shop) {
+        if (shop != null && shop.isMailsAus()) {
+            log.info("[MAIL] Nicht gesendet: Mails aus fuer Laden {}", shop.getId());
+            return true;
+        }
+        return false;
+    }
+
     @Async
     public void sendDeletionMail(Customer customer) {
         String deleteConfirmUrl = com.example.stemplekarte.config.KundenLink.basis(baseUrl) + "/mail/delete-confirm?token=" + customer.getDeleteToken();
@@ -173,6 +187,7 @@ public class EmailService {
     // zurueck, wenn der Mailserver die Mail angenommen hat.
     public boolean sendNewsletterMail(Shop shop, String replyTo,
                                       NewsletterInhalt inhalt, NewsletterEmpfaenger e) {
+        if (mailsAus(shop)) return false;
         String lang = Texts.sprache(shop);
         String shopName = shop.getName();
         String farbe = (shop.getColorBackground() != null) ? shop.getColorBackground() : STAMPIT_FARBE;
@@ -247,6 +262,7 @@ public class EmailService {
      * Mail, die wirklich rausging.
      */
     public boolean sendTestphaseMail(Shop shop, java.time.Instant bis, boolean vorbei, String dashboardUrl) {
+        if (mailsAus(shop)) return false;
         String datum = java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy")
                 .withZone(java.time.ZoneId.of("Europe/Berlin")).format(bis);
         String hallo = "Hallo " + esc(shop.getName()) + ",<br><br>";

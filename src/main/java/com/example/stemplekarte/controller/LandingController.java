@@ -957,7 +957,7 @@ public class LandingController {
             // Laden gibt Karten ohne Anmeldung aus: eigene, kleine Seite mit
             // einem Knopf. Die Seite darunter bleibt fuer alle anderen Laeden
             // Zeichen fuer Zeichen wie bisher.
-            if (card.getShop().isAnmeldungOhneMail()) {
+            if (card.getShop().isAnmeldungOhneMail() || card.getShop().isMailsAus()) {
                 return ResponseEntity.ok()
                         .header(org.springframework.http.HttpHeaders.CACHE_CONTROL, "no-cache")
                         .body(mitKontrast(direktSeite(lang, explizit, card, cardId, shopName, bgColor, logoUrl),

@@ -50,6 +50,14 @@ public class GlobalExceptionHandler {
                 "funktion", e.getFunktion().name()));
     }
 
+    // E-Mail-Versand fuer diesen Laden aus (Admin).
+    @ExceptionHandler(com.example.stemplekarte.service.TarifPruefung.MailsAus.class)
+    public ResponseEntity<Map<String, String>> handleMailsAus(com.example.stemplekarte.service.TarifPruefung.MailsAus e) {
+        return ResponseEntity.status(HttpStatus.PAYMENT_REQUIRED).body(Map.of(
+                "error", e.getMessage(),
+                "code", "MAILS_AUS"));
+    }
+
     // Gratis-Testphase vorbei: Scanner und Laden-Seiten zeigen die Meldung.
     @ExceptionHandler(com.example.stemplekarte.service.TarifPruefung.TestVorbei.class)
     public ResponseEntity<Map<String, String>> handleTestVorbei(com.example.stemplekarte.service.TarifPruefung.TestVorbei e) {
