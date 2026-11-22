@@ -339,6 +339,8 @@ public class CustomerService {
 
         ScanResult result = null;
         int rewardsEarnedThisScan = 0;
+        // Eingeloeste Praemien in diesem Scan - fuer die Statistik je Filiale.
+        int eingeloestThisScan = 0;
 
         // Mitgliedskarte: ein Scan = ein Besuch, egal wie viele Stempel der
         // Scanner mitschickt. Keine Schwelle, keine Praemie.
@@ -363,6 +365,7 @@ public class CustomerService {
         for (int i = 0; i < count && !card.isMember() && !card.isPackage(); i++) {
             if (cc.getStamps() >= threshold) {
                 cc.redeemReward(threshold);
+                eingeloestThisScan++;
                 result = new ScanResult.Redeemed(cc, card.getRewardText() + " eingeloest!", rewardsEarnedThisScan);
             } else {
                 cc.addStamp();
@@ -404,7 +407,7 @@ public class CustomerService {
             // Stempel - wie bei der Punktekarte, damit die Stempel-Statistik sauber bleibt.
             scanLogRepo.save(ScanLog.create(
                     shop.getId(), cardId, customerId, card.isMember() || card.isPackage() ? 0 : count,
-                    rewardsEarnedThisScan, staffLabel, ortId));
+                    rewardsEarnedThisScan, staffLabel, ortId).eingeloest(eingeloestThisScan));
         } catch (Exception e) {
             log.warn("ScanLog konnte nicht gespeichert werden: {}", e.getMessage());
         }

@@ -18,7 +18,9 @@ import java.util.UUID;
                 @Index(name = "idx_scanlog_shop_time", columnList = "shop_id, scanned_at"),
                 @Index(name = "idx_scanlog_card", columnList = "card_id"),
                 // Letzter Scan einer Kundenkarte (Sperrzeit am Tablet, KioskService)
-                @Index(name = "idx_scanlog_kunde", columnList = "shop_id, customer_id, card_id, scanned_at")
+                @Index(name = "idx_scanlog_kunde", columnList = "shop_id, customer_id, card_id, scanned_at"),
+                // Statistik je Filiale (FilialStatistikService)
+                @Index(name = "idx_scanlog_ort", columnList = "shop_id, ort_id, scanned_at")
         })
 public class ScanLog {
 
@@ -59,6 +61,12 @@ public class ScanLog {
     @Column(name = "ort_id", length = 64)
     private String ortId;
 
+    // Wie viele Praemien in diesem Vorgang EINGELOEST wurden (nicht: verdient,
+    // das ist rewardsEarned). Null = 0 oder aelterer Eintrag - die Zahl
+    // "eingeloeste Praemien je Filiale" stimmt deshalb erst ab Einfuehrung.
+    @Column(name = "eingeloest")
+    private Integer eingeloest;
+
     protected ScanLog() {}
 
     public static ScanLog create(String shopId, String cardId, String customerId,
@@ -85,6 +93,14 @@ public class ScanLog {
         l.staffLabel = (staffLabel == null || staffLabel.isBlank()) ? null
                 : (staffLabel.length() > 100 ? staffLabel.substring(0, 100) : staffLabel);
         return l;
+    }
+
+    public int getEingeloest() { return eingeloest != null ? eingeloest : 0; }
+
+    /** 0 bleibt null in der Datenbank. Gibt sich selbst zurueck (Verkettung beim Anlegen). */
+    public ScanLog eingeloest(int anzahl) {
+        this.eingeloest = anzahl > 0 ? anzahl : null;
+        return this;
     }
 
     public String getStaffLabel() { return staffLabel; }

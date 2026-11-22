@@ -54,4 +54,41 @@ public interface ScanLogRepository extends JpaRepository<ScanLog, String> {
     @Query("select count(distinct sl.customerId) from ScanLog sl "
             + "where sl.shopId = :shopId and sl.scannedAt > :after")
     long countDistinctCustomersSince(@Param("shopId") String shopId, @Param("after") Instant after);
+
+    // ── Statistik je Filiale (FilialStatistikService) ───────────────────
+    // ortId null = Hauptstandort. Zeitfenster: von (einschliesslich) bis (ausschliesslich).
+
+    /**
+     * Je Filiale: [ortId, scans, stempel, eingeloest, kunden].
+     * stempel ohne die Durchlaeufe, in denen eingeloest statt gestempelt wurde
+     * (stampsAdded zaehlt sie mit).
+     */
+    @Query("select sl.ortId, count(sl), "
+            + "sum(case when sl.stampsAdded > coalesce(sl.eingeloest, 0) "
+            + "         then sl.stampsAdded - coalesce(sl.eingeloest, 0) else 0 end), "
+            + "sum(coalesce(sl.eingeloest, 0)), count(distinct sl.customerId) "
+            + "from ScanLog sl where sl.shopId = :shopId "
+            + "and sl.scannedAt >= :von and sl.scannedAt < :bis group by sl.ortId")
+    List<Object[]> zahlenJeFiliale(@Param("shopId") String shopId,
+                                   @Param("von") Instant von, @Param("bis") Instant bis);
+
+    /**
+     * Neue Kunden je Filiale: [ortId, anzahl]. Neu ist, wessen allererster
+     * Scan auf dieser Karte im Zeitfenster liegt; er zaehlt in der Filiale
+     * dieses ersten Scans.
+     */
+    @Query("select sl.ortId, count(distinct sl.customerId) from ScanLog sl "
+            + "where sl.shopId = :shopId and sl.customerId is not null "
+            + "and sl.scannedAt >= :von and sl.scannedAt < :bis "
+            + "and sl.scannedAt = (select min(e.scannedAt) from ScanLog e "
+            + "    where e.shopId = :shopId and e.customerId = sl.customerId and e.cardId = sl.cardId) "
+            + "group by sl.ortId")
+    List<Object[]> neueKundenJeFiliale(@Param("shopId") String shopId,
+                                       @Param("von") Instant von, @Param("bis") Instant bis);
+
+    /** Unterschiedliche Kunden im Zeitfenster ueber alle Filialen (fuer die Summenzeile). */
+    @Query("select count(distinct sl.customerId) from ScanLog sl where sl.shopId = :shopId "
+            + "and sl.scannedAt >= :von and sl.scannedAt < :bis")
+    long kundenImZeitraum(@Param("shopId") String shopId,
+                          @Param("von") Instant von, @Param("bis") Instant bis);
 }

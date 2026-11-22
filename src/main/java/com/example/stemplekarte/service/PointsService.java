@@ -249,7 +249,10 @@ public class PointsService {
         // Gezaehlt werden Punkte-Einloesungen in PointsBooking - dort ist die
         // Ruecknahme sauber abgebildet, und daraus kommt auch die Rangliste
         // der beliebtesten Praemien.
-        scanLogSchreiben(shop, card, cc, 0, ortId);
+        // eingeloest = 1 nur fuer die Statistik je Filiale. Eine Ruecknahme
+        // (undo) zieht sie dort nicht wieder ab - fuer Punktekarten ist die
+        // Zahl je Filiale deshalb eine Obergrenze.
+        scanLogSchreiben(shop, card, cc, 0, ortId, 1);
 
         webhook(shop, "points.redeemed", WebhookService.daten(
                 "customerId", qr.customerId(), "cardId", card.getId(), "customerCardId", cc.getId(),
@@ -413,12 +416,17 @@ public class PointsService {
     }
 
     private void scanLogSchreiben(Shop shop, Card card, CustomerCard cc, int rewardsEarned, String ortId) {
+        scanLogSchreiben(shop, card, cc, rewardsEarned, ortId, 0);
+    }
+
+    private void scanLogSchreiben(Shop shop, Card card, CustomerCard cc, int rewardsEarned, String ortId,
+                                  int eingeloest) {
         // Wie beim Stempel-Weg: schlaegt das Protokoll fehl, darf die Buchung
         // NICHT scheitern. stampsAdded bleibt 0, damit sich Stempel- und
         // Punktzahlen in der Statistik nicht vermischen.
         try {
             scanLogRepo.save(ScanLog.create(shop.getId(), card.getId(),
-                    cc.getCustomer().getId(), 0, rewardsEarned, null, ortId));
+                    cc.getCustomer().getId(), 0, rewardsEarned, null, ortId).eingeloest(eingeloest));
         } catch (Exception e) {
             log.warn("ScanLog konnte nicht gespeichert werden: {}", e.getMessage());
         }

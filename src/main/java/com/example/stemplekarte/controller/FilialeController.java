@@ -2,6 +2,7 @@ package com.example.stemplekarte.controller;
 
 import com.example.stemplekarte.model.FilialZugang;
 import com.example.stemplekarte.security.JwtAuthFilter;
+import com.example.stemplekarte.service.FilialStatistikService;
 import com.example.stemplekarte.service.FilialZugangService;
 import com.example.stemplekarte.service.FilialenService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -23,9 +24,24 @@ import java.util.Map;
 public class FilialeController {
 
     private final FilialZugangService filialZugangService;
+    private final FilialStatistikService statistik;
 
-    public FilialeController(FilialZugangService filialZugangService) {
+    public FilialeController(FilialZugangService filialZugangService, FilialStatistikService statistik) {
         this.filialZugangService = filialZugangService;
+        this.statistik = statistik;
+    }
+
+    @Operation(summary = "Statistik der eigenen Filiale im gewaehlten Zeitraum",
+            description = "von/bis als JJJJ-MM-TT, ohne Angabe die letzten 30 Tage. Nur die eigene Filiale, "
+                    + "keine Kundendaten.")
+    @GetMapping("/statistik")
+    public FilialStatistikService.Zeile statistik(
+            @org.springframework.web.bind.annotation.RequestParam(required = false) String von,
+            @org.springframework.web.bind.annotation.RequestParam(required = false) String bis,
+            Authentication auth) {
+        JwtAuthFilter.FilialPrincipal p = filiale(auth);
+        return statistik.eine(p.shop(), p.zugang().getOrtId(), filialZugangService.ortLabel(p.zugang()),
+                FilialStatistikService.zeitraum(von, bis, FilialStatistikService.heute()));
     }
 
     static JwtAuthFilter.FilialPrincipal filiale(Authentication auth) {

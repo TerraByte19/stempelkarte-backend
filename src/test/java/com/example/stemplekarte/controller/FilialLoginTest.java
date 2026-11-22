@@ -89,7 +89,7 @@ class FilialLoginTest {
         var auth = new UsernamePasswordAuthenticationToken(
                 new JwtAuthFilter.FilialPrincipal(z, kette), null, List.of());
 
-        Map<String, Object> ich = new FilialeController(filialService).ich(auth);
+        Map<String, Object> ich = new FilialeController(filialService, null).ich(auth);
 
         assertThat(ich).containsEntry("kette", "BackBaron")
                 .containsEntry("benutzername", "backbaron-mitte")

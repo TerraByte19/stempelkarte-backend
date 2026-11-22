@@ -21,9 +21,26 @@ import java.time.Instant;
 public class FilialenController {
 
     private final FilialenService filialenService;
+    private final com.example.stemplekarte.service.FilialStatistikService statistik;
 
-    public FilialenController(FilialenService filialenService) {
+    public FilialenController(FilialenService filialenService,
+                              com.example.stemplekarte.service.FilialStatistikService statistik) {
         this.filialenService = filialenService;
+        this.statistik = statistik;
+    }
+
+    @Operation(summary = "Statistik je Filiale im gewaehlten Zeitraum, plus Summe",
+            description = "von/bis als JJJJ-MM-TT, beide Tage zaehlen mit; ohne Angabe die letzten 30 Tage. "
+                    + "Je Filiale: scans, stempel, neueKunden (erster Stempel in dieser Filiale), "
+                    + "praemien (eingeloest, erst ab Einfuehrung gezaehlt), aktiveKunden. Keine Kundendaten.")
+    @GetMapping("/statistik")
+    public com.example.stemplekarte.service.FilialStatistikService.Tabelle statistik(
+            @org.springframework.web.bind.annotation.RequestParam(required = false) String von,
+            @org.springframework.web.bind.annotation.RequestParam(required = false) String bis,
+            Authentication auth) {
+        Shop shop = ((JwtAuthFilter.ShopPrincipal) auth.getPrincipal()).shop();
+        return statistik.tabelle(shop, com.example.stemplekarte.service.FilialStatistikService.zeitraum(
+                von, bis, com.example.stemplekarte.service.FilialStatistikService.heute()));
     }
 
     @Operation(summary = "Filialen mit Scans, Stempeln, Kunden der letzten 30 Tage und Zugaengen",
