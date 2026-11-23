@@ -13,6 +13,12 @@ public interface ShopOrtRepository extends JpaRepository<ShopOrt, String> {
 
     long countByShop(Shop shop);
 
+    // Admin: alle Filialen, die auf die Bestaetigung warten - MIT Laden,
+    // weil der Name des Ladens dazugehoert und die Sitzung danach zu ist.
+    @org.springframework.data.jpa.repository.Query(
+            "select o from ShopOrt o join fetch o.shop where o.bestaetigt = false order by o.createdAt asc")
+    List<ShopOrt> findOffene();
+
     Optional<ShopOrt> findByIdAndShop(String id, Shop shop);
 
     // Beim Loeschen eines Ladens (AdminController#deleteShop).

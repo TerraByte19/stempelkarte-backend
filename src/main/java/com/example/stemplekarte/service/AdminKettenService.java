@@ -48,7 +48,11 @@ public class AdminKettenService {
     public record Login(String id, String benutzername, boolean gesperrt, String zuletztEingeloggt) {}
 
     public record Filiale(String id, String label, String adresse, boolean haupt, boolean aktiv,
-                          long geraete, List<Login> logins) {}
+                          long geraete, List<Login> logins, boolean bestaetigt) {}
+
+    /** Eine Filiale, die auf die Bestaetigung wartet - fuer die Liste ueber alle Laeden. */
+    public record Anfrage(String shopId, String shopName, String ortId, String label, String adresse,
+                          String angelegt) {}
 
     public record Uebersicht(String shopId, String name, String tarif, boolean kette, boolean mailsAus,
                              boolean hauptIstFiliale, int geraeteJeFiliale,
@@ -70,9 +74,9 @@ public class AdminKettenService {
         List<StaffToken> geraete = staffTokenRepo.findByShop(shop);
 
         List<Filiale> liste = new ArrayList<>();
-        liste.add(filiale(null, FilialenService.HAUPT_LABEL, null, true, shop.isHauptIstFiliale(), zugaenge, geraete));
+        liste.add(filiale(null, FilialenService.HAUPT_LABEL, null, true, shop.isHauptIstFiliale(), true, zugaenge, geraete));
         for (ShopOrt o : orte) {
-            liste.add(filiale(o.getId(), o.getLabel(), o.getAdresse(), false, o.isAktiv(), zugaenge, geraete));
+            liste.add(filiale(o.getId(), o.getLabel(), o.getAdresse(), false, o.isAktiv(), o.isBestaetigt(), zugaenge, geraete));
         }
         int aktiv = (int) liste.stream().filter(Filiale::aktiv).count();
         return new Uebersicht(shop.getId(), shop.getName(), shop.getTarif().name(), OrteService.kette(shop),
@@ -81,21 +85,58 @@ public class AdminKettenService {
     }
 
     private static Filiale filiale(String ortId, String label, String adresse, boolean haupt, boolean aktiv,
-                                   List<FilialZugang> zugaenge, List<StaffToken> geraete) {
+                                   boolean bestaetigt, List<FilialZugang> zugaenge, List<StaffToken> geraete) {
         List<Login> logins = zugaenge.stream()
                 .filter(z -> Objects.equals(z.getOrtId(), ortId))
                 .map(z -> new Login(z.getId(), z.getBenutzername(), z.isGesperrt(),
                         z.getLastLoginAt() != null ? z.getLastLoginAt().toString() : null))
                 .toList();
         long anzahl = geraete.stream().filter(t -> Objects.equals(t.getOrtId(), ortId)).count();
-        return new Filiale(ortId != null ? ortId : FilialenService.HAUPT, label, adresse, haupt, aktiv, anzahl, logins);
+        return new Filiale(ortId != null ? ortId : FilialenService.HAUPT, label, adresse, haupt, aktiv, anzahl, logins, bestaetigt);
     }
 
     @Transactional
     public Uebersicht filialeAnlegen(String shopId, String label, Double latitude, Double longitude, String ip) {
         Shop shop = laden(shopId);
-        orteService.hinzufuegen(shopId, label, latitude, longitude);
+        orteService.hinzufuegen(shopId, label, latitude, longitude, true);
         merke(shop, "Filiale angelegt: " + label, ip);
+        return uebersicht(shopId);
+    }
+
+    /** Alle Filialen aller Ketten, die auf die Bestaetigung warten. */
+    @Transactional(readOnly = true)
+    public List<Anfrage> anfragen() {
+        return orteService.offene().stream()
+                .map(o -> new Anfrage(o.getShop().getId(), o.getShop().getName(), o.getId(), o.getLabel(),
+                        o.getAdresse(), o.getCreatedAt().toString()))
+                .toList();
+    }
+
+    @Transactional
+    public Uebersicht filialeBestaetigen(String shopId, String ortId, String ip) {
+        Shop shop = laden(shopId);
+        ShopOrt ort = orteService.bestaetigen(shopId, ortId);
+        merke(shop, "Filiale bestaetigt: " + ort.getLabel(), ip);
+        return uebersicht(shopId);
+    }
+
+    /**
+     * Anfrage ablehnen: die Filiale wird entfernt, ihre Logins auch. Nur
+     * solange sie nie bestaetigt war - dann hat dort noch niemand gestempelt.
+     */
+    @Transactional
+    public Uebersicht filialeAblehnen(String shopId, String ortId, String ip) {
+        Shop shop = laden(shopId);
+        ShopOrt ort = orteService.liste(shop).stream().filter(o -> o.getId().equals(ortId)).findFirst()
+                .orElseThrow(() -> new NoSuchElementException("Ort nicht gefunden"));
+        if (ort.isBestaetigt()) {
+            throw new IllegalArgumentException("Diese Filiale ist schon bestätigt. Ausschalten statt ablehnen.");
+        }
+        for (FilialZugang z : zugangService.liste(shop)) {
+            if (ortId.equals(z.getOrtId())) zugangService.loeschen(shop, z.getId());
+        }
+        orteService.loeschen(shopId, ortId);
+        merke(shop, "Filiale abgelehnt: " + ort.getLabel(), ip);
         return uebersicht(shopId);
     }
 

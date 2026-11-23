@@ -93,4 +93,80 @@ class OrteServiceTest {
         assertThatThrownBy(() -> dienst.loeschen(shop.getId(), "ORT-FREMD"))
                 .isInstanceOf(NoSuchElementException.class);
     }
+
+    // ── Kette: neue Filialen warten auf die Bestaetigung des Admins ────────
+
+    private Shop kette() {
+        Shop k = Shop.create("z@kette.de", "hash", "BackBaron", 3);
+        k.setTarif(com.example.stemplekarte.model.Tarif.KETTE);
+        return k;
+    }
+
+    private OrteService kettenDienst(Shop k, ShopOrtRepository repo) {
+        ShopRepository shops = mock(ShopRepository.class);
+        org.mockito.Mockito.when(shops.findById(k.getId())).thenReturn(java.util.Optional.of(k));
+        return new OrteService(repo, shops);
+    }
+
+    @Test
+    void kette_filialeVomHauptkontoWartetUndZaehltNicht() {
+        Shop k = kette();
+        ShopOrtRepository repo = mock(ShopOrtRepository.class);
+        OrteService d = kettenDienst(k, repo);
+
+        d.hinzufuegen(k.getId(), "Bahnhof", 51.5, 7.4);
+        org.mockito.ArgumentCaptor<ShopOrt> neu = org.mockito.ArgumentCaptor.forClass(ShopOrt.class);
+        org.mockito.Mockito.verify(repo).save(neu.capture());
+        ShopOrt ort = neu.getValue();
+        org.assertj.core.api.Assertions.assertThat(ort.isBestaetigt()).isFalse();
+        org.assertj.core.api.Assertions.assertThat(ort.isAktiv()).isFalse();
+
+        // Das Hauptkonto kann sie nicht selbst einschalten.
+        org.mockito.Mockito.when(repo.findByIdAndShop(ort.getId(), k)).thenReturn(java.util.Optional.of(ort));
+        org.assertj.core.api.Assertions.assertThatThrownBy(
+                        () -> d.aendern(k.getId(), ort.getId(), null, null, null, true))
+                .isInstanceOf(IllegalArgumentException.class).hasMessage(OrteService.WARTET);
+        org.assertj.core.api.Assertions.assertThat(ort.isAktiv()).isFalse();
+
+        // Der Admin bestaetigt: jetzt ist sie an, und das Hauptkonto kann schalten.
+        d.bestaetigen(k.getId(), ort.getId());
+        org.assertj.core.api.Assertions.assertThat(ort.isBestaetigt()).isTrue();
+        org.assertj.core.api.Assertions.assertThat(ort.isAktiv()).isTrue();
+        d.aendern(k.getId(), ort.getId(), null, null, null, false);
+        org.assertj.core.api.Assertions.assertThat(ort.isAktiv()).isFalse();
+    }
+
+    @Test
+    void kette_filialeVomAdminIstSofortBestaetigt() {
+        Shop k = kette();
+        ShopOrtRepository repo = mock(ShopOrtRepository.class);
+
+        kettenDienst(k, repo).hinzufuegen(k.getId(), "Bahnhof", 51.5, 7.4, true);
+        org.mockito.ArgumentCaptor<ShopOrt> neu = org.mockito.ArgumentCaptor.forClass(ShopOrt.class);
+        org.mockito.Mockito.verify(repo).save(neu.capture());
+        org.assertj.core.api.Assertions.assertThat(neu.getValue().isBestaetigt()).isTrue();
+        org.assertj.core.api.Assertions.assertThat(neu.getValue().isAktiv()).isTrue();
+    }
+
+    @Test
+    void kette_sammelAnlageWartetAufBestaetigung() {
+        Shop k = kette();
+        ShopOrtRepository repo = mock(ShopOrtRepository.class);
+
+        kettenDienst(k, repo).sammel(k.getId(), java.util.List.of(
+                new OrteService.Neu("Nord", "Nordweg 1", 52.6, 13.4),
+                new OrteService.Neu("Sued", "Suedweg 1", 52.4, 13.4)));
+        @SuppressWarnings("unchecked")
+        org.mockito.ArgumentCaptor<java.util.List<ShopOrt>> alle = org.mockito.ArgumentCaptor.forClass(java.util.List.class);
+        org.mockito.Mockito.verify(repo).saveAll(alle.capture());
+        org.assertj.core.api.Assertions.assertThat(alle.getValue()).hasSize(2)
+                .allMatch(o -> !o.isBestaetigt() && !o.isAktiv());
+    }
+
+    @Test
+    void andereTarife_brauchenKeineBestaetigung() {
+        ShopOrt ort = ShopOrt.create(shop, "Zweitladen", 50.0, 8.0);
+        org.assertj.core.api.Assertions.assertThat(ort.isBestaetigt()).isTrue();
+        org.assertj.core.api.Assertions.assertThat(ort.isAktiv()).isTrue();
+    }
 }

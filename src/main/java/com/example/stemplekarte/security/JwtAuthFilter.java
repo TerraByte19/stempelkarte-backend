@@ -110,7 +110,7 @@ public class JwtAuthFilter extends OncePerRequestFilter {
      * Eine geloeschte Filiale ist aus. Dieselbe Regel wie FilialZugangService.ortAktiv.
      */
     private boolean ortAktiv(FilialZugang z) {
-        if (z.getOrtId() == null) return z.getShop().isHauptIstFiliale();
+        if (z.getOrtId() == null) return false;   // kein Login am Hauptstandort
         return ortRepo.findById(z.getOrtId()).map(ShopOrt::isAktiv).orElse(false);
     }
 

@@ -54,10 +54,12 @@ public class OrteController {
     public record HauptRequest(boolean filiale) {}
 
     public record OrtItem(String id, String label, double latitude, double longitude,
-                          String adresse, boolean aktiv) {
+                          String adresse, boolean aktiv,
+                          // Kette: false = wartet auf die Bestaetigung durch den Admin.
+                          boolean bestaetigt) {
         static OrtItem von(ShopOrt o) {
             return new OrtItem(o.getId(), o.getLabel(), o.getLatitude(), o.getLongitude(),
-                    o.getAdresse(), o.isAktiv());
+                    o.getAdresse(), o.isAktiv(), o.isBestaetigt());
         }
     }
 

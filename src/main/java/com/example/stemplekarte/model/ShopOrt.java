@@ -49,6 +49,12 @@ public class ShopOrt {
     @Column
     private Boolean aktiv;
 
+    // Kette: eine Filiale, die das Hauptkonto anlegt, muss der Admin erst
+    // bestaetigen. Bis dahin zaehlt sie nirgends (isAktiv). Null = bestaetigt,
+    // damit bestehende Standorte bleiben, wie sie sind.
+    @Column
+    private Boolean bestaetigt;
+
     // Adresse, wie sie beim Eintragen per Liste angegeben wurde. Nur zur
     // Anzeige; gerechnet wird mit den Koordinaten.
     @Column(length = ADRESSE_MAX)
@@ -74,8 +80,12 @@ public class ShopOrt {
     public double getLongitude() { return longitude; }
     public Instant getCreatedAt() { return createdAt; }
 
-    public boolean isAktiv() { return aktiv == null || aktiv; }
+    /** Eine Filiale, die noch auf die Bestaetigung wartet, ist nie aktiv. */
+    public boolean isAktiv() { return (aktiv == null || aktiv) && isBestaetigt(); }
     public void setAktiv(boolean aktiv) { this.aktiv = aktiv; }
+
+    public boolean isBestaetigt() { return bestaetigt == null || bestaetigt; }
+    public void setBestaetigt(boolean bestaetigt) { this.bestaetigt = bestaetigt; }
 
     public String getAdresse() { return adresse; }
     public void setAdresse(String adresse) {

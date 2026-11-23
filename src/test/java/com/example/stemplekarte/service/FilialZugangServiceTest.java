@@ -36,6 +36,7 @@ class FilialZugangServiceTest {
     private JwtService jwt;
     private FilialZugangService service;
     private Shop kette;
+    private ShopOrt mitte;
 
     @BeforeEach
     void aufbau() {
@@ -48,9 +49,18 @@ class FilialZugangServiceTest {
         kette = Shop.create("z@kette.de", "HASH", "BackBaron", 3);
         kette.setTarif(Tarif.KETTE);
         when(zugaenge.save(any())).thenAnswer(a -> a.getArgument(0));
+        // Ein Login haengt immer an einer Filiale - am Hauptstandort gibt es keins.
+        mitte = ShopOrt.create(kette, "Mitte", 52.5, 13.4);
+        when(orte.findById(mitte.getId())).thenReturn(Optional.of(mitte));
+        when(orte.findByIdAndShop(mitte.getId(), kette)).thenReturn(Optional.of(mitte));
     }
 
+    /** ortId null = die Standard-Filiale "Mitte". */
     private FilialZugang vorhanden(String name, String passwort, String ortId) {
+        return vorhandenAn(name, passwort, ortId != null ? ortId : mitte.getId());
+    }
+
+    private FilialZugang vorhandenAn(String name, String passwort, String ortId) {
         FilialZugang z = FilialZugang.create(kette, name, encoder.encode(passwort), ortId);
         when(zugaenge.findWithShopByBenutzername(name)).thenReturn(Optional.of(z));
         when(zugaenge.findByIdAndShop(z.getId(), kette)).thenReturn(Optional.of(z));
@@ -59,15 +69,20 @@ class FilialZugangServiceTest {
 
     @Test
     void anlegen_speichertGehashtesPasswort() {
-        FilialZugang z = service.anlegen(kette, "BackBaron-Mitte", "geheim123", null);
+        FilialZugang z = service.anlegen(kette, "BackBaron-Mitte", "geheim123", mitte.getId());
         assertThat(z.getBenutzername()).isEqualTo("backbaron-mitte");
         assertThat(encoder.matches("geheim123", z.getPasswortHash())).isTrue();
-        assertThat(z.getOrtId()).isNull();
+        assertThat(z.getOrtId()).isEqualTo(mitte.getId());
     }
 
     @Test
-    void anlegen_hauptAlsWortIstHauptstandort() {
-        assertThat(service.anlegen(kette, "backbaron-haupt", "geheim123", "HAUPT").getOrtId()).isNull();
+    void anlegen_amHauptstandortGibtEsKeinLogin() {
+        for (String haupt : new String[]{null, "", "HAUPT"}) {
+            assertThatThrownBy(() -> service.anlegen(kette, "backbaron-haupt", "geheim123", haupt))
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessage(FilialZugangService.KEIN_HAUPT_LOGIN);
+        }
+        verify(zugaenge, never()).save(any());
     }
 
     @Test
@@ -87,10 +102,10 @@ class FilialZugangServiceTest {
 
     @Test
     void anlegen_kurzesPasswortUndDoppelterName() {
-        assertThatThrownBy(() -> service.anlegen(kette, "backbaron-mitte", "kurz", null))
+        assertThatThrownBy(() -> service.anlegen(kette, "backbaron-mitte", "kurz", mitte.getId()))
                 .isInstanceOf(IllegalArgumentException.class);
         when(zugaenge.existsByBenutzername("backbaron-mitte")).thenReturn(true);
-        assertThatThrownBy(() -> service.anlegen(kette, "backbaron-mitte", "geheim123", null))
+        assertThatThrownBy(() -> service.anlegen(kette, "backbaron-mitte", "geheim123", mitte.getId()))
                 .isInstanceOf(ResponseStatusException.class)
                 .hasMessageContaining("vergeben");
     }
@@ -102,7 +117,7 @@ class FilialZugangServiceTest {
         assertThat(jwt.extractRole(a.token())).isEqualTo("FILIALE");
         assertThat(jwt.extractShopId(a.token())).isEqualTo(z.getId());
         assertThat(jwt.extractVersion(a.token())).isEqualTo(0);
-        assertThat(a.ortLabel()).isEqualTo(FilialenService.HAUPT_LABEL);
+        assertThat(a.ortLabel()).isEqualTo("Mitte");
         assertThat(z.getLastLoginAt()).isNotNull();
     }
 
@@ -147,13 +162,20 @@ class FilialZugangServiceTest {
     }
 
     @Test
-    void hauptstandortKeineFiliale_keinLoginDortUndKeinNeuer() {
-        vorhanden("backbaron-haupt", "geheim123", null);
-        kette.setHauptIstFiliale(false);
+    void altesLoginAmHauptstandort_kommtNichtMehrRein() {
+        vorhandenAn("backbaron-haupt", "geheim123", null);
         assertThatThrownBy(() -> service.login("backbaron-haupt", "geheim123"))
                 .isInstanceOf(IllegalArgumentException.class).hasMessage(FilialZugangService.FILIALE_AUS);
-        assertThatThrownBy(() -> service.anlegen(kette, "backbaron-zentrale", "geheim123", "HAUPT"))
-                .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("Hauptstandort");
+    }
+
+    @Test
+    void filialeWartetAufBestaetigung_loginKommtNichtRein() {
+        vorhanden("backbaron-mitte", "geheim123", null);
+        mitte.setBestaetigt(false);
+        assertThatThrownBy(() -> service.login("backbaron-mitte", "geheim123"))
+                .isInstanceOf(IllegalArgumentException.class).hasMessage(FilialZugangService.FILIALE_AUS);
+        mitte.setBestaetigt(true);
+        assertThat(service.login("backbaron-mitte", "geheim123").ortLabel()).isEqualTo("Mitte");
     }
 
     @Test
@@ -202,7 +224,7 @@ class FilialZugangServiceTest {
 
     @Test
     void sperren_amHauptstandortBleibenDieGeraeteDesHauptkontos() {
-        FilialZugang z = vorhanden("backbaron-haupt", "geheim123", null);
+        FilialZugang z = vorhandenAn("backbaron-haupt", "geheim123", null);
         service.sperren(kette, z.getId(), true);
         assertThat(z.isGesperrt()).isTrue();
         verifyNoInteractions(staffTokens);

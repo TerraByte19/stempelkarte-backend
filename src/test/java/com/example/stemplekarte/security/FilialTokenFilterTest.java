@@ -37,6 +37,7 @@ class FilialTokenFilterTest {
     private ShopOrtRepository orte;
     private Shop kette;
     private FilialZugang zugang;
+    private ShopOrt mitte;
 
     @BeforeEach
     void aufbau() {
@@ -46,7 +47,10 @@ class FilialTokenFilterTest {
         orte = mock(ShopOrtRepository.class);
         kette = Shop.create("z@kette.de", "HASH", "BackBaron", 3);
         kette.setTarif(Tarif.KETTE);
-        zugang = FilialZugang.create(kette, "backbaron-mitte", "HASH", null);
+        // Ein Login haengt immer an einer Filiale - am Hauptstandort gibt es keins.
+        mitte = ShopOrt.create(kette, "Mitte", 52.5, 13.4);
+        when(orte.findById(mitte.getId())).thenReturn(Optional.of(mitte));
+        zugang = FilialZugang.create(kette, "backbaron-mitte", "HASH", mitte.getId());
         when(zugaenge.findWithShopById(zugang.getId())).thenReturn(Optional.of(zugang));
         SecurityContextHolder.clearContext();
     }
@@ -121,10 +125,18 @@ class FilialTokenFilterTest {
     }
 
     @Test
-    void hauptstandortIstKeineFilialeMehr_loginAmHauptstandortGiltNicht() throws Exception {
-        assertThat(anmelden(token())).isNotNull();
-        kette.setHauptIstFiliale(false);
+    void loginAmHauptstandort_giltNie() throws Exception {
+        zugang = FilialZugang.create(kette, "backbaron-haupt", "HASH", null);
+        when(zugaenge.findWithShopById(zugang.getId())).thenReturn(Optional.of(zugang));
         assertThat(anmelden(token())).isNull();
+    }
+
+    @Test
+    void filialeWartetAufBestaetigung_giltNicht() throws Exception {
+        mitte.setBestaetigt(false);
+        assertThat(anmelden(token())).isNull();
+        mitte.setBestaetigt(true);
+        assertThat(anmelden(token())).isNotNull();
     }
 
     @Test

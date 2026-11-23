@@ -32,6 +32,8 @@ public class FilialZugangService {
     public static final String FILIALE_AUS = FilialenService.FILIALE_AUS;
     static final String GESPERRT = "Dieser Zugang ist gesperrt.";
     static final String NUR_KETTE = "Unterkonten gibt es nur im Tarif Kette.";
+    public static final String KEIN_HAUPT_LOGIN =
+            "Für den Hauptstandort gibt es kein eigenes Login. Bitte eine Filiale wählen.";
 
     private final FilialZugangRepository zugaenge;
     private final ShopOrtRepository orte;
@@ -81,9 +83,9 @@ public class FilialZugangService {
         String name = FilialZugang.benutzernameSauber(benutzername);
         pruefePasswort(passwort);
         String ort = ortSauber(shop, ortId);
-        if (ort == null && !shop.isHauptIstFiliale()) {
-            throw new IllegalArgumentException("Der Hauptstandort ist keine Filiale. Bitte eine Filiale wählen.");
-        }
+        // Der Hauptstandort gehoert dem Hauptkonto. Ein Login gibt es nur fuer
+        // eine eigene Filiale.
+        if (ort == null) throw new IllegalArgumentException(KEIN_HAUPT_LOGIN);
         if (zugaenge.existsByBenutzername(name)) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Dieser Benutzername ist schon vergeben.");
         }
@@ -148,7 +150,8 @@ public class FilialZugangService {
      * Eine geloeschte Filiale ist aus. Dieselbe Regel steht im JwtAuthFilter.
      */
     public boolean ortAktiv(FilialZugang z) {
-        if (z.getOrtId() == null) return z.getShop().isHauptIstFiliale();
+        // Logins am Hauptstandort gibt es nicht mehr; ein alter bleibt zu.
+        if (z.getOrtId() == null) return false;
         return orte.findById(z.getOrtId()).map(ShopOrt::isAktiv).orElse(false);
     }
 

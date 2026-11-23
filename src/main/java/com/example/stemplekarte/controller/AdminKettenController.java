@@ -60,6 +60,20 @@ public class AdminKettenController {
         return dienst.loginAnlegen(shopId, req.benutzername(), req.passwort(), req.ortId(), ip(forwardedFor));
     }
 
+    @PostMapping("/filialen/{ortId}/bestaetigen")
+    public AdminKettenService.Uebersicht filialeBestaetigen(
+            @PathVariable String shopId, @PathVariable String ortId,
+            @RequestHeader(value = "X-Forwarded-For", required = false) String forwardedFor) {
+        return dienst.filialeBestaetigen(shopId, ortId, ip(forwardedFor));
+    }
+
+    @PostMapping("/filialen/{ortId}/ablehnen")
+    public AdminKettenService.Uebersicht filialeAblehnen(
+            @PathVariable String shopId, @PathVariable String ortId,
+            @RequestHeader(value = "X-Forwarded-For", required = false) String forwardedFor) {
+        return dienst.filialeAblehnen(shopId, ortId, ip(forwardedFor));
+    }
+
     @PostMapping("/logins/{zugangId}/passwort")
     public AdminKettenService.Uebersicht loginPasswort(
             @PathVariable String shopId, @PathVariable String zugangId, @RequestBody PasswortRequest req,

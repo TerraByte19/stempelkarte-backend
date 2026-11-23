@@ -98,8 +98,20 @@ public class OrteService {
         return shopRepo.findById(shopId).orElseThrow(() -> new NoSuchElementException("Shop nicht gefunden"));
     }
 
+    public static final String WARTET = "Diese Filiale wartet noch auf die Bestätigung durch Stampit.";
+
     @Transactional
     public List<ShopOrt> hinzufuegen(String shopId, String label, Double latitude, Double longitude) {
+        return hinzufuegen(shopId, label, latitude, longitude, false);
+    }
+
+    /**
+     * vomAdmin: legt der Admin die Filiale an, ist sie sofort bestaetigt.
+     * Legt das Hauptkonto einer Kette sie an, wartet sie auf die Bestaetigung.
+     */
+    @Transactional
+    public List<ShopOrt> hinzufuegen(String shopId, String label, Double latitude, Double longitude,
+                                     boolean vomAdmin) {
         String l = labelSauber(label);
         pruefeKoordinaten(latitude, longitude);
         Shop shop = laden(shopId);
@@ -111,7 +123,9 @@ public class OrteService {
         if (ortRepo.countByShop(shop) >= erlaubt) {
             throw new IllegalArgumentException("Dein Tarif erlaubt " + erlaubt + " weitere Orte.");
         }
-        ortRepo.save(ShopOrt.create(shop, l, latitude, longitude));
+        ShopOrt neu = ShopOrt.create(shop, l, latitude, longitude);
+        if (kette(shop) && !vomAdmin) neu.setBestaetigt(false);
+        ortRepo.save(neu);
         return liste(shop);
     }
 
@@ -133,6 +147,7 @@ public class OrteService {
         }
         if (aktiv != null) {
             if (!kette(shop)) throw new IllegalArgumentException(NUR_KETTE);
+            if (aktiv && !ort.isBestaetigt()) throw new IllegalArgumentException(WARTET);
             ort.setAktiv(aktiv);
         }
         ortRepo.save(ort);
@@ -167,6 +182,7 @@ public class OrteService {
                 ShopOrt ort = ShopOrt.create(shop, l, z.latitude(), z.longitude());
                 ort.setAdresse(z.adresse());
                 ort.setAktiv(false);
+                ort.setBestaetigt(false);
                 neu.add(ort);
             } catch (IllegalArgumentException e) {
                 throw new IllegalArgumentException("Zeile " + nr + ": " + e.getMessage());
@@ -174,6 +190,25 @@ public class OrteService {
         }
         ortRepo.saveAll(neu);
         return liste(shop);
+    }
+
+    /** Admin: alle Filialen, die auf die Bestaetigung warten. */
+    public List<ShopOrt> offene() {
+        return ortRepo.findOffene();
+    }
+
+    /**
+     * Admin bestaetigt eine neue Filiale. Sie ist danach eingeschaltet; das
+     * Hauptkonto kann sie wie jede andere wieder ausschalten.
+     */
+    @Transactional
+    public ShopOrt bestaetigen(String shopId, String ortId) {
+        Shop shop = laden(shopId);
+        ShopOrt ort = ortRepo.findByIdAndShop(ortId, shop)
+                .orElseThrow(() -> new NoSuchElementException("Ort nicht gefunden"));
+        ort.setBestaetigt(true);
+        ort.setAktiv(true);
+        return ortRepo.save(ort);
     }
 
     /** Zaehlt der Hauptstandort als Filiale? Nur Tarif Kette. */
