@@ -20,10 +20,13 @@ public class FilialeKorrekturController {
 
     private final FilialKorrekturService service;
     private final WalletNotifier notifier;
+    private final com.example.stemplekarte.service.KartenGeltung geltung;
 
-    public FilialeKorrekturController(FilialKorrekturService service, WalletNotifier notifier) {
+    public FilialeKorrekturController(FilialKorrekturService service, WalletNotifier notifier,
+                                      com.example.stemplekarte.service.KartenGeltung geltung) {
         this.service = service;
         this.notifier = notifier;
+        this.geltung = geltung;
     }
 
     public record KarteRequest(@NotBlank String qrPayload) {}
@@ -33,7 +36,9 @@ public class FilialeKorrekturController {
             description = "POST, weil der QR-Inhalt nichts in einer URL und damit in Server-Logs zu suchen hat.")
     @PostMapping("/karte")
     public FilialKorrekturService.Ansicht karte(@Valid @RequestBody KarteRequest req, Authentication auth) {
-        return service.karte(FilialeController.filiale(auth).shop(), req.qrPayload());
+        JwtAuthFilter.FilialPrincipal p = FilialeController.filiale(auth);
+        geltung.pruefe(p.shop(), p.zugang().getOrtId(), req.qrPayload());
+        return service.karte(p.shop(), req.qrPayload());
     }
 
     @Operation(summary = "Stempelstand setzen",
@@ -43,6 +48,7 @@ public class FilialeKorrekturController {
     public FilialKorrekturService.Ansicht korrigieren(@PathVariable String customerCardId,
                                                       @RequestBody StempelRequest req, Authentication auth) {
         JwtAuthFilter.FilialPrincipal p = FilialeController.filiale(auth);
+        geltung.pruefeKundenkarte(p.shop(), p.zugang().getOrtId(), customerCardId);
         FilialKorrekturService.Ergebnis e = service.korrigieren(p.shop(), p.zugang(), customerCardId, req.stamps());
         // Stiller Weg wie in der Kundenliste des Inhabers: nur der neue Stand.
         if (e.geaendert()) notifier.nachStempelAenderung(e.cc());

@@ -67,6 +67,12 @@ public class Card {
     private String stripOriginalUrl;
 
     // ── Stempel-Design (pro Karte) ────────────────────────────────────────
+    // Kette: Filialen, in denen die Karte gilt (ShopOrt.id, HAUPT =
+    // Hauptstandort), mit Komma getrennt. Null = ueberall.
+    public static final String GILT_HAUPT = "HAUPT";
+    @Column(name = "gilt_in", length = 4000)
+    private String giltIn;
+
     @Column(name = "wallet_style", length = 16)
     private String walletStyle;
 
@@ -307,6 +313,30 @@ public class Card {
     }
 
     public void setActive(boolean active) { this.active = active; }
+
+    /**
+     * Kette: die Filialen, in denen die Karte gilt. Null = ueberall (jede
+     * Karte bisher und jede Karte ausserhalb der Kette).
+     */
+    public java.util.Set<String> getGiltIn() {
+        if (giltIn == null || giltIn.isBlank()) return null;
+        java.util.Set<String> ids = new java.util.LinkedHashSet<>();
+        for (String id : giltIn.split(",")) {
+            if (!id.isBlank()) ids.add(id.trim());
+        }
+        return ids.isEmpty() ? null : ids;
+    }
+
+    /** Null oder leer = ueberall. */
+    public void setGiltIn(java.util.Collection<String> ids) {
+        this.giltIn = (ids == null || ids.isEmpty()) ? null : String.join(",", ids);
+    }
+
+    /** @param ortId Filiale (ShopOrt.id), null = Hauptstandort */
+    public boolean giltIn(String ortId) {
+        java.util.Set<String> ids = getGiltIn();
+        return ids == null || ids.contains(ortId == null ? GILT_HAUPT : ortId);
+    }
 
     /**
      * Nur fuer Stempelkarten. Punkte- und Mitgliedskarte haben keinen

@@ -76,6 +76,7 @@ public class PointsController {
     @PostMapping("/earn")
     public PointsResponse earn(@Valid @RequestBody EarnRequest req, Authentication auth) {
         Staff staff = staffAus(auth);
+        pruefeKarte(staff, req.qrPayload());
         com.example.stemplekarte.service.TarifPruefung.pruefeTestphase(staff.shop());
         pruefeStandort(staff, req.lat(), req.lon());
         var ergebnis = service.earn(req.qrPayload(), staff.shop(), req.amountCents(), staff.label(),
@@ -88,6 +89,7 @@ public class PointsController {
     @PostMapping("/redeem")
     public PointsResponse redeem(@Valid @RequestBody RedeemRequest req, Authentication auth) {
         Staff staff = staffAus(auth);
+        pruefeKarte(staff, req.qrPayload());
         nurMitarbeiter(staff);
         pruefeStandort(staff, req.lat(), req.lon());
         var ergebnis = service.redeem(req.qrPayload(), staff.shop(), req.rewardId(), staff.label(),
@@ -100,6 +102,7 @@ public class PointsController {
     @PostMapping("/correct")
     public PointsResponse correct(@Valid @RequestBody CorrectRequest req, Authentication auth) {
         Staff staff = staffAus(auth);
+        pruefeKarte(staff, req.qrPayload());
         com.example.stemplekarte.service.TarifPruefung.pruefeTestphase(staff.shop());
         nurMitarbeiter(staff);
         pruefeStandort(staff, req.lat(), req.lon());
@@ -113,6 +116,7 @@ public class PointsController {
     @PostMapping("/undo")
     public PointsResponse undo(@Valid @RequestBody UndoRequest req, Authentication auth) {
         Staff staff = staffAus(auth);
+        pruefeKarte(staff, req.qrPayload());
         nurMitarbeiter(staff);
         pruefeStandort(staff, req.lat(), req.lon());
         var ergebnis = service.undo(req.qrPayload(), staff.shop(), req.bookingId(), staff.label());
@@ -125,6 +129,14 @@ public class PointsController {
     /** Laden und Geraetename. Das Token selbst bleibt hier - sein Wert ist
      *  die Zugangsberechtigung und hat in keiner Antwort etwas verloren. */
     private record Staff(Shop shop, String label, boolean aushilfe, com.example.stemplekarte.model.StaffToken token) {}
+
+    // Kette: gilt die Karte in der Filiale dieses Geraets? Optional wie filialen.
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.example.stemplekarte.service.KartenGeltung kartenGeltung;
+
+    private void pruefeKarte(Staff staff, String qrPayload) {
+        if (kartenGeltung != null) kartenGeltung.pruefe(staff.shop(), staff.token().getOrtId(), qrPayload);
+    }
 
     /** Filiale fuers Protokoll: Zuordnung des Zugangs, sonst Geraeteort, sonst Hauptstandort. */
     private String ortFuer(Staff staff, Double lat, Double lon) {

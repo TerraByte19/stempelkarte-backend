@@ -721,12 +721,15 @@ public class ApplePassService {
     private List<PKLocation> kettenOrte(Shop shop, CustomerCard cc, String text) {
         String haupt = com.example.stemplekarte.service.FilialenService.HAUPT;
         List<KettenOrte.Filiale> waehlbar = new java.util.ArrayList<>();
-        if (shop.isHauptIstFiliale() && shop.getLatitude() != null && shop.getLongitude() != null) {
+        com.example.stemplekarte.model.Card karte = cc.getCard();
+        if (shop.isHauptIstFiliale() && karte.giltIn(null)
+                && shop.getLatitude() != null && shop.getLongitude() != null) {
             waehlbar.add(new KettenOrte.Filiale(haupt, shop.getLatitude(), shop.getLongitude()));
         }
         for (com.example.stemplekarte.model.ShopOrt o
                 : com.example.stemplekarte.service.OrteService.geltende(
                         shop, ortRepo.findByShopOrderByCreatedAtAsc(shop))) {
+            if (!karte.giltIn(o.getId())) continue;
             waehlbar.add(new KettenOrte.Filiale(o.getId(), o.getLatitude(), o.getLongitude()));
         }
         List<KettenOrte.Besuch> besuche = new java.util.ArrayList<>();

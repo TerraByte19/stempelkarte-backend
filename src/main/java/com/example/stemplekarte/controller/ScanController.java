@@ -53,6 +53,14 @@ public class ScanController {
         return filialen != null ? filialen.ortFuer(staff, shop, lat, lon) : staff.getOrtId();
     }
 
+    // Kette: gilt die Karte in der Filiale dieses Geraets? Optional wie oben.
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.example.stemplekarte.service.KartenGeltung kartenGeltung;
+
+    private void pruefeKarte(com.example.stemplekarte.model.StaffToken staff, Shop shop, String qrPayload) {
+        if (kartenGeltung != null) kartenGeltung.pruefe(shop, staff.getOrtId(), qrPayload);
+    }
+
     /** Kette: an einer ausgeschalteten Filiale wird nicht gestempelt. */
     private void pruefeFiliale(com.example.stemplekarte.model.StaffToken staff, Shop shop) {
         if (filialen != null && filialen.filialeAus(staff, shop)) {
@@ -124,6 +132,7 @@ public class ScanController {
         // Auch das Nachschlagen einer Karte (Kundenname, Stand) ist an einer
         // ausgeschalteten Filiale zu.
         pruefeFiliale(p.staff(), p.staff().getShop());
+        pruefeKarte(p.staff(), p.staff().getShop(), req.qrPayload());
         return pointsService.state(req.qrPayload(), p.staff().getShop());
     }
 
@@ -170,6 +179,7 @@ public class ScanController {
         // Gratis-Testphase vorbei: kein Stempel (Laeden ohne Testphase: nie).
         com.example.stemplekarte.service.TarifPruefung.pruefeTestphase(shop);
         pruefeFiliale(((StaffTokenFilter.StaffPrincipal) auth.getPrincipal()).staff(), shop);
+        pruefeKarte(((StaffTokenFilter.StaffPrincipal) auth.getPrincipal()).staff(), shop, req.qrPayload());
 
         // Ohne Ladenort laeuft die Geo-Pruefung ins Leere - dann ist das
         // Stempeln selbst der Hebel, der fehlt.
@@ -286,6 +296,7 @@ public class ScanController {
         Shop shop = staff.getShop();
         com.example.stemplekarte.service.TarifPruefung.pruefeTestphase(shop);
         pruefeFiliale(staff, shop);
+        pruefeKarte(staff, shop, req.qrPayload());
         if (!com.example.stemplekarte.service.StandortPflicht.darfScannen(shop, java.time.Instant.now())) {
             log.warn("[SCAN] GESPERRT laden={} grund=kein_standort", shop.getId());
             throw new ResponseStatusException(HttpStatus.FORBIDDEN,
@@ -342,6 +353,7 @@ public class ScanController {
         Shop shop = staff.getShop();
         com.example.stemplekarte.service.TarifPruefung.pruefeTestphase(shop);
         pruefeFiliale(staff, shop);
+        pruefeKarte(staff, shop, req.qrPayload());
         if (!com.example.stemplekarte.service.StandortPflicht.darfScannen(shop, java.time.Instant.now())) {
             log.warn("[SCAN] GESPERRT laden={} grund=kein_standort", shop.getId());
             throw new ResponseStatusException(HttpStatus.FORBIDDEN,
@@ -386,6 +398,7 @@ public class ScanController {
 
         var staff = ((StaffTokenFilter.StaffPrincipal) auth.getPrincipal()).staff();
         pruefeFiliale(staff, staff.getShop());
+        pruefeKarte(staff, staff.getShop(), req.qrPayload());
         // Zuruecksetzen = Praemie eingeloest, neue Karte. Das darf eine
         // Aushilfe nicht - sonst gaebe es den Gratis-Artikel ohne Kontrolle.
         if (!staff.darfEinloesen()) {
