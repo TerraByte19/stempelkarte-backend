@@ -61,6 +61,13 @@ public class NfcController {
     private final ScanLogRepository scanLogRepo;
     private final AppProperties props;
 
+    // NFC-Karten je Filiale (Tarif Kette). Optional: ohne sie (Tests, aelterer
+    // Aufbau) gibt es nur den einen Link je Stempelkarte.
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.example.stemplekarte.repository.NfcTagRepository nfcTags;
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.example.stemplekarte.repository.ShopOrtRepository orte;
+
     public NfcController(CardRepository cardRepo, CustomerService customerService,
                          WalletNotifier notifier, ScanLogRepository scanLogRepo,
                          AppProperties props) {
@@ -83,6 +90,12 @@ public class NfcController {
         }
 
         Optional<Card> gefunden = cardRepo.findByNfcToken(token);
+        // Kein Link einer Stempelkarte: dann vielleicht die NFC-Karte einer Filiale.
+        com.example.stemplekarte.model.NfcTag tag = null;
+        if (gefunden.isEmpty() && nfcTags != null) {
+            tag = nfcTags.findByToken(token).orElse(null);
+            if (tag != null) gefunden = cardRepo.findById(tag.getCardId());
+        }
         if (gefunden.isEmpty()) {
             log.warn("[NFC] unbekannter Token: {}", kuerzen(token));
             return seite("Karte unbekannt", "Diese NFC-Karte gehört zu keinem Laden.", null, false);
@@ -112,6 +125,32 @@ public class NfcController {
         if (!StandortPflicht.darfScannen(shop, Instant.now())) {
             log.warn("[NFC] GESPERRT laden={} grund=kein_standort", shop.getId());
             return seite("Stempeln gesperrt", StandortPflicht.sperrText(), shop, false);
+        }
+
+        // Filiale und Name der NFC-Karte fuers Protokoll. Der eine Link je
+        // Stempelkarte kennt beides nicht: er zaehlt als Hauptstandort.
+        String ortId = tag != null ? tag.getOrtId() : null;
+        String nfcLabel = tag != null ? "NFC: " + tag.getLabel() : null;
+        if (tag != null && tag.isGesperrt()) {
+            log.warn("[NFC] GESPERRT laden={} grund=nfc_karte_gesperrt tag={}", shop.getId(), tag.getId());
+            return seite("NFC-Karte gesperrt", "Bitte zeig deine Karte zum Scannen.", shop, false);
+        }
+        // Kette: dieselben Regeln wie am Scanner - die Karte muss in der
+        // Filiale gelten, und die Filiale muss eingeschaltet sein.
+        if (com.example.stemplekarte.service.OrteService.kette(shop)) {
+            if (!card.giltIn(ortId)) {
+                log.warn("[NFC] GESPERRT laden={} grund=karte_gilt_nicht ort={}", shop.getId(), ortId);
+                return seite("Gilt hier nicht",
+                        com.example.stemplekarte.service.KartenGeltung.GILT_NICHT, shop, false);
+            }
+            boolean filialeAn = ortId == null
+                    ? shop.isHauptIstFiliale()
+                    : orte != null && orte.findById(ortId)
+                            .map(com.example.stemplekarte.model.ShopOrt::isAktiv).orElse(false);
+            if (!filialeAn) {
+                log.warn("[NFC] GESPERRT laden={} grund=filiale_aus ort={}", shop.getId(), ortId);
+                return seite("Stempeln gesperrt", "Diese Filiale stempelt gerade nicht.", shop, false);
+            }
         }
 
         // Wer ist das Handy? Ohne Cookie kennt der Server den Kunden nicht -
@@ -170,8 +209,10 @@ public class NfcController {
                     shop, true);
         }
 
-        ScanResult result = customerService.processScan(
-                new QrPayload(customerId, card.getId()), shop, 1);
+        // Ohne NFC-Karte einer Filiale unveraendert der alte Aufruf.
+        ScanResult result = tag == null
+                ? customerService.processScan(new QrPayload(customerId, card.getId()), shop, 1)
+                : customerService.stempelnPerNfc(new QrPayload(customerId, card.getId()), shop, 1, nfcLabel, ortId);
         cc = result.customerCard();
 
         log.info("[WALLET] NFC serial={} kunde={} karte={} laden={} stempelNeu={}",

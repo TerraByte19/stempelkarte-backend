@@ -60,6 +60,9 @@ public class AdminController {
     private final com.example.stemplekarte.repository.AutomationRepository automationen;
     private final com.example.stemplekarte.repository.FilialZugangRepository filialZugaenge;
     private final com.example.stemplekarte.repository.KorrekturLogRepository korrekturLogs;
+    // NFC-Karten der Filialen. Optional, damit bestehende Tests den Controller weiter bauen koennen.
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.example.stemplekarte.repository.NfcTagRepository nfcTags;
 
     @Value("${stempelkarte.admin-secret:admin-geheim-nur-lokal}")
     private String adminSecret;
@@ -725,6 +728,7 @@ public class AdminController {
         // Logins der Filialen (Tarif Kette) haengen am Laden.
         filialZugaenge.deleteByShop(shop);
         korrekturLogs.deleteByShopId(shop.getId());
+        if (nfcTags != null) nfcTags.deleteByShopId(shop.getId());
         rueckmeldungen.deleteByShop(shop);
         autoNachrichten.deleteByShop(shop);
         automationen.deleteByShop(shop);

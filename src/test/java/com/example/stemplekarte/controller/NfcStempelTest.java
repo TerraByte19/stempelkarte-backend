@@ -403,4 +403,107 @@ class NfcStempelTest {
         org.assertj.core.api.Assertions.assertThat(KundenCookie.name("CARD-AB12")).isEqualTo("sk_kunde_CARD-AB12");
         org.assertj.core.api.Assertions.assertThat(KundenCookie.name("CARD;=x y")).isEqualTo("sk_kunde_CARDxy");
     }
+
+    // ── NFC-Karten je Filiale (Tarif Kette) ───────────────────────────────
+
+    private static final String TAG_TOKEN = "filialtagtoken";
+    private final com.example.stemplekarte.repository.NfcTagRepository nfcTags =
+            mock(com.example.stemplekarte.repository.NfcTagRepository.class);
+    private final com.example.stemplekarte.repository.ShopOrtRepository orte =
+            mock(com.example.stemplekarte.repository.ShopOrtRepository.class);
+    private com.example.stemplekarte.model.NfcTag tag;
+    private com.example.stemplekarte.model.ShopOrt nord;
+    private Card kettenKarte;
+
+    /** Kette mit einer eingeschalteten Filiale und einer NFC-Karte dort. */
+    private NfcController kettenController() {
+        NfcController c = controller(120);
+        kettenKarte = cardRepo.findByNfcToken(TOKEN).orElseThrow();
+        Shop shop = kettenKarte.getShop();
+        when(shop.getTarif()).thenReturn(com.example.stemplekarte.model.Tarif.KETTE);
+        when(shop.isHauptIstFiliale()).thenReturn(true);
+        nord = mock(com.example.stemplekarte.model.ShopOrt.class);
+        when(nord.isAktiv()).thenReturn(true);
+        when(orte.findById("ORT-N")).thenReturn(Optional.of(nord));
+        when(kettenKarte.giltIn("ORT-N")).thenReturn(true);
+        when(kettenKarte.giltIn(null)).thenReturn(true);
+        tag = com.example.stemplekarte.model.NfcTag.create("SHOP-1", KARTE, "ORT-N", "Theke 1");
+        when(nfcTags.findByToken(TAG_TOKEN)).thenReturn(Optional.of(tag));
+        when(cardRepo.findById(KARTE)).thenReturn(Optional.of(kettenKarte));
+        when(scanLogRepo.findFirstByCustomerIdAndCardIdOrderByScannedAtDesc(KUNDE, KARTE))
+                .thenReturn(Optional.empty());
+        when(service.stempelnPerNfc(any(QrPayload.class), any(Shop.class), anyInt(), anyString(), anyString()))
+                .thenReturn(new ScanResult.Stamped(cc, "Stempel hinzugefuegt (3/10)", 0));
+        org.springframework.test.util.ReflectionTestUtils.setField(c, "nfcTags", nfcTags);
+        org.springframework.test.util.ReflectionTestUtils.setField(c, "orte", orte);
+        return c;
+    }
+
+    private void keinStempel() {
+        verify(service, never()).processScan(any(QrPayload.class), any(Shop.class), anyInt());
+        verify(service, never()).stempelnPerNfc(any(QrPayload.class), any(Shop.class), anyInt(), any(), any());
+    }
+
+    @Test
+    void nfcKarteDerFiliale_stempeltMitFilialeUndNamen() {
+        NfcController c = kettenController();
+
+        ResponseEntity<String> antwort = c.tippen(TAG_TOKEN, mitCookie(echtesCookie()),
+                new MockHttpServletResponse());
+
+        assertTrue(antwort.getBody().contains("Stempel erhalten"));
+        verify(service).stempelnPerNfc(any(QrPayload.class), any(Shop.class),
+                org.mockito.ArgumentMatchers.eq(1),
+                org.mockito.ArgumentMatchers.eq("NFC: Theke 1"),
+                org.mockito.ArgumentMatchers.eq("ORT-N"));
+    }
+
+    @Test
+    void gesperrteNfcKarte_stempeltNicht() {
+        NfcController c = kettenController();
+        tag.setGesperrt(true);
+
+        ResponseEntity<String> antwort = c.tippen(TAG_TOKEN, mitCookie(echtesCookie()),
+                new MockHttpServletResponse());
+
+        assertTrue(antwort.getBody().contains("NFC-Karte gesperrt"));
+        keinStempel();
+    }
+
+    @Test
+    void karteGiltNichtInDerFiliale_stempeltNicht() {
+        NfcController c = kettenController();
+        when(kettenKarte.giltIn("ORT-N")).thenReturn(false);
+
+        ResponseEntity<String> antwort = c.tippen(TAG_TOKEN, mitCookie(echtesCookie()),
+                new MockHttpServletResponse());
+
+        assertTrue(antwort.getBody().contains("Gilt hier nicht"));
+        keinStempel();
+    }
+
+    @Test
+    void ausgeschalteteFiliale_stempeltNicht() {
+        NfcController c = kettenController();
+        when(nord.isAktiv()).thenReturn(false);
+
+        ResponseEntity<String> antwort = c.tippen(TAG_TOKEN, mitCookie(echtesCookie()),
+                new MockHttpServletResponse());
+
+        assertTrue(antwort.getBody().contains("Stempeln gesperrt"));
+        keinStempel();
+    }
+
+    /** Der alte Link je Stempelkarte zaehlt in der Kette als Hauptstandort. */
+    @Test
+    void alterLinkInDerKette_giltNurWennDieKarteAmHauptstandortGilt() {
+        NfcController c = kettenController();
+        when(kettenKarte.giltIn(null)).thenReturn(false);
+
+        ResponseEntity<String> antwort = c.tippen(TOKEN, mitCookie(echtesCookie()),
+                new MockHttpServletResponse());
+
+        assertTrue(antwort.getBody().contains("Gilt hier nicht"));
+        keinStempel();
+    }
 }

@@ -311,6 +311,12 @@ public class CustomerService {
         return stempeln(qr, shop, count, null, null);
     }
 
+    /** NFC-Karte einer Filiale: Name der NFC-Karte und Filiale fuers Protokoll. */
+    @Transactional
+    public ScanResult stempelnPerNfc(QrPayload qr, Shop shop, int count, String staffLabel, String ortId) {
+        return stempeln(qr, shop, count, staffLabel, ortId);
+    }
+
     @Transactional
     public ScanResult stempeln(QrPayload qr, Shop shop, int count, String staffLabel, String ortId) {
         String customerId = qr.customerId();
