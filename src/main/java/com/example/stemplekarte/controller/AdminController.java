@@ -597,11 +597,15 @@ public class AdminController {
         return ResponseEntity.ok(out);
     }
 
-    public record TestRequest(int tage) {}
+    public record TestRequest(int tage, String bis) {}
 
     /**
      * Testphase: tage = 0 heisst bezahlt (Testphase weg), sonst laeuft sie ab
      * heute noch so viele Tage (verlaengern). Hoechstens 90.
+     *
+     * Oder bis = ein freies Datum (JJJJ-MM-TT): die Testphase laeuft bis zum
+     * Ende dieses Tages (Berliner Zeit). Heute oder spaeter, hoechstens zwei
+     * Jahre voraus. Ist bis gesetzt, zaehlt tage nicht.
      */
     @PostMapping("/shops/{shopId}/test")
     public ResponseEntity<Map<String, Object>> setTest(@PathVariable String shopId, @RequestBody TestRequest req) {
@@ -609,13 +613,31 @@ public class AdminController {
         if (shop == null) {
             return ResponseEntity.status(404).body(Map.of("error", "Shop nicht gefunden: " + shopId));
         }
-        if (req.tage() < 0 || req.tage() > 90) {
-            return ResponseEntity.badRequest().body(Map.of("error", "Erlaubt sind 0 bis 90 Tage"));
-        }
         java.time.Instant jetzt = java.time.Instant.now();
-        shop.setTestBis(req.tage() == 0 ? null : jetzt.plus(java.time.Duration.ofDays(req.tage())));
+        java.time.Instant bis;
+        if (req.bis() != null && !req.bis().isBlank()) {
+            java.time.ZoneId berlin = java.time.ZoneId.of("Europe/Berlin");
+            java.time.LocalDate tag;
+            try {
+                tag = java.time.LocalDate.parse(req.bis().trim());
+            } catch (java.time.format.DateTimeParseException e) {
+                return ResponseEntity.badRequest().body(Map.of("error", "Datum bitte als JJJJ-MM-TT"));
+            }
+            java.time.LocalDate heute = java.time.LocalDate.now(berlin);
+            if (tag.isBefore(heute) || tag.isAfter(heute.plusYears(2))) {
+                return ResponseEntity.badRequest().body(Map.of("error",
+                        "Das Datum muss heute oder später sein, höchstens zwei Jahre voraus"));
+            }
+            bis = tag.plusDays(1).atStartOfDay(berlin).toInstant().minusSeconds(1);
+        } else {
+            if (req.tage() < 0 || req.tage() > 90) {
+                return ResponseEntity.badRequest().body(Map.of("error", "Erlaubt sind 0 bis 90 Tage"));
+            }
+            bis = req.tage() == 0 ? null : jetzt.plus(java.time.Duration.ofDays(req.tage()));
+        }
+        shop.setTestBis(bis);
         shopRepo.save(shop);
-        log.info("[ADMIN] Testphase laden={} tage={}", shop.getId(), req.tage());
+        log.info("[ADMIN] Testphase laden={} tage={} bis={}", shop.getId(), req.tage(), bis);
         Map<String, Object> out = new HashMap<>();
         out.put("id", shop.getId());
         out.put("testBis", shop.getTestBis() != null ? shop.getTestBis().toString() : null);
