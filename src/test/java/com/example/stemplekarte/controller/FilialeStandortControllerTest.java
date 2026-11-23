@@ -25,6 +25,7 @@ import static org.mockito.Mockito.when;
 class FilialeStandortControllerTest {
 
     private ShopOrtRepository orte;
+    private com.example.stemplekarte.service.ShopService shopService;
     private FilialeStandortController controller;
     private Shop kette;
     private ShopOrt nord;
@@ -32,7 +33,8 @@ class FilialeStandortControllerTest {
     @BeforeEach
     void aufbau() {
         orte = mock(ShopOrtRepository.class);
-        controller = new FilialeStandortController(orte);
+        shopService = mock(com.example.stemplekarte.service.ShopService.class);
+        controller = new FilialeStandortController(orte, shopService);
         kette = Shop.create("z@kette.de", "HASH", "BackBaron", 3);
         kette.setTarif(Tarif.KETTE);
         nord = ShopOrt.create(kette, "Nord", 52.5, 13.4);
@@ -73,11 +75,21 @@ class FilialeStandortControllerTest {
     }
 
     @Test
-    void hauptstandort_bleibtBeimHauptkonto() {
+    void hauptstandort_setztDenStandortDesLadens_ohneDenSchalterAnzufassen() {
+        when(shopService.updateLockScreen(kette.getId(), null, 51.5, 7.4)).thenReturn(kette);
+        when(shopService.getById(kette.getId())).thenReturn(kette);
+
+        var antwort = controller.setzen(
+                new FilialeStandortController.StandortRequest(51.5, 7.4), login(null));
+        verify(shopService).updateLockScreen(kette.getId(), null, 51.5, 7.4);
+        verify(orte, never()).save(any());
+        assertThat(antwort).containsEntry("label", "Hauptstandort");
+        assertThat(controller.stand(login(null))).containsEntry("label", "Hauptstandort");
+
+        // Ungueltige Werte kommen auch hier nicht durch.
         assertThatThrownBy(() -> controller.setzen(
-                new FilialeStandortController.StandortRequest(51.5, 7.4), login(null)))
-                .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("Hauptkonto");
-        assertThatThrownBy(() -> controller.stand(login(null))).isInstanceOf(IllegalArgumentException.class);
+                new FilialeStandortController.StandortRequest(Double.NaN, 7.4), login(null)))
+                .isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test

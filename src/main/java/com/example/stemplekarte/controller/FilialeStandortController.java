@@ -23,29 +23,39 @@ import java.util.NoSuchElementException;
  * Laden, wie der Inhaber im Profil. Genauer als der Punkt aus der
  * Adresssuche. Die Filiale kommt immer aus dem Login, nie aus der Anfrage.
  *
- * Der Hauptstandort bleibt beim Hauptkonto (Profil): daran haengt die
- * Standort-Pflicht des ganzen Ladens.
+ * Ein Login am Hauptstandort setzt den Standort des Ladens selbst - denselben,
+ * den das Hauptkonto im Profil setzt. Wer dort an der Kasse steht, ist oft
+ * der Einzige, der wirklich im Laden ist.
  */
 @RestController
 @RequestMapping("/api/filiale/standort")
 public class FilialeStandortController {
 
     private static final Logger log = LoggerFactory.getLogger(FilialeStandortController.class);
-    static final String NUR_HAUPTKONTO = "Den Standort des Hauptstandorts legt das Hauptkonto im Profil fest.";
-
     private final ShopOrtRepository orte;
+    private final com.example.stemplekarte.service.ShopService shopService;
 
-    public FilialeStandortController(ShopOrtRepository orte) {
+    public FilialeStandortController(ShopOrtRepository orte,
+                                     com.example.stemplekarte.service.ShopService shopService) {
         this.orte = orte;
+        this.shopService = shopService;
     }
 
     public record StandortRequest(Double latitude, Double longitude) {}
 
     private ShopOrt eigene(JwtAuthFilter.FilialPrincipal p) {
-        String ortId = p.zugang().getOrtId();
-        if (ortId == null) throw new IllegalArgumentException(NUR_HAUPTKONTO);
-        return orte.findByIdAndShop(ortId, p.shop())
+        return orte.findByIdAndShop(p.zugang().getOrtId(), p.shop())
                 .orElseThrow(() -> new NoSuchElementException("Filiale nicht gefunden"));
+    }
+
+    /** Hauptstandort: Koordinaten des Ladens, null solange keiner gesetzt ist. */
+    private static Map<String, Object> antwortHaupt(com.example.stemplekarte.model.Shop shop) {
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("label", com.example.stemplekarte.service.FilialenService.HAUPT_LABEL);
+        m.put("adresse", null);
+        m.put("latitude", shop.getLatitude());
+        m.put("longitude", shop.getLongitude());
+        return m;
     }
 
     private static Map<String, Object> antwort(ShopOrt o) {
@@ -60,7 +70,9 @@ public class FilialeStandortController {
     @Operation(summary = "Standort der eigenen Filiale")
     @GetMapping
     public Map<String, Object> stand(Authentication auth) {
-        return antwort(eigene(FilialeController.filiale(auth)));
+        JwtAuthFilter.FilialPrincipal p = FilialeController.filiale(auth);
+        if (p.zugang().getOrtId() == null) return antwortHaupt(shopService.getById(p.shop().getId()));
+        return antwort(eigene(p));
     }
 
     @Operation(summary = "Standort der eigenen Filiale setzen",
@@ -69,7 +81,8 @@ public class FilialeStandortController {
     @Transactional
     public Map<String, Object> setzen(@RequestBody StandortRequest req, Authentication auth) {
         JwtAuthFilter.FilialPrincipal p = FilialeController.filiale(auth);
-        ShopOrt ort = eigene(p);
+        boolean haupt = p.zugang().getOrtId() == null;
+        ShopOrt ort = haupt ? null : eigene(p);
         // NaN und Unendlich zuerst: sie bestehen jeden Groessenvergleich, und
         // ein solcher Punkt haette in der Geo-Pruefung die Entfernung 0 -
         // dann gaelte jedes Geraet ueberall als "im Laden".
@@ -79,6 +92,14 @@ public class FilialeStandortController {
                 || req.longitude() < -180 || req.longitude() > 180
                 || (req.latitude() == 0 && req.longitude() == 0)) {
             throw new IllegalArgumentException("Der Standort ist ungültig.");
+        }
+        if (haupt) {
+            // enabled = null: der Schalter der Sperrbildschirm-Erinnerung bleibt, wie er ist.
+            com.example.stemplekarte.model.Shop neu = shopService.updateLockScreen(
+                    p.shop().getId(), null, req.latitude(), req.longitude());
+            log.info("[FILIALE] Standort gesetzt laden={} filiale=HAUPT von={}",
+                    p.shop().getId(), p.zugang().getBenutzername());
+            return antwortHaupt(neu);
         }
         ort.verlegen(req.latitude(), req.longitude());
         orte.save(ort);
