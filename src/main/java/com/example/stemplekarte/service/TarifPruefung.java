@@ -46,14 +46,14 @@ public final class TarifPruefung {
     }
 
     /**
-     * Fuer diesen Laden gehen keine E-Mails raus (Shop.mailsAus, vom Admin).
+     * Fuer diesen Laden ist der Newsletter aus (Shop.mailsAus, vom Admin).
      * 402 mit code MAILS_AUS - wie oben bewusst nicht 403.
      */
     public static class MailsAus extends RuntimeException {
         public MailsAus() { super(MAILS_AUS_TEXT); }
     }
 
-    public static final String MAILS_AUS_TEXT = "Für diesen Laden ist der E-Mail-Versand ausgeschaltet.";
+    public static final String MAILS_AUS_TEXT = "Für diesen Laden ist der Newsletter ausgeschaltet.";
 
     public static void pruefeMails(Shop shop) {
         if (shop.isMailsAus()) throw new MailsAus();

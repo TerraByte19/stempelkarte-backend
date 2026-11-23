@@ -82,7 +82,6 @@ public class EmailService {
     public void sendConfirmationMail(Customer customer, Shop shop, String cardId,
                                      String willkommenText) {
         if (customer.getConfirmToken() == null) return; // schon bestätigt
-        if (mailsAus(shop)) return;
 
         String lang = Texts.sprache(customer, shop);
         String shopName = shop.getName();
@@ -128,13 +127,14 @@ public class EmailService {
     // Generische StampIT-Mail, kein Laden-Branding (kontoweit, nicht
     // kartenspezifisch).
     /**
-     * Sicherheitsnetz: fuer einen Laden mit "Mails aus" (Shop.mailsAus, vom
-     * Admin) geht hier nichts raus. Die Aufrufer sperren schon vorher - das
-     * hier faengt den Fall, dass ein neuer Aufrufer es vergisst.
+     * Sicherheitsnetz fuer den Newsletter: bei "Newsletter aus"
+     * (Shop.mailsAus, vom Admin) geht keiner raus. Die Endpunkte sperren
+     * schon vorher (TarifPruefung.pruefeMails). Alle anderen Mails
+     * (Bestaetigung, Loeschung, Testphase) laufen normal weiter.
      */
     private static boolean mailsAus(Shop shop) {
         if (shop != null && shop.isMailsAus()) {
-            log.info("[MAIL] Nicht gesendet: Mails aus fuer Laden {}", shop.getId());
+            log.info("[MAIL] Nicht gesendet: Newsletter aus fuer Laden {}", shop.getId());
             return true;
         }
         return false;
@@ -262,7 +262,6 @@ public class EmailService {
      * Mail, die wirklich rausging.
      */
     public boolean sendTestphaseMail(Shop shop, java.time.Instant bis, boolean vorbei, String dashboardUrl) {
-        if (mailsAus(shop)) return false;
         String datum = java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy")
                 .withZone(java.time.ZoneId.of("Europe/Berlin")).format(bis);
         String hallo = "Hallo " + esc(shop.getName()) + ",<br><br>";

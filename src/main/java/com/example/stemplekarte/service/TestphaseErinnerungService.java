@@ -58,8 +58,6 @@ public class TestphaseErinnerungService {
         int gesendet = 0;
         for (Shop shop : shopRepo.findByTestBisNotNull()) {
             if (!shop.isActive() || shop.getEmail() == null || shop.getEmail().isBlank()) continue;
-            // Mails aus (Admin): ueberspringen, nicht alle 30 Minuten neu versuchen.
-            if (shop.isMailsAus()) continue;
             Integer tage = shop.testTageUebrig(jetzt);
             if (tage == null) continue;
             int stufe = shop.getTestMailStufe();

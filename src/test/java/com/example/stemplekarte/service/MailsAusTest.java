@@ -36,9 +36,9 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 /**
- * Schalter "Mails aus" (Admin, je Laden): fuer diesen Laden geht KEINE
- * E-Mail raus, auf keinem der fuenf Wege. Fuer jeden anderen Laden bleibt
- * alles, wie es war - das prueft jeder Test mit.
+ * Schalter "Newsletter aus" (Admin, je Laden; das Feld heisst noch
+ * mailsAus): der Laden kann keinen Newsletter senden. Alle anderen Mails
+ * und die Anmeldung der Kunden laufen wie bei jedem Laden.
  */
 class MailsAusTest {
 
@@ -96,17 +96,14 @@ class MailsAusTest {
         TarifPruefung.pruefeMails(an);   // wirft nicht
     }
 
-    // ── 3: Bestaetigungsmail bei der Anmeldung ──────────────────────────
+    // ── Alles andere laeuft normal weiter ───────────────────────────────
 
     @Test
-    void bestaetigungsmail_gehtNichtRaus() {
+    void bestaetigungsmail_gehtWeiterRaus() {
         Customer kunde = Customer.create("Ayşe", "ayse@example.com");
         kunde.requireNewConfirmation();
 
         mailer.sendConfirmationMail(kunde, aus, "CARD-1", null);
-        verify(sender, never()).send(any(MimeMessage.class));
-
-        mailer.sendConfirmationMail(kunde, an, "CARD-1", null);
         verify(sender).send(any(MimeMessage.class));
     }
 
@@ -123,38 +120,32 @@ class MailsAusTest {
     }
 
     @Test
-    void anmeldungMitEmail_wirdAbgelehnt_nichtsGespeichert_keineMail() {
+    void anmeldungMitEmail_gehtWieBeiJedemLaden() {
         EmailService mail = mock(EmailService.class);
         CustomerRepository customerRepo = mock(CustomerRepository.class);
         CustomerCardRepository ccRepo = mock(CustomerCardRepository.class);
         Card card = Card.create(aus, "Brotkarte", "x", 10, "1 Brot gratis");
-        CustomerService dienst = kundenDienst(card, mail, customerRepo, ccRepo);
 
-        assertThatThrownBy(() -> dienst.registerForCard("Ayşe", "ayse@example.com", card.getId(), false))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("ohne Anmeldung");
-        verify(customerRepo, never()).save(any());
-        verify(ccRepo, never()).save(any());
-        verifyNoInteractions(mail);
+        kundenDienst(card, mail, customerRepo, ccRepo)
+                .registerForCard("Ayşe", "ayse@example.com", card.getId(), false);
+        verify(ccRepo).save(any(CustomerCard.class));
     }
 
     @Test
-    void karteOhneAnmeldung_gehtAuchOhneDenSchalterDesLadens() {
+    void karteOhneAnmeldung_haengtNurAmEigenenSchalterDesLadens() {
         EmailService mail = mock(EmailService.class);
         CustomerRepository customerRepo = mock(CustomerRepository.class);
         CustomerCardRepository ccRepo = mock(CustomerCardRepository.class);
         Card card = Card.create(aus, "Brotkarte", "x", 10, "1 Brot gratis");
         assertThat(aus.isAnmeldungOhneMail()).isFalse();
 
-        CustomerCard cc = kundenDienst(card, mail, customerRepo, ccRepo).registerOhneMail(card.getId(), null);
-        assertThat(cc.getCustomer().isOhneMail()).isTrue();
-        verifyNoInteractions(mail);
+        assertThatThrownBy(() -> kundenDienst(card, mail, customerRepo, ccRepo).registerOhneMail(card.getId(), null))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Anmeldung");
     }
 
-    // ── 4: Erinnerung an die Testphase ──────────────────────────────────
-
     @Test
-    void testphasenErinnerung_ueberspringtDenLaden() {
+    void testphasenErinnerung_gehtAnBeideLaeden() {
         EmailService mail = mock(EmailService.class);
         when(mail.sendTestphaseMail(any(), any(), anyBoolean(), anyString())).thenReturn(true);
         ShopRepository shops = mock(ShopRepository.class);
@@ -166,51 +157,23 @@ class MailsAusTest {
         when(shops.findByTestBisNotNull()).thenReturn(List.of(aus, an));
 
         TestphaseErinnerungService dienst = new TestphaseErinnerungService(shops, mail, "https://app.test");
-        assertThat(dienst.lauf(mittag)).isEqualTo(1);
-        verify(mail).sendTestphaseMail(any(), any(), anyBoolean(), anyString());
-        assertThat(aus.getTestMailStufe()).isZero();
-        assertThat(an.getTestMailStufe()).isPositive();
-
-        // Und als Netz: selbst ein direkter Aufruf sendet nichts.
-        assertThat(mailer.sendTestphaseMail(aus, mittag, false, "https://app.test")).isFalse();
-        verify(sender, never()).send(any(MimeMessage.class));
+        assertThat(dienst.lauf(mittag)).isEqualTo(2);
+        assertThat(aus.getTestMailStufe()).isPositive();
     }
 
-    // ── 5: Loesch-Mail ──────────────────────────────────────────────────
-
-    private PublicEmailController loeschSeite(Customer kunde, List<CustomerCard> karten, EmailService mail) {
+    @Test
+    void loeschMail_gehtImmerRaus() {
+        Customer kunde = Customer.create("Ayşe", "ayse@example.com");
+        Card karteAus = Card.create(aus, "Brotkarte", "x", 10, "Brot");
+        EmailService mail = mock(EmailService.class);
         CustomerRepository customerRepo = mock(CustomerRepository.class);
         when(customerRepo.findById(kunde.getId())).thenReturn(Optional.of(kunde));
         CustomerCardRepository ccRepo = mock(CustomerCardRepository.class);
-        when(ccRepo.findByCustomer(kunde)).thenReturn(karten);
-        return new PublicEmailController(customerRepo, ccRepo, mock(CustomerService.class), mail);
-    }
+        when(ccRepo.findByCustomer(kunde)).thenReturn(List.of(CustomerCard.create(kunde, karteAus)));
 
-    @Test
-    void loeschMail_nurKartenBeiLaedenMitMailsAus_gehtNichtRaus() {
-        Customer kunde = Customer.create("Ayşe", "ayse@example.com");
-        Card karteAus = Card.create(aus, "Brotkarte", "x", 10, "Brot");
-        EmailService mail = mock(EmailService.class);
-
-        loeschSeite(kunde, List.of(CustomerCard.create(kunde, karteAus)), mail).deleteRequest(kunde.getId());
-        verify(mail, never()).sendDeletionMail(any());
-    }
-
-    @Test
-    void loeschMail_sobaldEinLadenMailsAnHat_gehtSieRaus() {
-        Customer kunde = Customer.create("Ayşe", "ayse@example.com");
-        Card karteAus = Card.create(aus, "Brotkarte", "x", 10, "Brot");
-        Card karteAn = Card.create(an, "Kaffee", "x", 10, "Kaffee");
-        EmailService mail = mock(EmailService.class);
-
-        loeschSeite(kunde, List.of(CustomerCard.create(kunde, karteAus), CustomerCard.create(kunde, karteAn)),
-                mail).deleteRequest(kunde.getId());
+        new PublicEmailController(customerRepo, ccRepo, mock(CustomerService.class), mail)
+                .deleteRequest(kunde.getId());
         verify(mail).sendDeletionMail(kunde);
-
-        // Kunde ganz ohne Karte: wie bisher.
-        EmailService mail2 = mock(EmailService.class);
-        loeschSeite(kunde, List.of(), mail2).deleteRequest(kunde.getId());
-        verify(mail2).sendDeletionMail(kunde);
     }
 
     // ── Was das Dashboard erfaehrt ──────────────────────────────────────

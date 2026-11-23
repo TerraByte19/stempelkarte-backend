@@ -489,10 +489,11 @@ public class AdminController {
     public record MailsRequest(boolean aus) {}
 
     /**
-     * E-Mail-Versand je Laden aus- und einschalten. Aus = fuer diesen Laden
-     * geht keine einzige Mail raus (Bestaetigung, Newsletter, Erinnerung an
-     * die Testphase), im Dashboard verschwindet alles rund um E-Mail, und
-     * Karten gibt es nur ohne Anmeldung. Push auf die Wallet-Karte bleibt.
+     * Newsletter je Laden aus- und einschalten. Aus = der Laden kann keinen
+     * Newsletter senden, im Dashboard ist der Block weg. Alle anderen Mails
+     * (Bestaetigung der Anmeldung, Loeschung, Testphase) laufen normal, und
+     * an der Anmeldung der Kunden aendert sich nichts. Das Feld heisst aus
+     * der ersten Fassung noch mailsAus.
      */
     @PostMapping("/shops/{shopId}/mails")
     public ResponseEntity<Map<String, Object>> setMails(@PathVariable String shopId,

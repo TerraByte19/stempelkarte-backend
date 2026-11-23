@@ -338,3 +338,9 @@ Admin: `POST /api/admin/shops/{id}/mails`, `GET /api/admin/shops/{id}/kette`,
 `POST .../kette/filialen`, `.../filialen/{ortId}/aktiv`, `.../logins`,
 `.../logins/{id}/passwort|sperre`, `.../geraete-je-filiale`.
 
+
+## Nachtrag 2026-11-23: Schalter sperrt nur den Newsletter
+
+Entscheidung des Users: Der Admin-Schalter je Laden (Feld `mailsAus`, im Panel "Newsletter") sperrt nur noch den Newsletter samt Test-Newsletter und blendet den Block im Dashboard aus. Bestaetigungsmail, Loesch-Mail, Erinnerung an die Testphase und die Anmeldung mit E-Mail laufen wie bei jedem Laden. Karten ohne Anmeldung haengen allein am eigenen Schalter des Ladens (`anmeldungOhneMail`). Die Abschnitte oben zu "Mails aus = gar keine Mail" sind damit ueberholt.
+
+Ausserdem: Eine Login-Sperre gibt den Scanner-Geraeten der Filiale neue Schluessel (nicht am Hauptstandort).

@@ -75,13 +75,7 @@ public class PublicEmailController {
         kunde.ifPresent(c -> {
             c.startDeletion();
             customerRepository.save(c);
-            // Hat der Kunde nur Karten bei Laeden mit "Mails aus", geht auch
-            // diese Mail nicht raus. Kunden ohne Karte: wie bisher.
-            java.util.List<com.example.stemplekarte.model.CustomerCard> karten =
-                    customerCardRepository.findByCustomer(c);
-            boolean alleAus = !karten.isEmpty() && karten.stream()
-                    .allMatch(cc -> cc.getCard().getShop().isMailsAus());
-            if (!alleAus) emailService.sendDeletionMail(c);
+            emailService.sendDeletionMail(c);
         });
         // Immer dieselbe Antwort — verrät nicht, ob das Konto existiert
         String lang = Texts.sprache(kunde.orElse(null), null);
