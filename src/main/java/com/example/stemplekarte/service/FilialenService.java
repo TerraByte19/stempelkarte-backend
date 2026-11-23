@@ -91,6 +91,17 @@ public class FilialenService {
         return ortRepo.findById(staff.getOrtId()).map(o -> !o.isAktiv()).orElse(false);
     }
 
+    public static final String STANDORT_FEHLT =
+            "Für diese Filiale ist noch kein Standort gespeichert. Im Login der Filiale unter „Geräte“ "
+                    + "auf „Standort hier übernehmen“ tippen.";
+
+    /** Kette: haengt das Geraet an einer Filiale, die ihren Standort noch nicht gesetzt hat? */
+    public boolean standortFehlt(StaffToken staff, Shop shop) {
+        if (staff == null || shop == null || staff.getOrtId() == null) return false;
+        if (!OrteService.kette(shop) || shop.isGeoBefreit()) return false;
+        return ortRepo.findById(staff.getOrtId()).map(ShopOrt::isOhneStandort).orElse(false);
+    }
+
     // ── Uebersicht ──────────────────────────────────────────────────────
 
     /** Eine Filiale mit ihren Zahlen der letzten 30 Tage. */

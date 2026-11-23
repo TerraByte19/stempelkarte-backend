@@ -52,7 +52,7 @@ public class AdminKettenService {
 
     /** Eine Filiale, die auf die Bestaetigung wartet - fuer die Liste ueber alle Laeden. */
     public record Anfrage(String shopId, String shopName, String ortId, String label, String adresse,
-                          String angelegt) {}
+                          String angelegt, List<String> logins) {}
 
     public record Uebersicht(String shopId, String name, String tarif, boolean kette, boolean mailsAus,
                              boolean hauptIstFiliale, int geraeteJeFiliale,
@@ -108,7 +108,10 @@ public class AdminKettenService {
     public List<Anfrage> anfragen() {
         return orteService.offene().stream()
                 .map(o -> new Anfrage(o.getShop().getId(), o.getShop().getName(), o.getId(), o.getLabel(),
-                        o.getAdresse(), o.getCreatedAt().toString()))
+                        o.getAdresse(), o.getCreatedAt().toString(),
+                        zugangService.liste(o.getShop()).stream()
+                                .filter(z -> o.getId().equals(z.getOrtId()))
+                                .map(FilialZugang::getBenutzername).toList()))
                 .toList();
     }
 

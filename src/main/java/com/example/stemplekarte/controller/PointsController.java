@@ -185,6 +185,10 @@ public class PointsController {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN,
                     com.example.stemplekarte.service.FilialenService.FILIALE_AUS);
         }
+        if (filialen != null && filialen.standortFehlt(p.staff(), p.staff().getShop())) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                    com.example.stemplekarte.service.FilialenService.STANDORT_FEHLT);
+        }
         return new Staff(p.staff().getShop(), p.staff().getLabel(), p.staff().istAushilfe(), p.staff());
     }
 

@@ -236,4 +236,44 @@ class FilialZugangServiceTest {
         service.loeschen(kette, z.getId());
         verify(zugaenge).delete(z);
     }
+
+    // ── Neue Filiale in einem Schritt: Name, Benutzername, Passwort ────────
+
+    @Test
+    void filialeMitLogin_legtFilialeOhneStandortUndLoginAn_wartetAufBestaetigung() {
+        OrteService orteService = mock(OrteService.class);
+        ShopOrt neu = ShopOrt.createOhneStandort(kette, "Bahnhof");
+        neu.setBestaetigt(false);
+        when(orteService.anlegenOhneStandort(kette.getId(), "Bahnhof")).thenReturn(neu);
+        when(orte.findById(neu.getId())).thenReturn(Optional.of(neu));
+
+        FilialZugang z = service.filialeMitLogin(kette, orteService, "Bahnhof", "BackBaron-Bahnhof", "geheim123");
+
+        assertThat(z.getBenutzername()).isEqualTo("backbaron-bahnhof");
+        assertThat(z.getOrtId()).isEqualTo(neu.getId());
+        assertThat(neu.isOhneStandort()).isTrue();
+        // Vor der Bestaetigung kommt das Login nicht rein, danach schon.
+        when(zugaenge.findWithShopByBenutzername("backbaron-bahnhof")).thenReturn(Optional.of(z));
+        assertThatThrownBy(() -> service.login("backbaron-bahnhof", "geheim123"))
+                .isInstanceOf(IllegalArgumentException.class).hasMessage(FilialZugangService.FILIALE_AUS);
+        neu.setBestaetigt(true);
+        assertThat(service.login("backbaron-bahnhof", "geheim123").ortLabel()).isEqualTo("Bahnhof");
+        // Setzt die Filiale ihren Standort, ist der Vermerk weg.
+        neu.verlegen(51.5, 7.4);
+        assertThat(neu.isOhneStandort()).isFalse();
+    }
+
+    @Test
+    void filialeMitLogin_ohneGueltigesLoginEntstehtKeineFiliale() {
+        OrteService orteService = mock(OrteService.class);
+        assertThatThrownBy(() -> service.filialeMitLogin(kette, orteService, "Bahnhof", "backbaron-bahnhof", "kurz"))
+                .isInstanceOf(IllegalArgumentException.class);
+        when(zugaenge.existsByBenutzername("backbaron-bahnhof")).thenReturn(true);
+        assertThatThrownBy(() -> service.filialeMitLogin(kette, orteService, "Bahnhof", "backbaron-bahnhof", "geheim123"))
+                .isInstanceOf(ResponseStatusException.class).hasMessageContaining("vergeben");
+        Shop pro = Shop.create("p@laden.de", "HASH", "Einzelladen", 3);
+        assertThatThrownBy(() -> service.filialeMitLogin(pro, orteService, "Bahnhof", "laden-bahnhof", "geheim123"))
+                .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("Tarif Kette");
+        verifyNoInteractions(orteService);
+    }
 }

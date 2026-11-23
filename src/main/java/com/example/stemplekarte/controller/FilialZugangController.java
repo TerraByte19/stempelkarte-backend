@@ -24,6 +24,10 @@ public class FilialZugangController {
 
     private final FilialZugangService service;
 
+    // Fuer "neue Filiale mit Login". Als Feld, damit der Konstruktor bleibt.
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.example.stemplekarte.service.OrteService orteService;
+
     public FilialZugangController(FilialZugangService service) {
         this.service = service;
     }
@@ -34,6 +38,7 @@ public class FilialZugangController {
 
     public record NeuRequest(String benutzername, String passwort, String ortId) {}
     public record PasswortRequest(String passwort) {}
+    public record FilialeRequest(String filiale, String benutzername, String passwort) {}
     public record SperreRequest(boolean gesperrt) {}
 
     public record Eintrag(String id, String benutzername, String ortId, String ortLabel,
@@ -49,6 +54,15 @@ public class FilialZugangController {
     @GetMapping
     public List<Eintrag> liste(Authentication auth) {
         return service.liste(currentShop(auth)).stream().map(this::eintrag).toList();
+    }
+
+    @Operation(summary = "Neue Filiale mit Login anfragen",
+            description = "Name der Filiale, Benutzername, Passwort. Die Filiale wartet auf die Bestaetigung "
+                    + "durch Stampit; ihren Standort setzt sie danach selbst im Unterkonto.")
+    @PostMapping("/filiale")
+    public Eintrag filialeMitLogin(Authentication auth, @RequestBody FilialeRequest req) {
+        return eintrag(service.filialeMitLogin(currentShop(auth), orteService,
+                req.filiale(), req.benutzername(), req.passwort()));
     }
 
     @Operation(summary = "Login für eine Filiale anlegen",

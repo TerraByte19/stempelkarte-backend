@@ -92,6 +92,26 @@ public class FilialZugangService {
         return zugaenge.save(FilialZugang.create(shop, name, passwordEncoder.encode(passwort), ort));
     }
 
+    /**
+     * Neue Filiale in einem Schritt: Name der Filiale, Benutzername, Passwort.
+     * Die Filiale wartet auf die Bestaetigung des Admins; das Login geht erst
+     * danach. Ist der Benutzername vergeben, entsteht auch keine Filiale
+     * (eine Transaktion).
+     */
+    @Transactional
+    public FilialZugang filialeMitLogin(Shop shop, OrteService orteService, String filialName,
+                                        String benutzername, String passwort) {
+        if (shop.getTarif() != Tarif.KETTE) throw new IllegalArgumentException(NUR_KETTE);
+        // Erst alles pruefen, was ohne Datenbank geht - dann die Filiale.
+        String name = FilialZugang.benutzernameSauber(benutzername);
+        pruefePasswort(passwort);
+        if (zugaenge.existsByBenutzername(name)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Dieser Benutzername ist schon vergeben.");
+        }
+        ShopOrt ort = orteService.anlegenOhneStandort(shop.getId(), filialName);
+        return zugaenge.save(FilialZugang.create(shop, name, passwordEncoder.encode(passwort), ort.getId()));
+    }
+
     public List<FilialZugang> liste(Shop shop) {
         return zugaenge.findByShopOrderByCreatedAtAsc(shop);
     }

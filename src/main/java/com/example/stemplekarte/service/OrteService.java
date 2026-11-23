@@ -72,7 +72,9 @@ public class OrteService {
      * zaehlen. "alle" in Anlagereihenfolge (findByShopOrderByCreatedAtAsc).
      */
     public static List<ShopOrt> geltende(Shop shop, List<ShopOrt> alle) {
-        if (kette(shop)) return alle.stream().filter(ShopOrt::isAktiv).toList();
+        // Eine Filiale ohne Standort hat keinen Punkt auf der Karte: sie fehlt
+        // im Pass, in der Geo-Pruefung und bei der Zuordnung ueber die Naehe.
+        if (kette(shop)) return alle.stream().filter(ShopOrt::isAktiv).filter(o -> !o.isOhneStandort()).toList();
         int erlaubt = erlaubt(shop);
         return alle.size() <= erlaubt ? alle : alle.subList(0, Math.max(0, erlaubt));
     }
@@ -190,6 +192,23 @@ public class OrteService {
         }
         ortRepo.saveAll(neu);
         return liste(shop);
+    }
+
+    /**
+     * Kette: Filiale nur mit Namen anlegen. Sie wartet auf die Bestaetigung
+     * des Admins und hat noch keinen Standort - den setzt sie selbst.
+     */
+    @Transactional
+    public ShopOrt anlegenOhneStandort(String shopId, String label) {
+        String l = labelSauber(label);
+        Shop shop = laden(shopId);
+        if (!kette(shop)) throw new IllegalArgumentException(NUR_KETTE);
+        if (ortRepo.countByShop(shop) >= KETTE_MAX) {
+            throw new IllegalArgumentException("Mehr als " + KETTE_MAX + " Filialen gehen nicht.");
+        }
+        ShopOrt neu = ShopOrt.createOhneStandort(shop, l);
+        neu.setBestaetigt(false);
+        return ortRepo.save(neu);
     }
 
     /** Admin: alle Filialen, die auf die Bestaetigung warten. */

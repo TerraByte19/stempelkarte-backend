@@ -56,10 +56,12 @@ public class OrteController {
     public record OrtItem(String id, String label, double latitude, double longitude,
                           String adresse, boolean aktiv,
                           // Kette: false = wartet auf die Bestaetigung durch den Admin.
-                          boolean bestaetigt) {
+                          boolean bestaetigt,
+                          // Kette: true = die Filiale hat ihren Standort noch nicht gesetzt.
+                          boolean ohneStandort) {
         static OrtItem von(ShopOrt o) {
             return new OrtItem(o.getId(), o.getLabel(), o.getLatitude(), o.getLongitude(),
-                    o.getAdresse(), o.isAktiv(), o.isBestaetigt());
+                    o.getAdresse(), o.isAktiv(), o.isBestaetigt(), o.isOhneStandort());
         }
     }
 

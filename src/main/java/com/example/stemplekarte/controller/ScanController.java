@@ -67,6 +67,10 @@ public class ScanController {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN,
                     com.example.stemplekarte.service.FilialenService.FILIALE_AUS);
         }
+        if (filialen != null && filialen.standortFehlt(staff, shop)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                    com.example.stemplekarte.service.FilialenService.STANDORT_FEHLT);
+        }
     }
 
     public ScanController(CustomerService service, WalletNotifier notifier,

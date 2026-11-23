@@ -55,6 +55,7 @@ public class FilialeStandortController {
         m.put("adresse", null);
         m.put("latitude", shop.getLatitude());
         m.put("longitude", shop.getLongitude());
+        m.put("gesetzt", shop.getLatitude() != null && shop.getLongitude() != null);
         return m;
     }
 
@@ -64,6 +65,7 @@ public class FilialeStandortController {
         m.put("adresse", o.getAdresse());
         m.put("latitude", o.getLatitude());
         m.put("longitude", o.getLongitude());
+        m.put("gesetzt", !o.isOhneStandort());
         return m;
     }
 

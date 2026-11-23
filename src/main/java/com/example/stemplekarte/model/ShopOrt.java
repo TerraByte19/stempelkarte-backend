@@ -55,6 +55,12 @@ public class ShopOrt {
     @Column
     private Boolean bestaetigt;
 
+    // Kette: die Filiale wurde ohne Standort angelegt (nur Name und Login);
+    // den Standort setzt sie selbst per Knopf im Laden. Bis dahin stehen die
+    // Koordinaten auf 0/0 und zaehlen nirgends. Null = Standort vorhanden.
+    @Column(name = "ohne_standort")
+    private Boolean ohneStandort;
+
     // Adresse, wie sie beim Eintragen per Liste angegeben wurde. Nur zur
     // Anzeige; gerechnet wird mit den Koordinaten.
     @Column(length = ADRESSE_MAX)
@@ -72,6 +78,15 @@ public class ShopOrt {
         o.createdAt = Instant.now();
         return o;
     }
+
+    /** Filiale ohne Standort: den setzt sie spaeter selbst (verlegen). */
+    public static ShopOrt createOhneStandort(Shop shop, String label) {
+        ShopOrt o = create(shop, label, 0, 0);
+        o.ohneStandort = true;
+        return o;
+    }
+
+    public boolean isOhneStandort() { return Boolean.TRUE.equals(ohneStandort); }
 
     public String getId() { return id; }
     public Shop getShop() { return shop; }
@@ -98,5 +113,6 @@ public class ShopOrt {
     public void verlegen(double latitude, double longitude) {
         this.latitude = latitude;
         this.longitude = longitude;
+        this.ohneStandort = null;
     }
 }
