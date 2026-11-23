@@ -62,6 +62,8 @@ class FilialeStandortControllerTest {
         for (var req : new FilialeStandortController.StandortRequest[]{
                 new FilialeStandortController.StandortRequest(null, 7.4),
                 new FilialeStandortController.StandortRequest(91.0, 7.4),
+                new FilialeStandortController.StandortRequest(Double.NaN, 7.4),
+                new FilialeStandortController.StandortRequest(51.5, Double.POSITIVE_INFINITY),
                 new FilialeStandortController.StandortRequest(51.5, 181.0),
                 new FilialeStandortController.StandortRequest(0.0, 0.0)}) {
             assertThatThrownBy(() -> controller.setzen(req, auth)).isInstanceOf(IllegalArgumentException.class);

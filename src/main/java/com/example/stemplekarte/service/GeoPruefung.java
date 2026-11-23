@@ -59,6 +59,9 @@ public class GeoPruefung {
                 + Math.cos(Math.toRadians(lat1)) * Math.cos(Math.toRadians(lat2))
                 * Math.sin(dLon / 2) * Math.sin(dLon / 2);
         double c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        // Unbrauchbare Koordinaten (NaN, unendlich) zaehlen als unendlich weit
+        // weg. Math.round(NaN) waere 0 - und 0 Meter hiesse "im Laden".
+        if (!Double.isFinite(c)) return Long.MAX_VALUE;
         return Math.round(ERDRADIUS_METER * c);
     }
 

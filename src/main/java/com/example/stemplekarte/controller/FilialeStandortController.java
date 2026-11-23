@@ -70,7 +70,11 @@ public class FilialeStandortController {
     public Map<String, Object> setzen(@RequestBody StandortRequest req, Authentication auth) {
         JwtAuthFilter.FilialPrincipal p = FilialeController.filiale(auth);
         ShopOrt ort = eigene(p);
+        // NaN und Unendlich zuerst: sie bestehen jeden Groessenvergleich, und
+        // ein solcher Punkt haette in der Geo-Pruefung die Entfernung 0 -
+        // dann gaelte jedes Geraet ueberall als "im Laden".
         if (req.latitude() == null || req.longitude() == null
+                || !Double.isFinite(req.latitude()) || !Double.isFinite(req.longitude())
                 || req.latitude() < -90 || req.latitude() > 90
                 || req.longitude() < -180 || req.longitude() > 180
                 || (req.latitude() == 0 && req.longitude() == 0)) {
