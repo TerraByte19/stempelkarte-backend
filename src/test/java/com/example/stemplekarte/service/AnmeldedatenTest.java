@@ -38,6 +38,17 @@ class AnmeldedatenTest {
     }
 
     @Test
+    void geburtstag_heuteOderGanzFrisch_giltAlsNichtAngegeben() {
+        // iPhone setzt beim Antippen des Datumsfelds sofort "heute" ein. Wer
+        // danach mit Google/Apple weitergeht, schickt das ungewollt mit.
+        LocalDate heute = LocalDate.now(java.time.ZoneId.of("Europe/Berlin"));
+        assertThat(Anmeldedaten.geburtstag(heute.toString())).isNull();
+        assertThat(Anmeldedaten.geburtstag(heute.minusMonths(6).toString())).isNull();
+        assertThat(Anmeldedaten.geburtstag(heute.minusYears(1).toString()))
+                .isEqualTo(heute.minusYears(1));
+    }
+
+    @Test
     void telefon_nurTelefonzeichen() {
         assertThat(Anmeldedaten.telefon(null)).isNull();
         assertThat(Anmeldedaten.telefon("  ")).isNull();

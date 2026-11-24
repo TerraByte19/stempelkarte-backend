@@ -17,7 +17,7 @@ public final class Anmeldedaten {
 
     private Anmeldedaten() {}
 
-    /** ISO-Datum (JJJJ-MM-TT) aus dem date-Feld. Nicht in der Zukunft, nicht aelter als 120 Jahre. */
+    /** ISO-Datum (JJJJ-MM-TT) aus dem date-Feld. Nicht in der Zukunft, nicht aelter als 120 Jahre; juenger als ein Jahr = null. */
     public static LocalDate geburtstag(String roh) {
         if (roh == null || roh.isBlank()) return null;
         LocalDate d;
@@ -30,6 +30,10 @@ public final class Anmeldedaten {
         if (d.isAfter(heute) || d.isBefore(heute.minusYears(120))) {
             throw new IllegalArgumentException("Ungültiges Geburtsdatum");
         }
+        // iPhone setzt beim Antippen des Datumsfelds sofort "heute" ein. Ein
+        // Datum aus den letzten zwölf Monaten ist kein Geburtstag eines Kunden,
+        // also "nicht angegeben" - bei Pflicht fragt der Aufrufer dann nach.
+        if (d.isAfter(heute.minusYears(1))) return null;
         return d;
     }
 
