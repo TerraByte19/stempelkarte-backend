@@ -102,6 +102,11 @@ class AppleAnmeldeSeiteTest {
         assertThat(html).contains("class=\"btn zweit\" onclick=\"getCard()\"");
         assertThat(html.indexOf("id=\"success\"")).isLessThan(html.indexOf("class='sprachen'"));
         assertThat(html).contains("data-width='100%' data-height='40' data-border-radius='50'");
+        // Pflichtfelder zuerst: eine Sperre liegt ueber Google/Apple (nicht ueber
+        // "oder mit E-Mail"), bis sie ausgefuellt sind; ein Tipp markiert das Feld.
+        assertThat(html).contains("<div class='sperre' id='sperre' onclick='pflichtZeigen()'></div>")
+                .contains("function pflichtFehlt()").contains("if (pflichtZeigen()) return");
+        assertThat(html.indexOf("id='sperre'")).isLessThan(html.indexOf("class='oder'"));
         // Der Text verlangt nicht mehr Name und E-Mail.
         assertThat(html).contains("Einmal tippen, und die Stempelkarte ist direkt in deiner Wallet.")
                 .doesNotContain("Trag deinen Namen");

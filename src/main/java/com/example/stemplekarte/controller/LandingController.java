@@ -1062,6 +1062,10 @@ public class LandingController {
                             .success-icon { font-size: 48px; margin-bottom: 12px; }
                             /* Google und Apple: gross, volle Breite, ueber dem E-Mail-Weg */
                             .sozial { display: flex; flex-direction: column; align-items: center; gap: 12px; width: 100%%; }
+                            .sozial-knoepfe { position: relative; display: flex; flex-direction: column; align-items: center; gap: 12px; width: 100%%; }
+                            /* liegt ueber Google/Apple, solange ein Pflichtfeld fehlt */
+                            .sperre { position: absolute; inset: 0; z-index: 5; cursor: pointer; display: none; }
+                            input.fehlt { border: 2px solid #e5484d; box-shadow: 0 0 0 3px rgba(229,72,77,0.3); }
                             #appleid-signin { width: 100%%; max-width: 375px; height: 40px; cursor: pointer; }
                             .oder {
                                 display: flex;
@@ -1118,7 +1122,51 @@ public class LandingController {
                             const LANG = %s;
                             // Google- und Apple-Knopf (nur wenn eingerichtet): der Anbieter liefert
                             // ein Token, der Server prueft es und schickt den Link zur Karte.
+                            // Fehlt ein Pflichtfeld? Ein Geburtstag aus den letzten zwoelf Monaten
+                            // zaehlt als leer (das iPhone setzt beim Antippen "heute" ein).
+                            function pflichtFehlt() {
+                                const bEl = document.getElementById('birthday')
+                                const pEl = document.getElementById('phone')
+                                if (bEl && bEl.dataset.required === '1') {
+                                    const grenze = new Date()
+                                    grenze.setFullYear(grenze.getFullYear() - 1)
+                                    if (!bEl.value || new Date(bEl.value) > grenze) return { el: bEl, text: errBirthday }
+                                }
+                                if (pEl && pEl.dataset.required === '1' && !pEl.value.trim()) return { el: pEl, text: errPhone }
+                                return null
+                            }
+                            // Zeigt auf das fehlende Feld: rot, in Sicht, mit Meldung. true = es fehlt etwas.
+                            function pflichtZeigen() {
+                                const errorEl = document.getElementById('error')
+                                document.querySelectorAll('input.fehlt').forEach(function (el) { el.classList.remove('fehlt') })
+                                const f = pflichtFehlt()
+                                if (!f) return false
+                                errorEl.style.display = 'block'
+                                errorEl.textContent = f.text
+                                f.el.classList.add('fehlt')
+                                if (f.el.scrollIntoView) f.el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+                                return true
+                            }
+                            function sperreSetzen() {
+                                const s = document.getElementById('sperre')
+                                if (s) s.style.display = pflichtFehlt() ? 'block' : 'none'
+                            }
+                            function feldBeobachten(id) {
+                                const el = document.getElementById(id)
+                                if (!el) return
+                                const neu = function () {
+                                    el.classList.remove('fehlt')
+                                    if (!pflichtFehlt()) document.getElementById('error').style.display = 'none'
+                                    sperreSetzen()
+                                }
+                                el.addEventListener('input', neu)
+                                el.addEventListener('change', neu)
+                            }
+                            feldBeobachten('birthday');
+                            feldBeobachten('phone');
+                            sperreSetzen();
                             async function sozialAnmeldung(url, daten, fehlerText) {
+                                if (pflichtZeigen()) return
                                 const errorEl = document.getElementById('error')
                                 errorEl.style.display = 'none'
                                 const bEl = document.getElementById('birthday')
@@ -1174,16 +1222,7 @@ public class LandingController {
                                     errorEl.textContent = errFields
                                     return
                                 }
-                                if (bEl && bEl.dataset.required === '1' && !birthday) {
-                                    errorEl.style.display = 'block'
-                                    errorEl.textContent = errBirthday
-                                    return
-                                }
-                                if (pEl && pEl.dataset.required === '1' && !phone) {
-                                    errorEl.style.display = 'block'
-                                    errorEl.textContent = errPhone
-                                    return
-                                }
+                                if (pflichtZeigen()) return
 
                                 try {
                                     const res = await fetch('/karte-neu/register', {
@@ -1714,9 +1753,15 @@ public class LandingController {
         boolean google = googleAnmeldung != null && googleAnmeldung.aktiv();
         boolean apple = appleAnmeldung != null && appleAnmeldung.aktiv();
         if (!google && !apple) return "";
+        // Die Sperre liegt nur ueber den zwei Knoepfen und nur, solange ein
+        // Pflichtfeld fehlt: der Tipp zeigt dann auf das Feld, statt erst durch
+        // das Google-/Apple-Fenster zu fuehren und danach zu scheitern.
         return "<div class='sozial'>"
+                + "<div class='sozial-knoepfe'>"
                 + (google ? googleKnopf(lang) : "")
                 + (apple ? appleKnopf(lang) : "")
+                + "<div class='sperre' id='sperre' onclick='pflichtZeigen()'></div>"
+                + "</div>"
                 + "<div class='oder'>" + t(lang, "signup.oder") + "</div>"
                 + "</div>";
     }
